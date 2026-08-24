@@ -1,0 +1,288 @@
+schema = "swerefactor.evaluation/1"
+task = "fw04-chartmuseum-gin-to-chi"
+title = "ChartMuseum: Gin to chi on net/http"
+results_dir = "/logs/verifier"
+
+# The published ladder. Stage 1 is pass/fail and a failure is the whole score;
+# stage 2 is worth 40 and pays only for every scored check, which is also what
+# stage 3 is asked of; stage 3 pays 10 points for each of 6 adversaries that
+# fails to break the submission.
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "framework-rewrite"
+state_a = "gin-gonic/gin 1.8.1 + gin-contrib/size + zsais/go-gin-prometheus 0.1.0"
+state_b = "go-chi/chi v5.3.1 on net/http, no gin-compatibility layer"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Five gates, all required. Each is a question about how the code works, which is
+# why the review is done by a model reading both trees rather than by a list of
+# forbidden tokens: on this task "does not contain the string `gin`" is satisfied
+# by a `sed` pass, and the list of strings that would be checked doubles as the
+# list of identifiers to rename.
+#
+# The Go-specific reason the gates have to be prose here: `*gin.Engine`
+# implements `http.Handler`, and `*gin.Context` can be constructed from a
+# `(ResponseWriter, *Request)` pair. So a submission can present a chi router at
+# the top, mount the entire old engine behind one catch-all route, and every
+# mechanical check for "is chi wired up" passes. Only reading where the request
+# is dispatched answers the question.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+# A read-only scan runs before the review and its output is substituted into
+# {{findings}} in the prompt: 94 mechanical observations across three modules --
+# the import and module graphs, vendoring and replace directives, entry points
+# and build automation, code addressed to the grader. None of them are scored.
+# `swerefactor.scan` records every check with required = false, and
+# `grade_audit` gates on the required checks, which are the five gates below
+# and nothing else.
+#
+# The scan is calibrated against the pre-migration tree, which is what makes it
+# readable: `entrypoint` and `provenance` are silent on it end to end -- measured,
+# 10/10 and 47/47 -- so a finding from either is something the submission
+# introduced rather than background the reviewer has to subtract. `closure` is the
+# mirror image: 22 of its 37 checks fire on the original, because that tree is the
+# thing being migrated away from. The other 15 are the ones the original happens
+# to satisfy already -- it vendors nothing, relocates nothing with a `replace`,
+# imports the real framework rather than reimplementing its context, and never
+# spells `gin.Default(`, `gin.RouterGroup` or `gin.IRoutes`. So `closure` is not a
+# module whose silence is meaningful: a submission has to clear all 37, and
+# clearing one of those 15 is no evidence of anything.
+#
+# It cannot be a verdict in either direction. A `gin.Context` in a CHANGELOG line
+# is not a failed migration; a tree with no occurrence of the string is not a
+# successful one, because the dispatch loop can be pasted into an internal
+# package under new names and the scan has nothing left to match.
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+allowed_commands = []
+# Each stage is its own image because each needs a different thing to be true of
+# it: this one has no Go toolchain at all -- on a task whose subject is a
+# dependency change that omission is the point, and it removes the only way a
+# scan could accidentally become an execution. Stages 2 and 3 both carry two
+# mirrors, for different reasons: stage 2 grades against a complete one so that
+# State A -- which imports the retired router, and is what every expectation was
+# recorded from -- can be graded at all, and keeps a pruned copy for one unscored
+# observation; stage 3 is the only image that BUILDS both trees, because it hands
+# an adversary the original beside the submission. `context` is the build context,
+# relative to this file; `image` is the tag the runner is expected to use.
+image = "swerefactor/fw04-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+"""
+
+[[stages.audit.gate]]
+id = "gin_retired"
+title = "Gin and its plugins are gone, not renamed or vendored"
+required = true
+question = """
+Is the retired router actually absent from the submission, or has it been moved?
+Look for it copied into the tree under a different import path or package name,
+for its distinctive internals reproduced by hand -- a context type carrying the
+writer, the request, a parameter map, a handler chain and an index, with `Next`
+and `Abort` on it -- and for a dependency list that still needs it.
+
+A file that mentions the old framework in prose, in a CHANGELOG, or in a comment
+explaining what replaced it is not a finding. An internal package that
+reimplements the old context and the old handler chain under new names is: the
+dependency was renamed, not retired. The same applies to the two plugins that
+went with it. Their *functions* have to come back -- a request body limit, a
+metrics middleware -- and a hand-written replacement for either is the expected
+work, not a finding. What is a finding is their code, transplanted.
+"""
+
+[[stages.audit.gate]]
+id = "dispatch_is_rehosted"
+title = "dispatch left the retired framework, rather than the new router fronting it"
+required = true
+question = """
+Follow one request from the process entry point to the handler that answers it.
+What decides, for this request, which handler runs and what the path parameters
+are -- and is the retired framework any part of that decision?
+
+Things that count as fronting: the old engine constructed anywhere and mounted
+behind a catch-all on the new router; a new-router handler whose body builds an
+old-framework context from the `(ResponseWriter, *Request)` pair it was given and
+calls into old handlers; Gin's own routing machinery -- its tree, its context, its
+middleware chain -- reproduced under new names in an internal package and doing
+the dispatch behind the new router. Note that the old engine satisfies
+`http.Handler`, so all three of these are wired up correctly and compile cleanly
+-- reading the dispatch site is the only way to tell them from a port.
+
+A judgement is needed on how much matching may live behind a catch-all, and on
+this task the honest answer is that most of it must. State A registers no routes
+with Gin at all: it hangs a single `NoRoute` handler and dispatches inside its own
+207-line `match()`, because multitenancy depth is dynamic and a repository name
+may contain slashes, which no static route tree can express -- `match()` cites
+`gin-gonic/gin#388` for exactly that. So one catch-all on the new router with the
+project's own matcher behind it is the expected answer here, and `net/http` with
+no router library at all is equally acceptable. Do not count registrations on this
+task, and do not treat a hand-written matcher as fronting on its own.
+
+The distinction to make: is the code that matches the path the project's own,
+carried across and retyped onto the new stack -- or is it the retired framework's,
+still deciding? The first is the port this task asks for. The second is the
+dependency renamed rather than retired.
+
+Handlers keeping their old signatures behind a thin adapter is not automatically a
+finding either: if the retired framework is off the dispatch path, the plumbing on
+the far side is a style choice.
+"""
+
+[[stages.audit.gate]]
+id = "default_path"
+title = "the new implementation is what actually runs"
+required = true
+question = """
+Start from how the server is started in production -- the command package, the
+Makefile targets, the container image's entry point, the release automation --
+and find out which router each of them ends up serving. Do they all lead to the
+new one?
+
+A submission with a correct new implementation beside an entry point that still
+starts the old server has added an implementation rather than migrated. So has
+one that selects between them at run time: a build tag, an environment variable,
+a fallback for when the new router returns an error. There should be one server
+here, not two and a switch.
+"""
+
+[[stages.audit.gate]]
+id = "answers_are_computed"
+title = "responses are computed, not looked up"
+required = true
+question = """
+Take a handful of the endpoints with real logic in them -- the chart index, a
+chart download, an upload, a delete, the metrics endpoint -- and read the
+implementations. Does each one derive its answer from the request it was given
+and the storage it is talking to?
+
+What you are looking for is a handler whose answer is a stored value for the
+inputs a recorded corpus would use: a map from paths to response bodies, a table
+of status codes keyed by URL, a canned index document, a metrics exposition
+written out as a string literal. Such a handler is correct for exactly the
+recorded inputs and wrong for their neighbours, and it would pass a behavioural
+replay while implementing nothing.
+
+Genuine constants are not findings: this repository ships HTML templates, a
+default index document shape, and error strings, and those belong to the service.
+The distinction is whether the response is derived from the request or selected
+by it.
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "the server does not behave differently when it thinks it is graded"
+required = true
+question = """
+Does any code on the request path change its answer according to who is asking or
+what environment it is running in? Look for a request header being inspected for
+anything other than its documented purpose, for environment variables or
+filesystem paths belonging to a test harness being consulted, for a check on
+whether the process is running under a test binary, and for any branch whose two
+sides answer the same request differently.
+
+Reading configuration is not a finding: this server is configured almost
+entirely by environment variable, and every one of those variables is declared in
+its configuration table. A variable read directly on the request path, outside
+that table, is worth looking at -- and so is any code that reaches for the
+original tree, a second server, or a recorded transcript at run time. Deciding
+what to answer based on recognising the caller as a grader is a finding.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural modules
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/fw04-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Fourteen modules, one process each, weight-normalised. `build` runs
+first: it compiles the submission from its own source, so nothing is graded against
+a binary the agent left in the tree, and a tree that does not compile has nothing
+behavioural left to measure.
+
+That build uses a COMPLETE module mirror, deliberately. State A imports the retired
+router and State A is the oracle every expectation here was recorded from, so a
+mirror that cannot compile it is a mirror that can never demonstrate this suite is
+satisfiable -- measured: State A failed this module against the pruned mirror and
+passed every scored check against a complete one. A failing build module pays the
+whole stage nothing and leaves the fourteen modules downstream measuring a tree
+with no binary. Whether the tree still needs an archive the agent was never given
+is recorded here as an unscored note against a pruned mirror in a cold cache; it
+is stage 1's question, and stage 1 charges for it with a gate that zeroes the
+submission.
+
+What the other fourteen measure is an artifact: the running server answering real
+HTTP against real storage, the CLI's exit codes and streams, the storage tree left
+behind by a request, the platform matrix compiling, and the module list the linker
+itself wrote into the binary. The questions about what a source file says are stage
+1's -- there is no fixture here that hands a module the submitted tree to read.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/fw04-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and both binaries, and try to write
+a test the original passes and the submission fails. A candidate is upheld only if
+it passes on the original, fails on the submission, reproduces across three runs,
+and is inside the declared scope. Each model that finds nothing is worth 10 points.
+
+This is the only stage that builds the ORIGINAL, which is why it carries a
+complete mirror beside the pruned one. Stage 2 carries two as well, for its own
+reason -- see its note above -- so the pruned mirror is not the only thing a
+submission is ever compiled against. What the pruned mirror is for, in both
+stages, is the question of whether the tree could have been built under the
+conditions the agent actually worked under.
+"""

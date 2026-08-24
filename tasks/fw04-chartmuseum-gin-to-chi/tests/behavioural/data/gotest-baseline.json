@@ -1,0 +1,71 @@
+{
+  "note": "State A's own Go test suite, measured with `go test -race -json -count=1 ./...` in the construction image.",
+  "packages": {
+    "helm.sh/chartmuseum/cmd/chartmuseum": {
+      "ids": 2,
+      "result": "pass",
+      "top_level": [
+        "TestMainTestSuite"
+      ]
+    },
+    "helm.sh/chartmuseum/pkg/cache": {
+      "ids": 2,
+      "result": "pass",
+      "top_level": [
+        "TestStoreTestSuite"
+      ]
+    },
+    "helm.sh/chartmuseum/pkg/chartmuseum": {
+      "ids": 2,
+      "result": "pass",
+      "top_level": [
+        "TestServerTestSuite"
+      ]
+    },
+    "helm.sh/chartmuseum/pkg/chartmuseum/logger": {
+      "ids": 3,
+      "result": "pass",
+      "top_level": [
+        "TestLoggerTestSuite"
+      ]
+    },
+    "helm.sh/chartmuseum/pkg/chartmuseum/router": {
+      "ids": 5,
+      "result": "pass",
+      "top_level": [
+        "TestMatchTestSuite",
+        "TestRouterTestSuite"
+      ]
+    },
+    "helm.sh/chartmuseum/pkg/chartmuseum/server/multitenant": {
+      "ids": 22,
+      "result": "pass",
+      "top_level": [
+        "TestHandlerTestSuite",
+        "TestMultiTenantServerTestSuite"
+      ]
+    },
+    "helm.sh/chartmuseum/pkg/config": {
+      "ids": 3,
+      "result": "pass",
+      "top_level": [
+        "TestConfigTestSuite"
+      ]
+    },
+    "helm.sh/chartmuseum/pkg/repo": {
+      "ids": 13,
+      "result": "pass",
+      "top_level": [
+        "TestChartTestSuite",
+        "TestIndexTestSuite",
+        "TestProvenanceTestSuite"
+      ]
+    }
+  },
+  "schema": 1,
+  "totals": {
+    "ids": 52,
+    "packages": 8,
+    "top_level": 12
+  }
+}

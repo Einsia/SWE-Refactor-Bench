@@ -1,0 +1,30 @@
+{
+  "//": [
+    "The harness owns this file, not the submission. `types-surface.py` copies it",
+    "into the module's work directory beside the one consumer being compiled, and",
+    "symlinks `jsonata.d.ts` to the declarations under test -- so `paths` here is",
+    "a fixed local name and never a path into anybody's tree.",
+    "",
+    "strict:true and skipLibCheck:false are the measurement. A declaration that",
+    "only type-checks with the checks off has not described anything, and the",
+    "twelve negative consumers are exactly the misuses `strict` is what catches.",
+    "",
+    "types:[] means no ambient @types are needed, so the grading image does not",
+    "have to ship @types/node for the type surface to be measurable -- and a",
+    "submission cannot pass a negative by leaning on a global that happened to be",
+    "in scope."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": [],
+    "lib": ["ES2022"],
+    "baseUrl": ".",
+    "paths": { "jsonata": ["./jsonata"] }
+  },
+  "files": ["case.ts"]
+}

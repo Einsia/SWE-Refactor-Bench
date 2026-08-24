@@ -1,0 +1,238 @@
+schema = "swerefactor.verification-probe/1"
+task = "lang04-acorn-js-to-rust"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file run against a tree this script prepares.  Both
+# trees end up presenting the same two entry points -- `bin/acorn-probe`, which
+# speaks the NDJSON line protocol, and `bin/acorn`, the CLI -- so a candidate sees
+# an installed prefix and cannot tell which tree it is testing except by the
+# answers it gets back.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two
+# implementations of a JavaScript parser differ somewhere.  The allow list is
+# acorn's own published contract -- what its README and its exported API declare,
+# what the ECMAScript grammar requires, and what 8.14.0 does where the grammar is
+# silent.  The deny list is what instruction.md told the agent is explicitly not
+# compared.  They have to agree: a scope that forbids what the instruction
+# promised would make the task unwinnable, and a scope that permits what the
+# instruction excluded would make it unlosable.
+[scope]
+allow = [
+  "the AST, key for key and value for value, as the probe's canonical JSON encoding renders it: node types, every field acorn puts on a node, `start` and `end` on every node, and the order the keys appear in",
+  "conformance with the ECMAScript grammar for every `ecmaVersion` acorn accepts -- 3, 5, 6 through 2026, and `latest` -- including which constructs each version must accept and which it must reject",
+  "the effect of every documented option, alone and in combination: sourceType, onInsertedSemicolon, onTrailingComma, allowReserved, allowReturnOutsideFunction, allowImportExportEverywhere, allowAwaitOutsideFunction, allowSuperOutsideMethod, allowHashBang, checkPrivateFields, locations, ranges, preserveParens, program, directSourceFile",
+  "`SyntaxError` on input that does not parse: that one is raised at all, and its `pos`, `raisedAt`, `loc.line` and `loc.column`. The message string is in scope only where instruction.md declares it compared",
+  "position and location bookkeeping: `start`, `end`, `loc.start`, `loc.end`, `range`, and `getLineInfo` -- for every node type and against every line terminator, including \\r\\n, \\r alone, U+2028 and U+2029",
+  "the tokenizer as a public iterator: the full token sequence with each token's type, value, start and end, and the token-context rules that decide whether `/` begins a regular expression or divides",
+  "regular expression literals: which flag combinations and which patterns 8.14.0 accepts and rejects at each ecmaVersion, the `Literal` node's `regex` field, and the `value` field on a pattern the host cannot compile",
+  "comments and tokens collected through `onComment` and `onToken`, in order, with their positions",
+  "unicode: identifier start and continue over the whole code-point range including astral, the ID_Start and ID_Continue property escapes in regular expressions, whitespace and line-terminator classification, and surrogate pairs in identifiers and strings",
+  "numeric and string literal decoding: legacy octal, BigInt, numeric separators, every escape form, and a literal whose value is not representable",
+  "acorn-loose: that it returns a tree rather than raising for any input at all, and the tree it returns for input State A also parses loosely -- `parse` and `parse_expression_at` on damaged input",
+  "acorn-walk: the four traversal orders -- `full`, `fullAncestor`, `simple`, `recursive` -- the node sequence each produces, the ancestor chain, and the four position queries `findNodeAt`, `findNodeAround`, `findNodeAfter`, `findNodeBefore`",
+  "the exported data surface the probe reads: `version`, `defaultOptions`, `tokTypes`, `keywordTypes`, `isIdentifierStart`, `isIdentifierChar`, `isNewLine`, `lineBreak`, `nonASCIIwhitespace`",
+  "the command-line interface: every flag `acorn/bin/acorn` documents, reading from stdin and from named files, multiple input files, exit statuses, and its behaviour on a file that does not exist",
+  "the line protocol itself: one response per request line, in order, `id` echoed, `ok` true or false, a malformed line answered rather than fatal, and a request that follows a failing one still answered",
+  "resource behaviour on verification input: deeply nested expressions, long chains of operators, pathological regular expressions and very long lines must not crash, hang past a generous timeout, or exhaust memory where 8.14.0 does not",
+]
+deny = [
+  "wall-clock performance: a submission may be slower than the JavaScript, and any assertion of the form 'this must complete in N milliseconds' is out of scope. A hang that outlives the run timeout is in scope, as above; a constant factor is not.",
+  "peak memory as a number, and allocation counts, sizes or ordering",
+  "the internal structure of the submission: crate layout, module names, type names, function names, file names, and whether any given piece of the port lives where the JavaScript did",
+  "the wording of any `SyntaxError` message except where instruction.md states the message is compared, and incidental text written to stderr on a successful run -- progress notes, timing, debug chatter. This does not cover stderr output instruction.md requires: the two-line no-`ecmaVersion` warning is demanded there byte for byte and graded on bytes by stage 2, so it is in scope like any other specified output. What is excluded is holding a submission to stderr bytes nobody asked it to write.",
+  "diagnostic wording the CLI invents for a failure instruction.md does not specify -- for the five argv shapes where State A dies through node's own stack trace, instruction.md grades the exit status, an empty stdout and that *something* reached stderr, and says the text is the port's to choose; asserting on that text is out of scope. The usage string is not covered by this: instruction.md specifies `--help` to stdout at exit 0 and the same usage to stderr at exit 1 for an unknown flag, keeps the program name `acorn`, and stage 2 grades both on bytes -- so usage output is in scope.",
+  "stack traces, panic text, and the Rust runtime's own machinery on an input that makes the port abort -- that it aborted where 8.14.0 did not is the finding; what it printed while aborting is not",
+  "the presence, absence or content of JavaScript source, which stage 1 and the provenance module already judge",
+  "anything requiring node, or the JavaScript implementation, to be present in the submission",
+  "behaviour on input the original also gets wrong -- a candidate must pass on the original, which is what makes it a migration defect rather than an upstream bug. acorn has known deviations from the grammar; they are the standard here, because the task was to port acorn and not to write a better parser.",
+  "the six third-party bundles under `test/bench/fixtures/` as *files*: they are jQuery, ember, react, react-dom, backbone and angular, and instruction.md permits them to be deleted. Parsing input of that size and shape is in scope; asserting the files are on disk is not.",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the contents of the installed prefix, the presence of a file only one of the two trees can have, whether an entry point is a script or an ELF, or anything else that answers 'am I on the original?' without asking the artifact a question about JavaScript. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Little here is timing adjacent, but a
+# flake that costs a submission ten points is a bug in the benchmark, not a
+# finding -- and the pathological-input cases are exactly where a borderline
+# timeout could produce one.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Build + install + pytest, for one candidate, on one tree.  The install is done
+# once per tree and cached, so only the first candidate pays for it; 1500s is the
+# ceiling for that first one, on a cold Rust build of four crates.
+candidate_timeout_sec = 1500.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one source text, one option
+combination or one command line that acorn 8.14.0 answers correctly and the port
+does not. A round that finds nothing pays the submission 10 points; a round that
+errors pays nothing and is reported as an error rather than as either verdict.
+
+A candidate drives the two entry points instruction.md specifies -- `acorn-probe`
+over its NDJSON line protocol, and the `acorn` CLI -- through `srbacorn`. Those are
+the same two interfaces stage 2 measures 16,018 recorded cases over, which is
+deliberate: what stage 3 adds is not a new surface but an input nobody recorded.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds
+# converge on the same three obvious constructs; six pointed ones cover the
+# parser.  It is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-regex-context-and-positions"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the token context stack: whether `/` starts a regular expression or divides.
+Read `acorn/src/tokencontext.js` and the `updateContext` methods on the token
+types -- the answer depends on the previous token, on whether a keyword was
+used as a property name, on template literal nesting, and on arrow-function
+lookahead. This is the single most stateful thing in the tokenizer and the
+hardest to port by transliteration.
+
+Then `start`, `end`, `loc` and `range` on every node type, and `getLineInfo`.
+The extents that are not obvious: a node whose parse backtracked, arrow
+parameters reinterpreted from a parenthesised expression, a class field, an
+optional chain, a sequence in parens under `preserveParens`, a template with
+substitutions -- and all of it against \\r alone, U+2028 and U+2029 as line
+terminators.
+"""
+
+[[adversary]]
+id = "a02-regexp-validator-and-strict-scope"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the regular expression validator in `acorn/src/regexp.js`: which patterns and
+flag combinations 8.14.0 accepts and rejects at each ecmaVersion, named groups
+and back-references, unicode property escapes with and without the `u` and `v`
+flags, character class set notation, the `regex` field on the Literal node,
+and what `value` becomes when the host cannot compile the pattern.
+
+Then strict mode and the scope rules in `acorn/src/scope.js`: reserved words
+that are contextual, duplicate declarations across
+`var`/`let`/function/parameter/catch, `arguments` and `eval` as targets,
+labels and their duplicate rules, `delete` of a bare name, legacy octal,
+`with` -- and every one of them at the boundary where a directive prologue
+turns strict mode on.
+"""
+
+[[adversary]]
+id = "a03-loose-and-unicode"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+acorn-loose, which has a much weaker specification than the parser and is
+therefore much easier to get wrong. It must never raise. Read `acorn-
+loose/src/*.js` and find input where its recovery produces a specific tree --
+a dummy node's extent, where it inserts a missing token, how far it
+resynchronises after an unclosed brace, and what it does with input that is
+not JavaScript at all.
+
+Then the generated Unicode tables and everything reading them:
+`isIdentifierStart` and `isIdentifierChar` over the whole code-point range
+including astral and the boundaries of every range in `acorn/src/generated/`,
+identifiers written with escapes and with surrogate pairs,
+`nonASCIIwhitespace`, `lineBreak`, and the ID_Start/ID_Continue property
+escapes.
+"""
+
+[[adversary]]
+id = "a04-tokenizer-and-versions"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the tokenizer as a public iterator, and `onToken`/`onComment`: the full
+sequence with each token's type, value, start and end. Numeric literals at
+their edges -- legacy octal, BigInt, separators in every position -- every
+string escape form, template literal cooked and raw values, and comments in
+positions that affect what follows.
+
+Then the `ecmaVersion` gates: for each of 3, 5, 6 and every year up to 2026
+plus `latest`, a construct that version must accept and one it must reject.
+The old versions are where a port is laziest -- ecmaVersion 3's reserved
+words, ecmaVersion 5 rejecting `let`, and the fact that omitting ecmaVersion
+entirely has its own documented behaviour and its own warning.
+"""
+
+[[adversary]]
+id = "a05-errors-and-walk"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+`SyntaxError`: not the wording, but that one is raised at all and where.
+`pos`, `raisedAt`, `loc.line` and `loc.column` on input that fails in the
+middle of a construct -- and the input that must *not* raise:
+`allowReturnOutsideFunction`, `allowAwaitOutsideFunction`,
+`allowImportExportEverywhere`, `allowSuperOutsideMethod`, `allowHashBang`,
+`allowReserved`, each turning one specific error off and nothing else.
+
+Then acorn-walk: the exact node sequence from `full`, `fullAncestor`, `simple`
+and `recursive`, the ancestor chain at each callback, and the four position
+queries. Read `acorn-walk/src/index.js`'s base visitors -- the order children
+are visited in is specified by that table and by nothing else, and a port that
+walks fields in declaration order gets a different sequence for several node
+types.
+"""
+
+[[adversary]]
+id = "a06-pathological-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+input that stresses the shape of the implementation rather than its rules:
+thousands of nested parentheses or array literals, a long chain of binary
+operators, deeply nested template substitutions, a very long single line, a
+regular expression with heavy backtracking in the validator. A recursive-
+descent parser in Rust has a fixed stack where the JavaScript one grows its
+own; a crash or a hang is the finding, not the time taken.
+
+Then, with whatever budget remains, nothing in particular -- read the
+JavaScript and follow what looks weakest. The other five rounds were told
+where to look. The protocol edges and the CLI are yours too: a request whose
+`id` repeats, a line that is not JSON, an op with a missing field, argv shapes
+State A rejects.
+"""

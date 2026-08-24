@@ -1,0 +1,32 @@
+# Every stage directory is a Docker build context and every stage Dockerfile
+# copies the whole of it into the image, so anything left lying about here gets
+# baked in.  Nothing below is a file the stage needs: it is the debris that
+# accumulates from running the suite locally, plus editor backups.  The same
+# list ships in all three stage directories -- a stage that excluded something
+# the others kept would produce an image nobody could reproduce from the tree.
+#
+# Every pattern is prefixed `**/`, and that prefix is the whole point of this
+# file.  `.dockerignore` matches a pattern against the entire context-relative
+# path and does not re-apply it at each directory level the way `.gitignore`
+# does, so a bare `__pycache__/` excludes a `__pycache__` sitting in this
+# directory and nothing deeper -- not `lib/__pycache__`, not
+# `modules/closure/__pycache__`, which are the only two places running the
+# suite locally ever puts one.  Measured, not reasoned: with the unprefixed
+# form, planting a `.pyc` in each of those two directories and building put
+# both of them in the image.
+#
+# `PYTHONDONTWRITEBYTECODE=1` in the Dockerfile looks like it covers this and
+# does not.  It stops the image from writing bytecode; it has no bearing on
+# COPY bringing the author's bytecode in.  The difference is visible only in
+# the interpreter tag on the filename -- a `cpython-310` tag on an image whose
+# own `python -V` says 3.11 came from the host -- which is why the Dockerfile
+# also asserts, after its last bytecode-writing step, that none shipped.
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*~
+**/*.orig
+**/*.rej
+**/.DS_Store

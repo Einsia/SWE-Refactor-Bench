@@ -1,0 +1,186 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "pf01-sqlite-wasi-port"
+
+# Seven modules, 2,653 behavioural cases, and one rule that decides all of them:
+# a case passes when the submission's build and the reference build produce the
+# same bytes.  No module reads the submission's source.  No module knows what the
+# VFS is called, which macros were defined, or how the build was organised -- those
+# are questions for stage 1, which has a model and no compiler, and asking them
+# here would be scoring the port's shape instead of its behaviour.
+#
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner.  They answer: if this module were the only thing that regressed, how much
+# of the *platform migration* would be missing?
+#
+# That question is why the shares do not track the case counts.  `engine` is 1,616
+# of the 2,653 cases and carries 0.20, while `storage` is 130 and carries 0.22:
+# the engine runs in memory and a port has no business touching it, so its cases
+# are a regression net, whereas the on-disk format is the subject of the task and
+# every one of its cases is a direct measurement of the layer being rewritten.
+# Pooling all the checks together instead would let the SQL corpus decide the score
+# on its own and a stubbed VFS would cost four percent.
+#
+# `platform` and `artifact` carry 0.24 between them because together they answer
+# the question the other modules cannot: not "does this behave like SQLite" but
+# "does it behave like SQLite *on this platform*, using only what the platform
+# offers".  A proxy that shelled out to a native binary would pass every
+# differential module in this file and fail those two.
+#
+# `build` is first because everything after it compares two binaries; if there is
+# only one, the modules downstream have nothing behavioural left to measure and each
+# fails its own checks on its own evidence.  Ordering, not a dependency check:
+# `build`'s own zero cancels no other module's result, and needs no veto to stop the
+# stage paying, which it does only for a submission that passed every scored check.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+# No [env] block.  The build tree, the delivered artefact and the ledger that names
+# them live under $SRB_SUITE_WORK, which the runner sets per run; pinning any of
+# them to an absolute path here would let two runs in one container share a build.
+
+[metadata]
+cases = 2653
+operations = 717
+reference = "native sqlite3 3.31.1, built into this image from the State A payload"
+comparison = "stdout, stderr, exit status, and the bytes of the files the port writes"
+
+# --------------------------------------------------------------------------- #
+# The two binaries everything else compares
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "the submission builds, and produces the artefact it promised"
+weight = 0.04
+timeout_sec = 3600
+about = """
+Copies the submitted tree, deletes the generated sources and build products from
+the copy, runs ./build-wasi.sh, and checks that it exited 0 having produced a
+sqlite3.wasm that parses as a wasm module.  Publishes builds.json under
+$SRB_SUITE_WORK so the six modules after it read one build instead of repeating it.
+
+The deletion is the point of the copy: instruction.md says the verifier removes
+build products first, because generating the amalgamation with tclsh is where most
+of the build-system work actually is, and a checked-in sqlite3.c would skip it.
+
+Scored, not setup.  "It builds" is a measurement about the submission and belongs
+in the report with its log, not in the harness's error channel.  The reference is
+not built here -- the image built it, from the same payload the agent got -- so a
+compiler that breaks on grading day fails `docker build` instead of being reported
+as a port that fails every comparison.
+"""
+
+[[module]]
+id = "artifact"
+title = "the delivered module reaches only what WASI offers, and reaches what it needs"
+weight = 0.10
+timeout_sec = 600
+about = """
+Reads the import and export sections of the binary the build produced.  The only
+module that does not run cases, and the only one that can establish a negative: a
+host function that is not imported is not present in the instance, so it can never
+be called, on any input, including the inputs nobody thought to try.
+
+That is what closes the proxy hole.  A module that shelled out to a native sqlite3
+would produce identical output for all 2,653 differential cases; it could not do so
+without an import that says as much.  The positive half is asserted too, because a
+module importing nothing at all imports nothing forbidden: the port must ask the
+platform to open, read, write, sync, stat, truncate and unlink files, with
+alternatives allowed wherever the choice is the port's.
+"""
+
+# --------------------------------------------------------------------------- #
+# The layer being rewritten
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "storage"
+title = "the on-disk format, byte for byte, through the new VFS"
+weight = 0.22
+timeout_sec = 2400
+about = """
+130 cases over 71 operations: the database header, page sizes, auto_vacuum and
+incremental vacuum, WAL and its two side files, every journal mode including the
+persist and truncate variants, savepoints, ATTACH across files, VACUUM INTO,
+.backup, audit_check, and the digests of the files the port writes.
+
+The module a stubbed VFS cannot survive.  Keeping pages in linear memory satisfies
+every engine case; here the file is closed, reopened and digested, and the
+native_read cases hand it to the native reference -- which is asked to read a
+database it did not write, on a different platform, and get the same answers out.
+"""
+
+[[module]]
+id = "platform"
+title = "the WASI contract: what the reference cannot demonstrate"
+weight = 0.14
+timeout_sec = 900
+about = """
+78 cases over 32 operations, and the only module whose expectations are written
+down rather than measured -- because native has pipes, dlopen, permission bits and
+an unrestricted filesystem, so asking it what `.shell echo hi` should print gets an
+answer that is correct for Linux and meaningless here.
+
+The bar for a written-down expectation is high and stated in lib/cases_platform.py:
+WASI has no such concept, or upstream provides the porting macro and the port is
+required to use it, or this benchmark pins a name the source leaves open.  Of 52
+candidates probed on both targets 48 agreed and were moved into the differential
+modules; each entry that stayed records what native answered, so a reader can check
+the classification rather than take it on trust.
+"""
+
+# --------------------------------------------------------------------------- #
+# What the port is not supposed to change
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "engine"
+title = "the SQL language, unchanged"
+weight = 0.20
+timeout_sec = 2400
+about = """
+1,616 cases over 328 operations: expressions, the numeric tower, string and date
+functions, collation, comparison and cast rules, aggregates, window functions,
+joins, CTEs, recursive queries, DDL, triggers, views, UPSERT, generated columns,
+the pragma surface, and the error text for all of it.
+
+Nothing here should move under a platform port, which is what makes it a
+regression net rather than a measurement of the migration.  The one place the
+platform legitimately shows through is the numeric tower -- wasm32's long double is
+113 significand bits against x86-64's 64, and two of SQLite's printf paths ask for
+more digits than a double has -- and normalise.py names that difference, cites the
+lines that produce it, and asserts the round-trip property positively instead.
+"""
+
+[[module]]
+id = "shell"
+title = "the CLI surface, unchanged"
+weight = 0.16
+timeout_sec = 1800
+about = """
+481 cases over 167 operations: the ten output modes, the dot commands, the option
+vector, .import/.dump/.read round trips, .backup, .clone, error reporting and exit
+statuses.
+
+shell.c is the file a platform port has to touch most after the VFS -- popen,
+system and isatty all live there -- so it is the file most likely to be broken on
+the way past.  Its own module, so that a submission with a working engine and a
+mangled shell scores like one.
+"""
+
+[[module]]
+id = "extensions"
+title = "the extensions this release builds, still built"
+weight = 0.14
+timeout_sec = 1800
+about = """
+348 cases over 119 operations: FTS3/4 and FTS5 with its ranking functions, RTREE,
+JSON1, dbstat, the stmt vtab, .archive, fsdir, and the generate_series and
+completion helpers the shell registers.
+
+These are the parts of the tree most easily dropped by accident: each sits behind
+its own SQLITE_ENABLE_ flag, each adds work to the build, and a tree that quietly
+stops defining the flag still builds cleanly and still passes any test that does
+not ask for the feature.  So the cases ask.
+"""

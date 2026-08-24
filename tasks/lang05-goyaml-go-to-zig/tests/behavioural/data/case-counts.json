@@ -1,0 +1,17 @@
+{
+  "_note": "What the verifier image actually froze.  Declared here because five host-side files state these numbers to a reader and none of them can compute one: the counts exist only after freeze.py runs, inside an image the author never opens.  freeze.py asserts this block against the manifest it just wrote, so a generator change that moves a count fails the image build; tests/check-task.py asserts the prose copies against this block, so a document that states an old count fails before the task ships.  These are equalities, not floors -- min_graded_cases below is the floor.",
+  "_why_here": "This file is verifier-side and has no counterpart under environment/.  It used to be a `grading` key inside source-contract.json, which is shipped to the agent: that told the solver the exact size of the graded suite, and it is the same key lang06's verify_environment.py fails an image build for containing.  The contract states what State B has to be; how much of it gets measured, and against how many cases, is the verifier's business.  The basename is deliberately not source-contract.json -- cli.py's _shared_input_drift requires any basename shared with environment/ to be byte-identical, so the counts could not live in a second copy of the contract even if they were wanted there.",
+  "case_counts": {
+    "document_cases": 72,
+    "error_texts": 42,
+    "fresh_cases": 2000,
+    "frozen_cases": 8170,
+    "frozen_families": 17,
+    "graded_total": 10255,
+    "largest_family_cases": 2484,
+    "protocol_cases": 13,
+    "smallest_family_cases": 38
+  },
+  "min_graded_cases": 8000,
+  "schema_version": "swerefactor-case-counts-v1"
+}

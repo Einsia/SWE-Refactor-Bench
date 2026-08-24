@@ -1,0 +1,203 @@
+TASK {{task}} -- find what the migration got wrong.
+
+Jsonnet is a lazy, purely functional configuration language: a superset of JSON
+with functions, object inheritance, comprehensions and a standard library, which
+evaluates to JSON. The original is jsonnet 0.20.0, about 15,000 lines of C++11
+built with GNU make, shipping two programs -- `jsonnet`, which evaluates a program
+and prints the result, and `jsonnetfmt`, which reformats source while preserving
+comments. The submission is supposed to be the same two programs reimplemented in
+C# on .NET 8, against the base class library alone, with the C++ gone.
+
+Same programs means byte for byte: same stdout, same stderr, same exit status, same
+files written. It has already been checked that the migration is real, and that
+2,602 recorded cases over the language, the standard library, the two parsers, the
+formatter, the error channels and both command lines still get the right answer.
+Your job is the part those cases cannot do: find a program, a command line or a
+standard-library call that nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original, C++
+  {{submission}}   the submission, which claims to be the same two programs in C#
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack the built programs, not the source. Read the C++ as much as you like -- it
+is the specification of what the answer should be, and reading it is the most
+productive thing you can do here.
+
+One thing is worth knowing before you start reading. `stdlib/std.jsonnet` is the
+standard library, written in Jsonnet, and the migration preserves it byte for byte
+rather than porting it -- both trees lex, parse and evaluate the same file, and
+bind a small set of native functions over the result. So for any `std.` function
+implemented in Jsonnet, both trees are running the same source, and a difference
+there is a difference in the evaluator, not in the library. The natives are the
+other half: those are C++ in one tree and C# in the other, and that boundary is
+where the interesting divergences live. `core/vm.cpp`'s builtin table tells you
+which is which.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner builds
+that tree -- `make` on the C++, `dotnet publish` on the C#, using the same argv the
+behavioural suite uses -- installs both programs into a prefix, and runs your file
+against them. You are told the outcome on each tree separately. The build happens
+once per tree and is reused, so only your first candidate waits for it.
+
+Your file may import `srbjsonnet` and the standard library, and nothing else:
+
+    import srbjsonnet as rj
+
+    def test_negative_zero_survives_arithmetic():
+        out = rj.jsonnet("-e", "0 * -1")
+        assert out.ok, out
+        assert out.stdout == b"-0\n"
+
+`srbjsonnet` gives you:
+
+    jsonnet(*args, stdin=..., timeout=...) -> Output
+    jsonnetfmt(*args, stdin=..., timeout=...) -> Output
+        the two installed programs, run in a fresh empty directory. Output has
+        .returncode, .stdout, .stderr (bytes), .ok and .timed_out. A timeout
+        returns rather than raising, so "it hung" is something you can assert.
+
+    evaluate(snippet, *extra) -> bytes      `jsonnet -e`, raising unless exit 0
+    reformat(source, *extra) -> bytes       `jsonnetfmt -`, raising unless exit 0
+    version(program="jsonnet") -> bytes     `--version`
+
+    Case({"a.jsonnet": "...", "lib/b.libsonnet": "..."}) -> .run(program, *argv)
+        an input tree, one run in it, and what the run did to it. The Result has
+        the Output's fields plus .created, .changed and .removed, and .read(path)
+        for a file the run wrote. This is how you reach `--multi`, `--output-file`,
+        `--in-place`, `--test`, and any import that has to resolve against a
+        directory laid out a particular way.
+
+Streams are bytes, not str, deliberately: jsonnet's output is whatever the input
+made it, `--string` can manifest arbitrary bytes, and `importbin` exists. Decoding
+would hide exactly the difference you are looking for.
+
+Do not read the tree under test from inside a test, and do not reach for anything
+except the two installed programs. What is being graded is what the submission
+ships.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first is where most attempts die: a test that fails on both trees has found a
+bug in your test, or a behaviour jsonnet 0.20.0 never had. Run every idea -- you
+have budget for many, and one call tells you which of the four outcomes you got.
+
+Do not guess at what the C++ does. Run it. `try_test` gives you the original's
+result on every attempt, so the cheapest way to learn 0.20.0's behaviour on some
+horrible input is to write the assertion you expect, run it, and read which way it
+went. A candidate built on a guess about the C++ usually fails on both trees.
+
+Then it has to assert on something that was promised. The scope below is jsonnet's
+public contract; a divergence outside it is thrown out on review no matter how real
+it is, and you will have spent the budget for nothing. Two exclusions are worth
+knowing up front because they look like findings and are not: `jsonnetfmt
+--debug-desugaring` is broken in 0.20.0 for every input, so the flag must be
+accepted but its output is not graded; and `std.parseJson`/`std.parseYaml` abort on
+a number literal that overflows a double, so those inputs are out. Both are cases
+where the original is wrong, and a port that behaves sensibly would "fail" them.
+
+WHERE REWRITES OF THIS KIND ACTUALLY FAIL
+
+Not on the conformance suite. Every submission passes most of `test_suite/`,
+because it is the first thing anyone runs. What gets left out:
+
+  * Number formatting. The C++ prints doubles with `%.17g` when they are
+    fractional and `%.0f` when they are integral, and C#'s default double
+    formatting is shortest-round-trip, which is a different answer for most
+    values. `0.1` is `0.10000000000000001`. `1e-5` is `1.0000000000000001e-05`,
+    with a two-digit exponent. `1e100` prints all 101 digits. Negative zero prints
+    as `-0`, including when arithmetic produced it. A port that got this right for
+    the obvious cases can still be wrong at the integral cliff, at subnormals, on
+    ties, and on a three-digit exponent.
+
+  * The error channels. Three prefixes, `ERROR: `, `STATIC ERROR: ` and
+    `RUNTIME ERROR: `, each with its own exit status, and the message text and
+    location span are compared byte for byte. Location spans are where this goes
+    wrong: the C++ tracks them through desugaring, and the span it reports for an
+    error inside a comprehension, a computed field, or a std function implemented
+    in Jsonnet is whatever its own bookkeeping produced.
+
+  * Stack traces. Tab-indented frames, in a specific order, with a specific
+    function name on each and an empty context on the last. Desugaring rewrites
+    comprehensions and object composition into other constructs before evaluation,
+    so what appears in a trace is not what the user wrote. `--max-trace` elides the
+    middle with `...`.
+
+  * The formatter's comments. `jsonnetfmt` preserves comments through a parse and
+    a reprint, which means every comment has to be attached to something and
+    emitted in the right place. Between a field name and its colon. Inside an
+    otherwise empty object. After the last element of an array. Around a binary
+    operator that gets reflowed. These are the cases where the C++ has specific,
+    incidental behaviour, and `--sort-imports` moving an import with a comment
+    attached to it is worse.
+
+  * rapidyaml. `std.parseYaml` is a vendored YAML parser, and its scalar
+    resolution, its anchors and aliases, its merge keys, its block scalars with
+    every chomping indicator, and its errors are that parser's, not the YAML
+    specification's. Whatever the port used instead will disagree somewhere.
+
+  * The manifesters. `manifestYamlDoc`'s quoting and folding, `manifestIni`,
+    `manifestPython`, `manifestXmlJsonml`, `manifestTomlEx`. They are in
+    `std.jsonnet`, so both trees run the same code -- which means a divergence here
+    is the evaluator or a native underneath, and it is a genuine one.
+
+  * Laziness where it is observable. A thunk forced at most once, and forced at a
+    specific moment: an assertion in an object body, a field whose evaluation
+    forces another field, `super` through several `+`, a `local` captured before
+    the thing it refers to exists. A port with eager evaluation somewhere passes
+    every test whose output does not depend on when an error is raised.
+
+  * `--multi`. One file per top-level field, and it does not rewrite a file whose
+    contents would be unchanged. That last part is behaviour, it is observable
+    through the filesystem, and it is easy to miss.
+
+  * Pathological input. Deep recursion, very long strings, objects with many
+    fields. The C++ has a stack limit with `--max-stack` and specific behaviour at
+    it; a rewrite with .NET's own stack can crash where the C++ reports an error.
+    The crash is the finding. How long it took is not.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence on
+the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. `srbjsonnet` runs everything in a fresh directory and
+removes it afterwards, so leftovers between candidates are handled, but a test that
+asserts on something outside the case directory is on its own.
+
+A candidate must find its answer by asking the programs a question. A test that
+works out which tree it is on -- from a path, from an environment variable, from
+something sitting beside the binary -- and then passes or fails accordingly meets
+every mechanical condition for a break while establishing nothing, and it is
+rejected on sight. If you want to know whether the two differ, assert the value you
+believe is right and read the two outcomes.
+
+HOW TO SPEND THE BUDGET
+
+Read first, but read with a question in mind. `core/vm.cpp` and
+`core/formatter.cpp` are right there, and they are the definition of the
+answer -- but run each candidate the moment it is written: a wrong attempt
+costs one call and tells you more than another hour of reading. There is no
+turn limit; the wall clock is the only budget.
+
+Work in this order: pick a mechanism, read how the C++ implements it, find the case
+where its behaviour is incidental rather than specified -- a `%.17g` boundary, a
+location span produced by desugaring, a comment attached to the token before it
+rather than the one after, a native that coerces its argument before checking it --
+and write the assertion that pins it. That is the kind of thing a reimplementation
+does not reproduce by accident.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

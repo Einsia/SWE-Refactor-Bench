@@ -1,0 +1,104 @@
+# pf01 -- pinned inputs, and what this task redistributes.
+#
+# Every URL below is a fixed release artifact, never a branch, tag-that-moves, or
+# "latest".  The digests are what the authoring host actually downloaded; the agent image
+# and the verifier image verify them before unpacking, so a substituted upstream artifact
+# fails an image build instead of quietly changing what the task measures.
+#
+# Checked with:  sha256sum -c SHA256SUMS   (from the directory holding the files)
+#
+# It exits 0 and prints two warnings, both expected.  GNU sha256sum counts the blank
+# lines between sections as "improperly formatted" -- it skips comments but not blanks --
+# and the four artifacts below that are recorded rather than shipped cannot be read.  The
+# images do not run this file: each verifies one digest inline, before unpacking.
+#
+# --- what is redistributed, and under what terms ------------------------------
+#
+# One third-party artifact is committed to this task: original.tar.gz, the SQLite 3.31.1
+# source distribution.  SQLite is not merely permissively licensed, it is **public
+# domain** -- upstream disclaims copyright rather than granting terms, and the statement
+# travels inside the archive as LICENSE.md, where a reader of the extracted tree finds it
+# without coming back here.  There are no per-directory exceptions, no copyleft component
+# and nothing to audit for files whose terms differ from the whole; because the code is
+# public domain rather than licensed, redistributing it here imposes no obligation on a
+# downstream reader either.
+#
+# It is redistributed rather than fetched because the task hands an agent this exact tree
+# and scores what comes back, so the tree has to be pinned to the byte.  A URL can change
+# or disappear, and both images are built under a no-network guarantee.
+#
+# The archive is a repackaging, not a modification: no source file's contents were
+# altered.  The upstream sqlite-src-3310100/ directory is repacked under repo/ with
+# archive metadata normalised so the tarball is reproducible -- members in sorted order,
+# every mtime pinned to the release date 2020-01-27, uid/gid 0/0 -- and modes as upstream
+# ships them, 1,848 files at 0644 and 8 scripts at 0755 (configure, install-sh, and six
+# .tcl/.bat tools).
+#
+# Three artifacts are downloaded during image build, verified against the digests below,
+# and never committed here:
+#
+#     wasi-sdk   24.0 (clang 18.1.2-wasi-sdk)   Apache-2.0 with LLVM exception
+#     wasmtime   24.0.0                         Apache-2.0 with LLVM exception
+#     zlib       1.2.11                         zlib licence
+#
+# No SQLite binary is redistributed and no container image is part of this folder.  The
+# native reference every stage compares against is built from this same source, inside the
+# image that needs it, at image-build time.
+
+# The State A payload.  Vendored, not downloaded: it is the task's own artifact.
+# tests/behavioural/data/original.tar.gz and tests/verification/data/original.tar.gz are
+# byte-identical copies -- a Docker build context cannot reach outside itself, and the
+# stages that build a reference need the same source the agent was handed.  Git stores
+# one blob for all three, and `swerefactor validate` fails if they ever diverge.
+#
+# 1,856 files.  Three short of the upstream zip: .fossil-settings/empty-dirs and
+# .fossil-settings/ignore-glob are version-control configuration, which an agent that
+# could read history could use to read a later platform layer instead of writing one, and
+# ext/lsm1/Makefile is a build file for an extension the amalgamation does not include.
+# `manifest` and `manifest.uuid` stay, and are not version-control metadata despite the
+# names -- they are plain files upstream ships and the build reads.  Without `manifest`,
+# tool/mksourceid cannot derive SQLITE_SOURCE_ID and the tree does not build.
+#
+# `manifest` still names all three dropped files, so mksourceid appends `alt1` to
+# SQLITE_SOURCE_ID for anything built from this tree.  A correct port reports the same
+# tail, because deleting src/os_unix.c fails the same inventory check.  The suite relies
+# on that: it measures the source id from the reference instead of writing it down.
+#
+# state_a_files.txt records the shipped list, digest by digest, and both images check an
+# extracted tree against it before anything else runs.
+928d7a4dba8359bbac94e515a75e7898fe66f732a308eee1520b495356e407e1  original.tar.gz
+
+# Upstream provenance of original.tar.gz, recorded but not shipped.  original.tar.gz is
+# this archive's sqlite-src-3310100/ directory, repacked under repo/ with no
+# version-control data.  Listed so the derivation is checkable against sqlite.org.
+#   https://www.sqlite.org/2020/sqlite-src-3310100.zip
+f2dc2382855d99a960c363c1e5ae72b49da4c55d49154aa6d100e5970a1fee58  sqlite-src-3310100.zip
+
+# The cross toolchain.  clang 18.1.2-wasi-sdk, target wasm32-unknown-wasi.
+#   https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.tar.gz
+c6c38aab56e5de88adf6c1ebc9c3ae8da72f88ec2b656fb024eda8d4167a0bc5  wasi-sdk-24.0-x86_64-linux.tar.gz
+
+# The runtime the port is scored under.  wasmtime-cli 24.0.0.
+#   https://github.com/bytecodealliance/wasmtime/releases/download/v24.0.0/wasmtime-v24.0.0-x86_64-linux.tar.xz
+27b4dff2ec7ab3148c73504f029f281bb78e0cea45d978f74e9f8c1d5585f8e6  wasmtime-v24.0.0-x86_64-linux.tar.xz
+
+# zlib, cross-built for wasm32-wasi by scripts/build-wasi-zlib.sh.  Load-bearing for
+# the `.archive` command even though `pragma compile_options` never mentions it.
+#   https://zlib.net/fossils/zlib-1.2.11.tar.gz
+c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1  zlib-1.2.11.tar.gz
+
+# The scripts in this directory, which also exist byte-identically under
+# tests/behavioural/data/scripts/ and tests/verification/data/scripts/ for the same
+# build-context reason as the payload.
+#
+# The duplication is forced rather than chosen, and it is the pair that matters most:
+# build-native-oracle.sh must produce the same binary in the agent image and the verifier,
+# or a port checked against the local reference is scored against a different one, and
+# build-wasi-zlib.sh must produce the same libz.a on both sides, or the submission links
+# against one archive and the verifier relinks against another.
+#
+# Checked with:  sha256sum -c <(grep -h '  scripts/' SHA256SUMS)
+71d494920938d009d2a1e275c956af22a4b7a68dc976cd5c03d91bb3efb31d3f  scripts/build-native-oracle.sh
+469793d4a3b1f83863a4249c1de316c850b13c5897eaae2bfc5500bca1628118  scripts/build-wasi-zlib.sh
+701d7d011115c3aeb50e9c9796dbf920c69038ff4dbcd1d56703e9b5f35b6a59  scripts/wasi-run
+dd6cf3fb4b86d2bedd176d338858ba1cf9bfebac03f90c51c21464b29e5b3458  scripts/wasm-imports.py

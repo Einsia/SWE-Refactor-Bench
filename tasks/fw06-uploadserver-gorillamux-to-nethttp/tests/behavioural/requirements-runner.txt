@@ -1,0 +1,39 @@
+# The stage's own Python stack, hash-pinned.
+#
+# Deliberately tiny.  The suite drives the submission over real HTTP using raw
+# sockets from the standard library -- `harness.wire` assembles the request line
+# byte for byte -- so nothing here can drift into the behaviour being graded.  No
+# httpx, no requests, not even http.client: every convenience client normalises a
+# target, and the most informative case in this corpus (`GET /files/sub%2Fb.txt`,
+# which the retired router answers 200 and a naive port answers 404) is destroyed
+# by any client that rewrites what it was given.
+#
+# No PyYAML, unlike the Helm task's list.  This repository's only YAML is its CI
+# workflow, and what that workflow claims about the build is checked by this stage
+# doing the build.
+#
+# pytest-timeout is the one addition over the minimum, and it is not optional.
+# Every request is a blocking read on a raw socket, and a submission that accepts
+# a connection and never answers would otherwise hang the module until the
+# suite-level timeout killed it -- losing the other 86 cases along with the one
+# that hung.
+#
+# The submission is a Go binary and the toolchain that builds it is the image's
+# Go, not anything on this list, so unlike a Python task this file has no overlap
+# at all with what the graded program depends on.
+#
+# tests/audit/requirements-scan.txt pins the same versions of the four
+# packages it shares with this list, so both stages run the same pytest and there
+# is one version of the runner to reason about across the tree.
+#
+# Installed with --require-hashes, so a substituted artefact fails the build.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6
+iniconfig==2.0.0 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759
+pluggy==1.5.0 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest-timeout==2.3.1 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e

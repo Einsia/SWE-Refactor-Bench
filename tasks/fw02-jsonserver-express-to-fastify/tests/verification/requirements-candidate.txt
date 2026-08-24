@@ -1,0 +1,30 @@
+# The candidate's test stack for stage 3, one set of versions for both trees.
+#
+# This is not the service's dependency list -- the service is Node, and its two
+# possible closures are lock-baseline.json and lock-target.json in data/. This is
+# what a candidate test file is allowed to import beyond the standard library.
+#
+# The same pytest and pytest-timeout the other stage 3 images pin, and the same
+# ones stage 2's grader uses: a benchmark should not run two pytests, and a
+# candidate whose pytest differed between the two halves of a comparison would not
+# be comparing the two frameworks.
+#
+# Deliberately absent: httpx, requests, aiohttp -- any HTTP client that
+# decompresses a body transparently, follows a redirect on its own, or normalises
+# a header dictionary. The whole subject here is bytes on the wire: the ETag
+# format, the Link header's spelling, whether Content-Encoding appears, whether a
+# 304 carries a body. `http.client` shows a candidate exactly what arrived, and
+# stage 2 measures 369 recorded exchanges through the same standard library, so
+# there is nothing a candidate needs that it does not have.
+#
+# Installed with --require-hashes, so a substituted artefact fails the build.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6
+iniconfig==2.0.0 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759
+pluggy==1.5.0 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest-timeout==2.3.1 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e

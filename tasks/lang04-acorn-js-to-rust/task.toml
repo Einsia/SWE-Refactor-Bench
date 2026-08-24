@@ -1,0 +1,234 @@
+# =============================================================================
+# SWERefactorBench -- language rewrite
+#
+#   State A : acorn 8.14.0, a three-package JavaScript monorepo -- acorn (the
+#             ECMAScript parser and tokenizer), acorn-loose (the error-tolerant
+#             parser) and acorn-walk (the AST walker) -- 6,549 lines of logic
+#             across 116 files, bundled by rollup into CommonJS and ESM, with a
+#             CLI at bin/acorn and upstream's own 6,763-test suite in test/.
+#   State B : the same three libraries and the same CLI in Rust 1.90 with no
+#             external crates, still emitting byte-identical ESTree JSON,
+#             identical SyntaxError messages, identical source positions and the
+#             same argv behaviour.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs a binary builds
+# one from the submitted source with the published argv.  That is what makes "the
+# parser is written here" a fact about the repository rather than a claim about a
+# directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission.  Failing a required gate is a zero and nothing after it runs.
+#   2. fourteen behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the JavaScript parser
+#      passes and this one fails.  60 points, paid per adversary that finds
+#      nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has
+# neither cargo nor node, because a review that can build grades a build log
+# instead of an implementation, and the question here -- were 6,549 lines of a
+# dynamically typed parser reimplemented or mechanically transliterated -- is not
+# one a build log answers.  Stage 2 has a Rust toolchain and node, because 38 of
+# its cases run the installed executable against the JavaScript CLI argv for
+# argv; everything else it compares against output frozen at image build time.
+# Stage 3 is the only image that hands a model both trees and both builds, because
+# "the JavaScript parser accepts this and yours does not" is a claim that has to
+# be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# `exclude` is passed to `tar --exclude`, so these patterns are matched at every
+# depth rather than anchored to the root.  Two names are listed and the list stops
+# there:
+#
+#   target/  is cargo's output and may legitimately contain anything, including a
+#            copy of every source file it compiled.  It is discarded before the
+#            graded build in any case.
+#   dist/    is where State A's own rollup writes.  An agent that ran the
+#            reference build to study it has a populated acorn/dist, acorn-loose/
+#            dist and acorn-walk/dist as ordinary regenerable output, and no byte
+#            comparison separates that from a submission that shipped the bundle
+#            deliberately.  Both are already skipped by the source-closure walk.
+#
+# node_modules/, vendor/ and .cargo/ are deliberately NOT excluded and must never
+# be.  All three are forbidden at submission, and the only evidence that one was
+# shipped is the build's own record of having deleted it -- an exclusion here
+# would delete them one step earlier, silence two scored checks, and turn "the
+# submission vendored its dependencies" into "the submission had no vendor
+# directory".  They are small: node_modules lives at /workspace/node_modules,
+# outside the repository, so a submission only has one if it put it there.
+#
+# .git/ is kept.  The image leaves exactly one deterministic baseline commit, so a
+# diff against it is the cheapest true account of what the agent changed, and
+# stage 1 reads it.
+#
+# A bundle placed anywhere else is not excluded by any of this, and stage 1's
+# no-embedded-reference gate is what sees it.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "target",
+    "dist",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+]
+
+[task]
+name = "swerefactor/lang04-acorn-js-to-rust"
+description = "Reimplement the complete acorn 8.14.0 ECMAScript parser monorepo -- parser, error-tolerant parser and AST walker -- in Rust with no external crates, preserving byte-identical ESTree JSON, error messages, source positions and the acorn CLI."
+authors = []
+keywords = [
+    "swe-refactor",
+    "language-migration",
+    "javascript",
+    "rust",
+    "acorn",
+    "ecmascript",
+    "parser",
+    "estree",
+    "offline",
+]
+
+[metadata]
+category = "language-rewrite"
+difficulty = "frontier"
+license = "MIT"
+upstream = "https://github.com/acornjs/acorn"
+upstream_version = "8.14.0"
+# The commit tag 8.14.0 points at, dereferenced.  The value here used to be
+# da3810ef1615e40545c640697b4453c5c5ce965f, which is the annotated *tag object* --
+# `git rev-parse 8.14.0` prints it, so it looks like a commit and reads like one,
+# but no commit has that hash and GitHub answers 422 "No commit found for SHA"
+# when asked for it.  It dereferences to the hash below, tagged 2024-10-27.
+upstream_commit = "3c6a5a98e8c6dcefef391e6114cc7e64657979d3"
+source_repository = "https://github.com/acornjs/acorn"
+source_version = "8.14.0"
+state_a = "acorn 8.14.0 in JavaScript (6,549 lines of logic across 116 files in three packages: acorn, acorn-loose, acorn-walk), bundled by rollup 3.29.4, Node 22.20.0"
+state_b = "the same three libraries and the same bin/acorn CLI in Rust 1.90, no external crates, ESTree JSON and SyntaxError text unchanged"
+scale = "116 files, 6,549 lines of JavaScript logic, plus upstream's 6,763-test suite and a 23-operation differential probe"
+tags = [
+    "whole-repository",
+    "language-rewrite",
+    "dynamic-to-static",
+    "differential-testing",
+    "byte-exact-json",
+    "offline",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 30h wall clock.  The parser is spec-complete ES2025: a regexp validator with its
+# own Unicode property database, an operator-precedence expression parser whose
+# error messages are part of the contract, class fields, private names, optional
+# chaining, JSX-free but decorator-adjacent lookahead, and an AST that has to
+# serialise to the same JSON with the same property insertion order.  Then the
+# same again twice, in miniature, for the error-tolerant parser and the walker.
+# The State A sources stay in the image as the oracle, so the time goes on
+# reimplementation rather than on reverse-engineering behaviour.
+#
+# no-network with CARGO_NET_OFFLINE: there is no vendor directory and no registry
+# cache, so "no external crates" is enforced by the environment rather than
+# audited afterwards.  Node and the pinned toolchain are already installed,
+# because the agent is expected to run State A.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 108000.0
+network_mode = "no-network"
+user = "agent"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+CARGO_NET_OFFLINE = "true"
+RUST_BACKTRACE = "1"
+CARGO_BUILD_JOBS = "4"
+NODE_PATH = "/workspace/node_modules"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 12600 + 54000 = 72000s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota to
+# be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 79200.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+# The behavioural image builds the JavaScript reference with the pinned rollup,
+# runs upstream's own suite against it, generates the corpus and freezes every
+# expectation, then grades the reference against its own frozen answers as a
+# self-check -- so its build is slower than the agent environment's.  node
+# survives into the grading stage because the CLI differential runs both sides
+# live; the bundler does not.
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+CARGO_NET_OFFLINE = "true"
+RUST_BACKTRACE = "1"
+CARGO_BUILD_JOBS = "4"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a smoke
+# test that the suite can be passed at all.  The suite's own gate answers that:
+# stage 3 is asked only of a submission that scored stage 2 in full, so a tree
+# that reaches it has already passed every recorded check.  What six models add is
+# the other half -- an hour each spent hunting for a behaviour nobody thought to
+# record.

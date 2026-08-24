@@ -1,0 +1,154 @@
+# Three jobs: the harness's own suite, `swerefactor validate` over all twenty tasks,
+# and the part of the suite that needs a container to run in.
+#
+# The sixty stage images are not built here.  One task's three images pull a
+# language toolchain, resolve an offline dependency mirror and build an upstream
+# release twice; twenty of those is not a pull-request check, and a CI file that
+# pretends otherwise is a CI file that is always red.
+#
+# `swerefactor/infra:1` is built, because it is not a stage image: a pip install of
+# tomli and a COPY of this repository's own harness, seconds either way.  Without
+# it the twenty-six tests that drive the two harness loop scripts skip, and a
+# skipped test that only ever skips is a test whose subject is unmeasured -- these
+# two scripts are the ones that decide when a round is wedged and when a session
+# is rotated, so they are worth a container.
+#
+# `validate` is the one that catches an authoring mistake before an image is ever
+# built -- declared gates missing from the prompt, weights that do not normalise,
+# a module whose command does not exist, a recorded tarball digest that has
+# drifted from the file beside it.  It reads the tree only, so it belongs here.
+#
+# Workflows live under .github/ because Gitea and Forgejo read that path as well
+# as their own, so one file serves both this repository's host and a public mirror.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    name: harness suite (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 has no tomllib, so it exercises swerefactor.tomlcompat's tomli
+        # fallback; 3.11+ take the stdlib path.  Both are shipped configurations:
+        # the donor image is 3.11 and the authoring host is 3.10, and a reader
+        # that works on only one of them fails in whichever is not tested.
+        python: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Twenty vendored release tarballs; no history is needed to run tests.
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: install
+        # The harness itself needs nothing but the standard library above 3.10, so
+        # what is installed here is what runs the suite -- plus `tomli` below 3.11,
+        # which is the fallback 3.10 is in this matrix to exercise.  The harness is
+        # read from the source tree, not installed: `pythonpath` in pyproject.toml
+        # puts it on the path, the same way the stage images set PYTHONPATH over a
+        # copy.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest "tomli; python_version < '3.11'"
+
+      - name: the harness imports with nothing else present
+        # The guarantee swerefactor.contract makes is not "it imports" but "it
+        # imports in an image with no TOML reader", which two of the twenty
+        # behavioural images are.  -I ignores the environment and PYTHONPATH both.
+        run: |
+          python -I -c "
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location(
+              'probe', 'infra/swerefactor/contract.py')
+          mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          assert len(mod.CONTRACT_ENV) == 8, sorted(mod.CONTRACT_ENV)
+          print('swerefactor.contract stands alone ok')"
+
+      - name: which harness this is
+        # The same digest infra/Dockerfile prints, so a CI log can be matched
+        # against a score.json's harness.fingerprint.
+        run: PYTHONPATH=infra python -c "import swerefactor; print(swerefactor.fingerprint())"
+
+      - name: suite
+        run: python -m pytest infra/tests -q
+
+  tasks:
+    name: validate all tasks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: swerefactor validate, every task
+        # Every task, then report -- not the first failure.  Twenty tasks share
+        # one set of conventions, so a change that breaks one usually breaks
+        # several, and stopping at the first turns one run into five.
+        run: |
+          failed=()
+          for task in tasks/*/; do
+            echo "::group::$(basename "$task")"
+            PYTHONPATH=infra python -m swerefactor validate --task-dir "$task" \
+              || failed+=("$(basename "$task")")
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            printf 'invalid: %s\n' "${failed[@]}"
+            exit 1
+          fi
+          echo "all $(ls -d tasks/*/ | wc -l) tasks validate"
+
+  container:
+    name: harness loop scripts (in a container)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          # One version.  These tests run their subject inside the image; the host
+          # interpreter only drives `docker` and reads what came back.
+          python-version: "3.11"
+
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: build the donor image
+        # The same command infra/Dockerfile documents.  Its two build-time
+        # self-checks are the first thing that would fail, and the fingerprint it
+        # prints is what a score.json's harness.fingerprint is matched against.
+        run: docker build -t swerefactor/infra:1 infra/
+
+      - name: the loop scripts, driven in a container
+        # These two modules skip when the image is absent, which is every
+        # environment that has not built it -- so this job is the only place their
+        # assertions are ever evaluated.  Named explicitly rather than run as the
+        # whole suite: the rest of it is already covered above on three
+        # interpreters, and repeating it here would only widen the window in which
+        # the same failure is reported twice.
+        run: |
+          python -m pytest infra/tests/test_agent_loop_diagnostics.py \
+                           infra/tests/test_claude_loop_context_window.py \
+                           -q -rs

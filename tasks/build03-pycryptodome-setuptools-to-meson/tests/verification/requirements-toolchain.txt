@@ -1,0 +1,93 @@
+# BOTH build systems, hash-pinned, for the interpreter that builds either tree.
+#
+# This is the file that makes stage 3 different from the other two images.  Stage 1
+# has no build system at all; stage 2 has Meson and asserts at image-build time
+# that setuptools, distutils and pkg_resources cannot be imported.  This stage has
+# to build the ORIGINAL as well, because a candidate's claim that "the setuptools
+# build ships this and the Meson build does not" is worth nothing unless the
+# setuptools build is right here to answer for itself.
+#
+# That reads like a loophole and is the opposite of one.  Stage 1 has already judged
+# whether setuptools left the submission, with both trees open and a reviewer, and a
+# failure there scores the submission zero before this image starts.  What this image
+# adds is the ability to ask State A a question at grading time.
+#
+# Everything below must therefore be importable, and a missing one is fatal.  A
+# stage-3 image without setuptools would not fail visibly -- it would make every
+# candidate fail on the original, which the adjudicator reads as "found nothing",
+# which pays the submission all 60 points.  Stage 2 pins the same two versions for
+# the neighbouring reason: its recordings came from that build.
+#
+# ---------------------------------------------------------------------------
+# For the ORIGINAL
+#
+#   setuptools    State A's `[build-system] requires`.  69.0.3 is the release
+#   wheel         contemporaneous with pycryptodome 3.20.0 (January 2024), which is
+#                 the same reason SOURCE_DATE_EPOCH is pinned to 2024-01-09: what a
+#                 candidate compares is what State A's build produced then, and a
+#                 setuptools two years newer would produce a different METADATA
+#                 block, a different RECORD and possibly a different wheel tag,
+#                 none of which the migration is responsible for.
+#
+# For the SUBMISSION
+#
+#   meson         the same four versions stage 2 grades against, to the byte.
+#   meson-python  A submission that built one way for stage 2 and another way here
+#   ninja         would be graded on two different artifacts, and a divergence
+#   patchelf      between them would be this stage's own doing.
+#
+# For BOTH
+#
+#   build         the PEP 517 front end.  Both trees are PEP 517 packages, so
+#                 `python -m build --wheel --no-isolation` builds either one and the
+#                 backend it dispatches to is the only difference.  That is what
+#                 makes a comparison between two build systems mean anything here:
+#                 the command, the flags and the front end are identical on both
+#                 halves of it.
+#   pyproject_hooks, pyproject-metadata, packaging
+#                 the front end's and meson-python's own closure, pinned rather
+#                 than resolved.
+#
+# ---------------------------------------------------------------------------
+# Deliberately absent: pycryptodome, and pytest.
+#
+# pycryptodome because the only Crypto that may exist during a run is the one a
+# submission's own wheel installs into a scratch prefix; an importable one here
+# would let a candidate measure the image instead of the build.  The Dockerfile
+# asserts it is not importable.
+#
+# pytest because the candidate's stack is a separate file installed into a separate
+# interpreter -- see requirements-candidate.txt.  The process that builds the trees
+# does not share an interpreter with code an adversary wrote.
+
+meson==1.4.0 \
+    --hash=sha256:476a458d51fcfa322a6bdc64da5138997c542d08e6b2e49b9fa68c46fd7c4475 \
+    --hash=sha256:8fd6630c25c27f1489a8a0392b311a60481a3c161aa699b330e25935b750138d
+meson-python==0.15.0 \
+    --hash=sha256:3ae38253ff02b2e947a05e362a2eaf5a9a09d133c5666b4123399ee5fbf2e591 \
+    --hash=sha256:fddb73eecd49e89c1c41c87937cd89c2d0b65a1c63ba28238681d4bd9484d26f
+ninja==1.11.1.1 \
+    --hash=sha256:84502ec98f02a037a169c4b0d5d86075eaf6afc55e1879003d6cab51ced2ea4b \
+    --hash=sha256:76482ba746a2618eecf89d5253c0d1e4f1da1270d41e9f54dfbd91831b0f6885 \
+    --hash=sha256:9d793b08dd857e38d0b6ffe9e6b7145d7c485a42dcfea04905ca0cdb6017cc3c
+patchelf==0.17.2.4 \
+    --hash=sha256:d9b35ebfada70c02679ad036407d9724ffe1255122ba4ac5e4be5868618a5689 \
+    --hash=sha256:970ee5cd8af33e5ea2099510b2f9013fa1b8d5cd763bf3fd3961281c18101a09
+setuptools==69.0.3 \
+    --hash=sha256:385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05 \
+    --hash=sha256:be1af57fc409f93647f2e8e4573a142ed38724b8cdd389706a867bb4efcf1e78
+wheel==0.42.0 \
+    --hash=sha256:177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d \
+    --hash=sha256:c45be39f7882c9d34243236f2d63cbd58039e360f85d0913425fbd7ceea617a8
+build==1.5.0 \
+    --hash=sha256:13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f \
+    --hash=sha256:302c22c3ba2a0fd5f3911918651341ebb3896176cbdec15bd421f80b1afc7647
+pyproject_hooks==1.2.0 \
+    --hash=sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913 \
+    --hash=sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8
+pyproject-metadata==0.12.1 \
+    --hash=sha256:f7162d580a96386a8eb096da06215f981f547d1490f03055ef99e323bc2da427 \
+    --hash=sha256:8809a4df6fe08279b39a8890669506ed3158e0617855ac9aff098fcbe772ae4c
+packaging==26.2 \
+    --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
+    --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661

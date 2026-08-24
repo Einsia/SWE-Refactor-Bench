@@ -1,0 +1,167 @@
+TASK {{task}} -- find what the migration got wrong.
+
+cmark is the reference C implementation of CommonMark: a library that parses
+Markdown into a node tree and renders it to HTML, XML, man, LaTeX, plaintext and
+back to CommonMark, plus a command-line tool wrapping it. The original is about
+22,000 lines of C11 built with CMake. The submission is supposed to be the same
+product reimplemented in Rust -- same installed libcmark.so and libcmark.a, same
+cmark.h, same cmark(1), same answers -- with the C gone.
+
+Same answers means byte for byte. It has already been checked that the migration
+is real, and that 4,122 recorded cases over the CommonMark specification suite,
+the renderers, the options, the node API and the CLI still get the right output.
+Your job is the part those cases cannot do: find a document, an API call or a
+command line that nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original library, C
+  {{submission}}   the submission, which claims to be the same library in Rust
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack the built artifacts, not the source. Read the C as much as you like -- it
+is the specification of what the answer should be, and reading it is the most
+productive thing you can do here.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner
+configures, builds and installs that tree with the published CMake argv, then runs
+your file against the installed artifacts. You are told the outcome on each tree
+separately. The build happens once per tree and is reused, so only your first
+candidate waits for it.
+
+Your file may import `srbcmark` and the standard library, and nothing else:
+
+    import srbcmark
+
+    def test_thing():
+        out = srbcmark.run_cmark("--to", "xml", stdin="*hi*\n")
+        assert out.ok, out
+        assert b"<emph>" in out.stdout
+
+`srbcmark` gives you:
+
+    run_cmark(*args, stdin=..., timeout=...) -> Output
+        the installed cmark(1). Output has .returncode, .stdout, .stderr
+        (bytes), .ok and .timed_out. A timeout returns rather than raising, so
+        "it hung" is something you can assert.
+
+    render(document, fmt="html", *extra) -> bytes
+        the shorthand. Raises if cmark exited non-zero.
+
+    CProgram(source, static=False) -> .compile() / .build() / .run()
+        a C program compiled against the installed library with flags from its
+        own libcmark.pc. This is how you reach the parts of the API that have no
+        command line: the custom allocator, the streaming parser, the node tree,
+        the iterator, and the ABI itself. .compile() returns the compiler's
+        output rather than raising, because "this program builds against the C
+        and not against the Rust" is itself a finding.
+
+    pkg_config(*args) -> list[str]     ask the installed libcmark.pc
+    nm_defined(static=False) -> set    the library's exported symbols
+    library_path(static=False)         the installed .so or .a
+
+Do not read the tree under test from inside a test, and do not try to import or
+link anything except through the install prefix. What is being graded is what the
+submission ships.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first is where most attempts die: a test that fails on both trees has found a
+bug in your test, or a behaviour cmark 0.31.1 never had. Run every idea -- you have
+budget for many, and one call tells you which of the four outcomes you got.
+
+Do not guess at what the C does. Run it. `try_test` gives you the original's
+result on every attempt, so the cheapest way to learn 0.31.1's behaviour on some
+horrible input is to write the assertion you expect, run it, and read which way it
+went. A candidate built on a guess about the C usually fails on both trees.
+
+Then it has to assert on something that was promised. The scope below is cmark's
+public contract; a divergence outside it is thrown out on review no matter how
+real it is, and you will have spent the budget for nothing. Performance as a
+number, allocation counts, private symbols in the Rust build, the layout of a
+struct cmark.h does not define: all genuinely different between these two, all
+excluded, none worth a candidate.
+
+WHERE REWRITES OF THIS KIND ACTUALLY FAIL
+
+Not on the specification suite. Every submission passes most of it, because it is
+the first thing anyone runs. What gets left out:
+
+  * Sourcepos. It is in the xml output and under CMARK_OPT_SOURCEPOS, it is
+    tedious, and it is the single most commonly wrong thing in a cmark rewrite. A
+    construct's extent is not obvious for setext headings, lazy continuations,
+    list items whose content is indented irregularly, an unclosed fenced block, or
+    anything containing a tab -- and the C's answer is whatever its offset
+    bookkeeping happens to produce, not something the specification states.
+
+  * The chunk boundary. cmark_parser_feed may be handed a document in arbitrary
+    pieces, and a boundary inside a CRLF, a multi-byte character, an entity, a
+    fence, or a link reference definition must not change the result. A rewrite
+    that buffers by line, or by UTF-8 character, gets this almost right.
+
+  * The writers nobody uses. man, latex, plaintext, and commonmark
+    round-tripping. Escaping rules differ per format, the width argument wraps at
+    a specific place, and a document rendered to commonmark and reparsed is
+    supposed to give the same tree.
+
+  * cmark_mem. Every allocation the library makes for a tree created with a custom
+    allocator must go through that allocator, including inside the renderers. A
+    rewrite that uses Rust's global allocator for its own internal buffers passes
+    every rendering test and breaks every embedder that passes a cmark_mem.
+
+  * The error and edge returns of the node API. What cmark_node_get_heading_level
+    returns on a paragraph. What cmark_node_insert_before returns for a node with
+    no parent. What cmark_node_check repairs. These are in cmark.h, they are
+    rarely exercised, and the C's answers are specific.
+
+  * Entities and invalid UTF-8. The full HTML5 named entity table, including the
+    multi-codepoint entries; decimal and hex references at their boundaries;
+    unterminated forms; overlong encodings, surrogates and NUL under
+    CMARK_OPT_VALIDATE_UTF8 and without it.
+
+  * The package, not the library. libcmark.pc's fields, the SONAME, the .so
+    symlink chain, and whether libcmark.a works as well as the shared build. A
+    downstream package is what consumes this, and pkg-config is how it finds it.
+
+  * Pathological input. Deep nesting, long emphasis runs, enormous link reference
+    tables. The C has upstream regression tests for these because they were bugs
+    once; a rewrite with different backtracking or unbounded recursion can crash
+    or hang where the C does not. The crash is the finding. How long it took is
+    not.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence
+on the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. Note that both trees are built once and reused, so a
+test that leaves a file behind in the scratch directory can change the answer a
+later candidate gets -- clean up, or use CProgram, which gets a fresh directory.
+
+HOW TO SPEND THE BUDGET
+
+Read first, but read with a question in mind. The C's inline scanner is right
+there, and it is the definition of the answer -- but run each candidate the
+moment it is written: a wrong attempt costs one call and tells you more than
+another hour of reading. There is no turn limit; the wall clock is the only
+budget.
+
+Work in this order: pick a mechanism, read how the C implements it, find the case
+where its behaviour is incidental rather than specified -- an off-by-one in a
+column, a buffer flushed at a particular point, a table entry with a special case
+-- and write the assertion that pins it. That is the kind of thing a
+reimplementation does not reproduce by accident.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

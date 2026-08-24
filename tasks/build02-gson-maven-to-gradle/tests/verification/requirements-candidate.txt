@@ -1,0 +1,32 @@
+# The interpreter a candidate runs in, and nothing else.
+#
+# pytest because a candidate is a test file and its PASS/FAIL is the signal the
+# adjudicator reads. pytest-timeout because a candidate that hangs must fail as a
+# candidate rather than take the round's whole budget with it -- run-candidate.sh
+# passes --timeout=2100 against the harness's 2400s ceiling, so the inner limit
+# always fires first and the failure is attributable.
+#
+# Same pytest version as stages 1 and 2. Collection behaviour decides what counts
+# as a test, and a stage that drifted onto a different runner could disagree with
+# the other two about whether a candidate collected at all.
+#
+# Deliberately absent: any HTTP client, any archive library beyond the standard
+# library's zipfile, any JVM bridge. The image has no network. lib/srbgson.py,
+# lib/jarinspect.py and lib/classfile.py read jars, class files and JUnit XML with
+# zipfile, struct and re, which is also why a malformed entry surfaces as the
+# defect it is instead of being tolerated by something more forgiving.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6 \
+    --hash=sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761
+pytest-timeout==2.3.1 \
+    --hash=sha256:12397729125c6ecbdaca01035b9e5239d4db97352320af155b3f5de1ba5165d9 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e
+iniconfig==2.0.0 \
+    --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==23.2 \
+    --hash=sha256:048fb0e9405036518eaaf48a55953c750c11e1a1b68e0dd1a9d62ed0c092cfc5 \
+    --hash=sha256:8c491190033a9af7e1d931d0b5dacc2ef47509b34dd0de67ed209b5203fc88c7
+pluggy==1.5.0 \
+    --hash=sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669

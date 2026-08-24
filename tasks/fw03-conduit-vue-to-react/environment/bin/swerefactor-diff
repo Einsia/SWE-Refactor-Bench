@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Compare your build against the State A oracle on paths you choose.
+#
+#   swerefactor-diff '#/' '#/@alice' 'alice:#/settings'
+#   swerefactor-diff --paths-from my-paths.txt
+#   swerefactor-diff --dist some/other/dist '#/'
+#
+# A path is an app path including the leading hash. Prefix it with 'alice:',
+# 'bob:' or 'carol:' to load it with that user already signed in.
+#
+# Both sides are driven identically: same mock API, same fixtures, same settling
+# rule, same DOM reduction, same off-origin stubbing. Differences are yours.
+#
+# Exit status 0 when every path matched, 1 when any differed. Which paths matter
+# is not given to you -- working that out is part of the job.
+set -euo pipefail
+
+REPO="${SWEREFACTOR_REPO:-/workspace/repo}"
+DIST=""
+ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dist) DIST="${2:?--dist needs a value}"; shift 2 ;;
+    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) ARGS+=("$1"); shift ;;
+  esac
+done
+
+if [[ ${#ARGS[@]} -eq 0 ]]; then
+  echo "swerefactor-diff: give at least one path, e.g. swerefactor-diff '#/'" >&2
+  echo "                (--help for details)" >&2
+  exit 2
+fi
+
+if [[ -z "$DIST" ]]; then
+  DIST="$(node /opt/harness/find-dist.mjs "$REPO" || true)"
+fi
+
+if [[ -z "$DIST" || ! -f "$DIST/index.html" ]]; then
+  echo "swerefactor-diff: no build output with an index.html found." >&2
+  echo "  Run your build first (npm run build), or pass --dist." >&2
+  exit 1
+fi
+
+exec node /opt/harness/compare.mjs /opt/oracle/dist "$DIST" "${ARGS[@]}"

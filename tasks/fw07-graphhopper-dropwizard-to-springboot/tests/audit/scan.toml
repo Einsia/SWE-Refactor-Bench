@@ -1,0 +1,197 @@
+schema = "swerefactor.scan-suite/1"
+task = "fw07-graphhopper-dropwizard-to-springboot"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# The gate for this task is the seven prose questions in evaluation.toml, answered
+# by a model that has both trees mounted and no toolchain to build either.  This
+# suite exists to spend that model's turns well: it answers, mechanically, the
+# sub-questions a text search can answer -- how many handlers, declared where, wired
+# how, which retired imports survive -- so the reviewer can spend its budget on the
+# one it cannot.  That one is `spring_does_the_dispatching`, and no token scan will
+# ever settle it: a servlet mounted on /* that reflects over the submission's own
+# @Path annotation imports nothing retired, declares no Spring annotation, and
+# answers every request in the corpus correctly.
+#
+# Every check is recorded with required = false.  `scoring.grade_audit` gates on
+# required checks only, and the required checks are the prose gates.  So a scan
+# finding costs a submission nothing by itself; what it does is put a file and a
+# line number in front of a reviewer that has the file open.  A clean scan is not a
+# pass, and prompt.txt says so in those words.
+#
+# The asymmetry is deliberate and it is the reason these checks are here rather than
+# in stage 2.  Stage 2 builds both trees and compares what they answer; a check in
+# stage 2 that opens a .java file and looks for `@GetMapping` is asserting on the
+# implementation with 40 points attached, and it is wrong in both directions -- it
+# fires on a comment explaining what Jersey used to do with the same path, and it
+# stays silent on a hand-rolled dispatcher that reproduces every byte.  Same
+# observation, no verdict, no points: that is what this stage is for.
+#
+# Weights are recorded and unused: nothing here is scored.  They are kept so a
+# module could move to a scored stage without a rewrite, which is also why the
+# module contract is byte-for-byte stage 2's -- same env vars, same result schema,
+# same runner.
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory.  No check in this suite can fail the audit gate.  The four modules
+read `SRB_REPO` and `SRB_ORIGINAL`, parse text, and write findings; there is no JDK
+in this image and no Maven, so nothing here can resolve, compile, package or launch
+either tree.  Anything that needs a running jar is stage 2's, and anything that
+needs both jars running at once is stage 3's.
+
+114 checks, and two kinds of them.  A check named `test_report_*` ALWAYS emits: it
+is an inventory, its message opens with `REPORT (not a defect)`, and it is written
+to fire unconditionally because a report that went quiet when the tree got worse
+would be useless.  There are six, and they carry the census a reviewer would
+otherwise assemble by hand -- how many handlers and in which classes, what does the
+registering, where the paths are written, how collaborators reach the handlers,
+where the object graph is declared, which lifecycle mechanism the port chose.
+
+Every other check is silent on State A save one deliberate exception, and that was
+measured rather than assumed.  On the unpacked tarball, compared against itself:
+`provenance` passes 46 of 46, `wiring` 4 of 7 -- its three reports and nothing else
+-- and `dispatch` 10 of 14, which is its three reports plus the one calibrated hit
+this file documents under that module: NavigateResource's hand-parse of
+`getRequestURI()`, which any faithful port inherits and which now says so in its own
+failure message rather than only in its docstring.  Read that number as three
+reports and one known baseline, not as four findings.  Two checks that were not
+silent have been narrowed until they were.  A static-holder sweep matched `static GtfsStorage.EdgeType[] edgeTypeValues`
+in reader-gtfs, a cached `values()` array that is not a service, so the type match
+became exact instead of a substring.  A caller-identity sweep matched
+`getRemoteAddr() + getLocale() + getHeader("User-Agent")` in RouteResource and
+NavigateResource, which is upstream's request logging in three files, so the check
+now fires only when one of those values reaches a comparison -- reading who is
+asking is ordinary, deciding on it is not.
+
+`closure` is the exception and it is deliberate: every retired-stack check in it
+fires on State A, because State A is the Dropwizard application.  Its findings are
+phrased as "still" rather than as an alarm, and the reviewer is reading them as a
+progress report on a migration.
+
+The suite was also run against a deliberately-cheating tree built from State A --
+self-declared @Path annotation, a servlet on /* with a switch on getRequestURI,
+reflection dispatch, a static GraphHopper holder, an SRB_ environment lookup,
+<skipTests>true</skipTests>, and one module's src/test deleted.  Every planted cheat
+was reported by the check written for it.
+"""
+
+[[module]]
+id = "closure"
+title = "the retired stack in the tree and in what the tree declares"
+weight = 1.0
+about = """
+Ordered by how much of the answer each observation can carry.  Import blocks first,
+parsed rather than grepped, split into delivered source and test files because a
+stale test and a live dependency are different findings -- the 23 test classes that
+boot the application through DropwizardAppExtension are the largest single block of
+work in the migration and they show up here as a count.  Then the poms: every
+dependency declaration wherever it sits, and separately the BOM import, because
+`dropwizard-dependencies` is one line that brings the whole stack's versions back
+and removing it is not required to make a build pass.
+
+Then two derived comparisons against State A.  Did the reactor keep every module it
+declared -- a module deleted rather than migrated would otherwise reach stage 2 as a
+set of behavioural differences.  And did the coordinate set change at all, which is
+the cheapest way to see whether the poms were touched.
+
+Then the shape checks, which look for the retired stack rebuilt under other names:
+a type that still declares `extends Application` or `implements ConfiguredBundle`,
+and an annotation type declared inside the tree whose name belongs to either web
+stack.  State A declares zero @interface in 935 Java files, so a submission that
+declares @Path or @GetMapping itself has written a framework rather than adopted
+one -- and every import check in this module goes quiet at the same moment.
+
+The token sweep is last and weakest on purpose: it reads text the compiler may
+never see, so a hit there is a pointer to follow rather than a fact about the
+classpath.
+"""
+
+[[module]]
+id = "dispatch"
+title = "what registers the handlers, and how many are there"
+weight = 1.0
+about = """
+The module that reads the lines the task is about.  Its three reports carry the
+census: how many method-level handler declarations exist and how they are spread
+over classes (State A: 17 across 14), every registration-shaped call in the
+delivered sources (State A: 24 in GraphHopperBundle, 3 in GraphHopperApplication),
+and the paths as the submission spells them -- read off the mapping annotations
+rather than grepped for slashes, because State A writes `@Path("route")` with no
+leading slash and a slash sweep finds almost none of the contract.
+
+Then the checks, which look for the shapes a hand-written dispatcher has and a
+container-dispatched application does not: the mappings concentrated in one class,
+a read of the raw request path, a switch or an if-chain deciding on it, a servlet
+or filter mounted across the whole path space, reflection over annotations paired
+with reflective invocation, and a Maven module that declared handlers and no longer
+does.
+
+One check is calibrated to a legitimate hit and says so: NavigateResource parses
+`getRequestURI()` by hand, because the Mapbox Directions URL carries its
+coordinates as a semicolon-separated segment no @PathParam can decode.  One hit
+there is State A's baseline; several, or one in a class that also holds the
+mappings, is the shape worth reading.
+"""
+
+[[module]]
+id = "wiring"
+title = "who constructs the handlers and hands them their collaborators"
+weight = 1.0
+about = """
+The second half of the dispatch question and the one a submission is most likely to
+get half-right invisibly.  State A's handlers construct nothing: 15 @Inject
+constructors in src/main, 13 bindings inside a single AbstractBinder, and exactly
+one resource built with `new` -- RootResource, which has no dependencies.  Moving
+those 13 bindings is the migration's real work, and the shortcut is to keep the
+resource classes, delete the annotations, and have a dispatcher construct each with
+`new` and a static field for the GraphHopper.  That shortcut answers every request
+correctly and stage 2 cannot see it.
+
+Three reports: how collaborators reach the handlers (State A: 13 of 14 handler
+classes carry an injection point), where the object graph is declared (State A:
+one file), and which lifecycle mechanism the port chose -- reported rather than
+judged, because Spring offers six legitimate answers and there is no way to rank
+them from outside.
+
+Four checks, all silent on State A: a handler constructing a type the container
+supplies, a static holder standing in for the container, a handler class the
+container has never been told about, and a new site that parses YAML directly where
+State A did not.
+"""
+
+[[module]]
+id = "provenance"
+title = "code addressed to the grader, and the repository's own suite"
+weight = 1.0
+about = """
+Whether the submission knows it is being measured, and whether the part of the
+measurement it controls is still there.
+
+The harness's own vocabulary and the rig's paths, each grepped against all 935 Java
+files, all 11 poms and every yml/sh/properties file in State A and scoring zero.
+One candidate was rejected for failing that test and is recorded in the module so
+nobody adds it back: `andorra`, which looks like a perfect oracle marker -- the
+corpus routes across Andorra and its one request body is match-andorra.gpx -- and
+appears in 16 files of State A, because core/files/andorra.osm.pbf is GraphHopper's
+own test fixture.  `config-example.yml` is excluded for the same reason: it is
+State A's committed example config and stage 2 passes it deliberately.
+
+Then Java's ways of asking who is running it, environment lookups State A never
+made (it calls System.getenv zero times in src/main, so any occurrence is a
+migration-time decision), the caller's identity reaching a condition, a new
+outbound client in a Maven module that had none -- differential because this
+repository ships an HTTP client library and Downloader and a GTFS feed poller --
+and two shapes of recited answer: a path literal within two lines of a status
+literal, and a new data file that looks like captured traffic.
+
+Last, four checks on the repository's own suite, which stage 2 runs and scores:
+test methods counted per module against State A's 1690, tests newly disabled
+against State A's own 20 exclusions, a src/test directory that disappeared while
+its module stayed in the reactor, and a pom-level skip that would make `mvn test`
+green in seconds.
+"""

@@ -1,0 +1,101 @@
+schema = "swerefactor.scan-suite/1"
+task = "lang03-sqlparse-python-to-go"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# The dividing line between this suite and stage 2 is the one stage 2's suite.toml
+# states: not mechanical versus semantic, but whether the check has an artefact to
+# point at. A check answered by running the built `sqlformat` or by opening a file
+# the build produced belongs there, with points attached. A check answered by walking
+# the submitted tree -- is there a `.pyc` in it, does `go.mod` name a dependency, is
+# LICENSE still LICENSE -- belongs here, where its output is evidence rather than a
+# score.
+#
+# For this task the reason to keep the two apart is sharper than for the others,
+# because the source language is Python and Python is not removable from the grading
+# image. Stage 2 handles that with an artefact: every interpreter name on PATH is
+# replaced by a shim that fails and records the invocation, so a build that reaches
+# for Python leaves a ledger entry, and the installed binary is checked for
+# `Py_Initialize` and `libpython` byte sequences. Those are measurements. The
+# question of whether a `//go:generate` line means the keyword tables were
+# transcribed from `sqlparse/keywords.py` by a program, and whether that matters, is
+# not a measurement -- it is a judgement, and this stage exists to put the line in
+# front of something that can make it.
+#
+# `swerefactor.scan` records every check with required = false, and
+# `scoring.grade_audit` gates on the required checks in evaluation.toml and
+# nothing else. A finding here costs a submission nothing on its own. What it does is
+# tell the reviewer where to look, and the reviewer has both trees open.
+#
+# Weights are recorded and unused: nothing here is scored. They are kept so a module
+# could move to a scored stage without a rewrite, which is the same reason the module
+# contract -- `SRB_REPO`, `SRB_RESULT`, a JSON list of checks -- is byte-for-byte
+# stage 2's.
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check in this suite can fail the audit gate; the gate is the prose
+questions in evaluation.toml, answered by a model that reads both trees and cannot
+run either one. These modules answer the sub-questions a string can answer -- which
+of State A's twenty-one modules is still on disk, whether LICENSE's bytes moved,
+what `go.mod` requires -- so that the reviewer spends its turns on the ones a string
+cannot: whether the Go is an implementation or a wrapper, and whether the four regex
+features Go's RE2 does not have were reimplemented or worked around.
+
+Every list this suite parametrizes over is derived rather than transcribed: the
+module names come from the tree at /opt/original, and the forbidden imports,
+forbidden paths, preserved paths and line floor come from source-contract.json,
+which ships in this image and is the same file the solver's own image installs at
+/opt/swerefactor/source-contract.json. A list written out here would be a second
+description of the task, free to drift from the first.
+"""
+
+[[module]]
+id = "closure"
+title = "did the Python leave, and is there Go where it was"
+weight = 1.0
+about = """
+Per module and per forbidden suffix rather than one "no Python remains" check,
+because the answer a reviewer needs is a list: a tree holding only `keywords.py` has
+kept the 809-entry table it did not want to retype, and a tree holding all
+twenty-one has not started. Then the same question from the other side -- State A's
+sources and bytecode found under new names by hash, the contracted module path, the
+ten package directories, the Go logic-line floor from source-contract.json measured
+over non-test files only. Reads both trees; builds nothing.
+"""
+
+[[module]]
+id = "provenance"
+title = "where the answer comes from"
+weight = 1.0
+about = """
+Checked-in compiled artefacts by extension, by ELF and `ar` magic on extensionless
+files, and by zip magic on files named like data, which is how a wheel arrives;
+archives of any kind; long base64 and hex runs in Go. Then what the build declares:
+fetches, interpreter names, cgo directives and `//go:generate` lines in files that
+can cause something to run, excluding lines State A already carried. Then `go.mod`'s
+require and replace directives, the contract's nine forbidden imports read as import
+syntax, and any third-party import at all. Then the shapes that hide a second
+implementation -- build tags, `-ldflags -X`, `os.Getenv` in a parser -- source that
+names the evaluation harness, and embedding or hashing as corroboration for stage 3.
+"""
+
+[[module]]
+id = "contract"
+title = "the licence, the preserved paths, and what was written down"
+weight = 1.0
+about = """
+The seven preserved paths, split by the contract's own wording into the two that are
+byte-identical and the five that only have to survive; LICENSE by hash, by copyright
+line and by operative clause, so that a reflowed file and a relicensed one are
+different findings; SPDX identifiers that are not BSD-3-Clause; CHANGELOG's release
+entry; the man page at either allowed path, reporting which of State A's long options
+it stopped documenting. Then the removable paths, checked only for Python left inside
+them; a README still telling the reader to `pip install`; prose citing a module that
+no longer exists; and the documented-surface ratio, measured and reported with its
+own error bar rather than enforced.
+"""

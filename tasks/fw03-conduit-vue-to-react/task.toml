@@ -1,0 +1,245 @@
+# =============================================================================
+# SWERefactorBench -- framework rewrite (frontend)
+#
+#   State A : the RealWorld "Conduit" SPA on Vue 2.6.10 -- vue-router 3.1.3 in
+#             hash mode, Vuex 3.1.1, Vue filters, single-file components compiled
+#             by vue-template-compiler, built by @vue/cli-service 3.11.0
+#             (webpack 4) with @vue/cli-plugin-pwa generating the service worker.
+#   State B : the same product on React 18 -- react-dom/client, react-router 6,
+#             a first-party store, JSX components, built by Vite 5 with
+#             vite-plugin-pwa, and no Vue package anywhere in the closure.
+#
+# 25 single-file components, 4 registered Vuex modules, 12 route records over 11
+# addressable paths, 2 global filters, a service worker and a router guard, all of
+# it observable from the outside as one contract: the DOM the app renders and the
+# requests it makes to get there. That contract is what is graded, not the shape of
+# the code that produces it.
+#
+# The agent edits /workspace/repo in place. Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside an independent verifier container the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Anything the agent installed or built is deliberately NOT carried over: the
+# verifier deletes node_modules and dist, reinstalls the declared closure offline
+# from its own npm cache, and runs the project's own build. That cache contains
+# no vue, vue-router, vuex, vue-template-compiler, @vue/compat, vuera, veaury,
+# petite-vue, alpinejs or preact -- so a submission that did not really migrate
+# cannot install, let alone build, let alone be graded.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, five gates, all required. Failing one is a zero and nothing
+#      after it runs.
+#   2. ten behavioural modules, 40 points, paid only for a submission that passed
+#      every scored check in every one of them. Short of that the ladder stops
+#      here with nothing from this stage.
+#   3. six adversaries with an hour each to write a journey the old bundle
+#      renders and this one does not. 60 points, 10 for every adversary that
+#      finds nothing.
+#
+# What each stage may know is as deliberate as what it measures. Stage 1 has no
+# build toolchain and no browser, because a review that can build grades a build
+# log instead of an implementation. Stage 2 has one npm cache, the target one, so
+# installing is itself evidence. Stage 3 is the only image that can put both
+# bundles side by side, because "the original renders this" is a claim that has to
+# be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop install and build debris only. They exist so the verifier
+# cannot be handed a pre-built bundle and be fooled into grading something the
+# submitted *source* no longer produces. Solutions must therefore live in
+# tracked source files, never inside these paths -- a rule instruction.md states
+# explicitly, and one the verifier enforces by deleting them regardless.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "node_modules",
+    "dist",
+    "build",
+    "out",
+    ".vite",
+    ".cache",
+    ".parcel-cache",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    ".output",
+    "coverage",
+    ".nyc_output",
+    ".npmrc",
+    "*.tgz",
+    "*.tar.gz",
+    "*.zip",
+    "__pycache__",
+    "*.pyc",
+]
+
+[task]
+name = "swerefactor/fw03-conduit-vue-to-react"
+description = "Migrate the RealWorld Conduit SPA off Vue 2 / vue-router 3 / Vuex 3 / vue-cli-service onto React 18 / react-router 6 / Vite 5, repository-wide, preserving the rendered DOM, the API request sequence, the hash-mode URLs and the PWA release artifacts."
+authors = []
+keywords = [
+    "swe-refactor",
+    "framework-migration",
+    "javascript",
+    "frontend",
+    "vue",
+    "vuex",
+    "react",
+    "react-router",
+    "vite",
+    "webpack",
+    "spa",
+    "pwa",
+    "realworld",
+    "conduit",
+    "offline",
+]
+
+[metadata]
+category = "framework-rewrite"
+difficulty = "frontier"
+license = "MIT"
+source_repository = "https://github.com/realworld-apps/vue-realworld-example-app"
+source_commit = "feb0b7d25c4e4c872d96fe91356c74e06c14506e"
+source_date = "2019-10-14T22:09:41+02:00"
+state_a = "vue-2.6.10 + vue-router-3.1.3 + vuex-3.1.1 + @vue/cli-service-3.11.0 (webpack 4) + @vue/cli-plugin-pwa"
+state_b = "react-18.3.1 + react-router-dom-6.28.0 + vite-5.4.11 + vite-plugin-pwa-0.21.1"
+tags = [
+    "whole-repository",
+    "framework-rewrite",
+    "component-model-rewrite",
+    "state-management-rewrite",
+    "router-rewrite",
+    "build-tool-rewrite",
+    "dom-contract",
+    "release-closure",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 11h wall clock. Every one of the 25 single-file components has to be
+# reimplemented as JSX, four Vuex modules as first-party state, the nested
+# hash-mode route table with its authentication guard as react-router 6 routes, and
+# the two global filters as ordinary functions -- while the DOM each of them
+# produces stays equivalent. The build system changes underneath all of it: webpack 4 with
+# vue-loader becomes Vite, and the cli-plugin-pwa service worker becomes
+# vite-plugin-pwa. The State A production bundle is available locally, so the
+# time goes on engineering against an oracle rather than on guessing what the
+# contract is.
+#
+# no-network: everything the target stack may use is already in the offline npm
+# cache. Offline is what makes "the old framework left the dependency closure" a
+# mechanical fact rather than a code-review opinion -- npm's own cache lookup
+# refuses `vue`, and no check in the repository can be edited to change that.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 39600.0
+network_mode = "no-network"
+
+[environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+# NODE_ENV is deliberately not declared, in this block or the verifier's.  Both
+# build tools in play default `build` to production on their own -- vue-cli-service
+# does, vite does -- so the name is only capable of doing harm here: "production"
+# makes npm skip the devDependencies that contain the bundler, and "" is not
+# "production" but is still a value, so vue-cli-service drops to development mode,
+# @vue/cli-plugin-pwa never adds workbox, and no service worker is emitted.
+#
+# It was declared as "" until this run measured what that costs.  With that value
+# inherited, and before the build module learned to pop the name, State A failed
+# `build/service-worker` at weight 1.0 and the identity property this task
+# documents did not hold.  An agent that built State A to observe it would have
+# been told, by the environment it was handed, that State A ships no service
+# worker -- and would then have been charged for not shipping one.
+[environment.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+NPM_CONFIG_CACHE = "/opt/npm-cache"
+NPM_CONFIG_OFFLINE = "true"
+NPM_CONFIG_AUDIT = "false"
+NPM_CONFIG_FUND = "false"
+NPM_CONFIG_UPDATE_NOTIFIER = "false"
+PLAYWRIGHT_BROWSERS_PATH = "/opt/playwright-browsers"
+SWEREFACTOR_ORACLE_DIST = "/opt/oracle/dist"
+SWEREFACTOR_HARNESS = "/opt/harness"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier image and Harbor does not upload it to the agent
+# container. That is what keeps the scenario corpus, the golden observation and
+# the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s. The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks. Stage 2 alone is a 100-scenario capture in
+# headless Chromium and ~21.7k assertions comparing what the submission rendered
+# and requested against what State A did, node by node and request by request.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota
+# to be spent. The rounds run sequentially, so one candidate cannot be broken by
+# whatever the previous one did to the browser.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+
+[verifier.environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+
+# No NODE_ENV here either, for the reasons given above [environment.env].  The
+# build module additionally pops the name out of the environment it hands the
+# install and the build, so a harness that injects one anyway cannot change what
+# this stage measures.
+[verifier.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+NPM_CONFIG_CACHE = "/opt/npm-cache"
+NPM_CONFIG_OFFLINE = "true"
+NPM_CONFIG_AUDIT = "false"
+NPM_CONFIG_FUND = "false"
+NPM_CONFIG_UPDATE_NOTIFIER = "false"
+PLAYWRIGHT_BROWSERS_PATH = "/opt/playwright-browsers"
+
+# There is deliberately no solution/ tree and no [solution.env]. A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a
+# smoke test that the suite can be passed at all. The suite's own gate answers
+# that: stage 3 is asked only of a submission that scored stage 2 in full, so a
+# tree that reaches it has already passed every recorded check. What six models
+# add is the other half -- an hour each spent hunting for a behaviour nobody
+# thought to record.

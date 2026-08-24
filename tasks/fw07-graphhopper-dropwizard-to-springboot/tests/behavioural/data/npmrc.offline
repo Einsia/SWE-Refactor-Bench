@@ -1,0 +1,28 @@
+# npm's side of the offline plumbing, and the least obvious piece of it.
+#
+# State A's web-bundle does not keep the map UI in the tree.  It builds it:
+# frontend-maven-plugin installs a pinned node and npm, runs
+# `npm pack @graphhopper/graphhopper-maps-bundle@<pinned digest>`, and an antrun
+# step untars the result into target/classes/com/graphhopper/maps, from where the
+# AssetsBundle serves it at /maps/.  Two of those three steps are already offline
+# in a trial container -- the node distribution is cached in the local Maven
+# repository by the warm, and the untar is local -- but `npm pack` reaches
+# registry.npmjs.org.
+#
+# The warm at image-build time runs that pack once with network, which fills
+# /root/.npm/_cacache with both the packument and the tarball.  This file then
+# makes every later pack cache-only, so the same command produces the same bytes
+# with no network at all.  Without it the build fails at EAI_AGAIN on a step the
+# submission did not write and cannot fix.
+#
+# offline, not prefer-offline: prefer-offline still contacts the registry for
+# metadata it considers stale, which in a container with no DNS means a timeout
+# instead of an answer.
+offline=true
+
+# Noise, not behaviour.  A trial container cannot reach the audit endpoint or the
+# funding endpoint either, and the update notifier writes a check timestamp into
+# the cache that has nothing to do with the build.
+audit=false
+fund=false
+update-notifier=false

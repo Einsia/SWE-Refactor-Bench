@@ -1,0 +1,119 @@
+schema = "swerefactor.scan-suite/1"
+task = "lang06-jsonnet-cpp-to-csharp"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Stage 2 restores offline, publishes both CLIs, and diffs their stdout, stderr and
+# exit status against a reference build on inputs composed at grading time.  Those
+# are measurements of artefacts.  A check that walks the submitted tree looking for a
+# `.dll`, hashes `LICENSE`, or greps a `.cs` file for the string `DllImport` is
+# asserting on the repository instead, and scoring the two alike would make "a stale
+# assembly is checked in" and "the evaluator does not reproduce the reference on
+# unseen input" the same kind of evidence.
+#
+# Reading a tree by grep also fails honest work in ways a score cannot absorb.  The
+# contract says in as many words that "spans, pointers and unsafe blocks are ordinary
+# C#", so matching `Marshal` or `unsafe` anywhere in any `.cs` reports a lexer that
+# reached for `Span<char>` -- and the lesson a submission would draw is to write a
+# slower lexer to look innocent.  A process-creation match cannot tell an evaluator
+# that shells out from a test project that runs the CLI it just built, which is how
+# an end-to-end test works.  And an `MD5` match is unavoidable in a correct
+# submission, because `std.md5` is a Jsonnet builtin.
+#
+# So the reading runs here, in the stage that may read and may not execute, and its
+# output is evidence: `swerefactor.scan` records every check with required = false, and
+# the gate is the prose questions in evaluation.toml and nothing else.  A scan
+# finding costs a submission nothing on its own.  What it does is tell the reviewer
+# where to look, and the reviewer has both trees open.
+#
+# Two things this suite does not do.  It does not read the number of C# lines and
+# conclude anything -- the floor it applies distinguishes 800 lines from 15,000 and
+# says so.  And it does not assert on identifiers: no check here requires a
+# particular class, method, field or variable name to exist, because a name is not a
+# behaviour and a submission that renames its AST nodes has not broken anything.
+#
+# Weights are recorded and unused: nothing here is scored.  They are kept so a module
+# can move to a scored stage without a rewrite, which is the same reason the module
+# contract -- `SRB_REPO`, `SRB_RESULT`, a JSON list of checks -- is byte-for-byte
+# stage 2's.
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory.  No check in this suite can fail the audit gate; the gate is the prose
+questions in evaluation.toml, answered by a model that reads both trees and cannot
+run either one.  These modules answer the sub-questions a string can answer -- which
+of State A's twenty-one native translation units is still on disk, whether
+std.jsonnet's bytes moved -- so that the reviewer spends its turns on the ones a
+string cannot: whether the C# evaluates the standard library or reimplements it, and
+whether the port is a port or a transliteration.
+
+Both of the suite's path lists come from outside it.  File names are derived from
+State A at collection time; the rules are read from data/source-contract.json, the
+same bytes the submitter was handed -- this stage's Dockerfile asserts that file's
+sha256 before any module reads it, and environment/ asserts the same digest over the
+copy the agent gets.  Nothing that describes the migration is typed into a scan
+module, so nothing here can drift away from the task the submission was given.
+"""
+
+# Module order is declaration order, and it is chosen rather than alphabetical.
+#
+# `swerefactor.scan` renders the first 60 findings into the reviewer's prompt and
+# replaces the rest with a count.  A submission that did nothing at all produces 66
+# findings here, and 61 of them are one observation repeated: another of State A's
+# translation units is still on disk.  With `closure` first, the six that got cut
+# were the licence, the standard library and the checked-in binaries -- the ones
+# worth reading.  So the modules whose findings do not repeat come first, and the
+# per-unit inventory, which is the part that is legible as a count, comes last.
+
+[[module]]
+id = "contract"
+title = "the licence, the standard library, and the preserved paths"
+weight = 1.0
+about = """
+`LICENSE` against State A by hash, by copyright line and by operative clause; SPDX
+identifiers that are not Apache-2.0; `stdlib/std.jsonnet` against the sha256 the
+contract records, with State A's own copy checked against the same digest so a wrong
+contract fails here instead of failing every submission; whether anything in the tree
+reaches for std.jsonnet at all, which is the weak half of "the stdlib is interpreted,
+not transliterated"; the three conformance directories present, unedited and not
+shrunk, reported as changed, missing and added counts; the five preserved files and
+three preserved directories, with a line-level diff when one changed; the pinned
+upstream version as the build declares it; and any State A native source present
+under a new name, found by hash.
+"""
+
+[[module]]
+id = "provenance"
+title = "where the answer comes from"
+weight = 1.0
+about = """
+Checked-in compiled artefacts by extension, by ELF, PE and `ar` magic on
+extensionless files, and by magic on files named like data or like Jsonnet source;
+a file named like a retained upstream binary; long base64 and hex runs in C#; what
+the build declares about restoring, fetching and package sources; publish settings
+the grading build overrides anyway; MSBuild properties that look like a switch
+between two engines; native-interop and process-creation mentions, which stage 1
+asks of the same bytes as a required gate; source that names the evaluation
+harness; and embedding or hashing as corroboration for stage 2's composed-input
+diff.
+"""
+
+[[module]]
+id = "closure"
+title = "did the C++ leave, and is there C# where it was"
+weight = 1.0
+about = """
+Per translation unit and per header, named from `original/core`, `cmd/`, `include/`,
+`cpp/`, `python/` and `stdlib/` rather than from a list written in the suite; the
+native suffixes the contract names, unioned with the wider set, over the whole tree
+with the contract's exempt prefixes annotated rather than dropped; the seven
+forbidden directories and nine forbidden files, each asserted to exist in State A
+first so a rule that cannot fail is reported as a rule that cannot fail; Bazel files
+by basename at any depth, which is where five of State A's fourteen hide; a C# logic
+floor; and whether every `.cs` is under a directory some `.csproj` could compile.
+Reads both trees; builds nothing.
+"""

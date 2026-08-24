@@ -1,0 +1,2839 @@
+{
+  "version": 1,
+  "corpus_fingerprint": "2c2e73398e2c5d2b604ee8bf06ebc7501f0b33a2138936f8023db70cc80e925d",
+  "fixtures_aggregate": "bfa364db081206cba49def81caf967e5b80785bcdcfca4c4565017c5d6b51c2f",
+  "records": {
+    "auth-405-not-401": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiREVMRVRFIGlzIG5vdCBhbGxvd2VkIG9uIC9maWxlcyJ9",
+      "body_len": 54,
+      "case": "auth-405-not-401",
+      "header_names_in_order": [
+        "Allow",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "allow": [
+          "GET, PUT"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "54"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "auth",
+      "status": 405,
+      "suite": "auth"
+    },
+    "auth-bad-token": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidW5hdXRob3JpemVkIn0=",
+      "body_len": 35,
+      "case": "auth-bad-token",
+      "header_names_in_order": [
+        "Content-Type",
+        "Www-Authenticate",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "35"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "www-authenticate": [
+          "Bearer"
+        ]
+      },
+      "profile": "auth",
+      "status": 401,
+      "suite": "auth"
+    },
+    "auth-basic-rejected": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidW5hdXRob3JpemVkIn0=",
+      "body_len": 35,
+      "case": "auth-basic-rejected",
+      "header_names_in_order": [
+        "Content-Type",
+        "Www-Authenticate",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "35"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "www-authenticate": [
+          "Bearer"
+        ]
+      },
+      "profile": "auth",
+      "status": 401,
+      "suite": "auth"
+    },
+    "auth-bearer": {
+      "body_b64": "aGVsbG8K",
+      "body_len": 6,
+      "case": "auth-bearer",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "auth",
+      "status": 200,
+      "suite": "auth"
+    },
+    "auth-clean-precedes": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "auth-clean-precedes",
+      "header_names_in_order": [
+        "Location",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "0"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "location": [
+          "/a.txt?token=ro1"
+        ]
+      },
+      "profile": "auth",
+      "status": 301,
+      "suite": "auth"
+    },
+    "auth-head-401": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "auth-head-401",
+      "header_names_in_order": [
+        "Www-Authenticate",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "www-authenticate": [
+          "Bearer"
+        ]
+      },
+      "profile": "auth",
+      "status": 401,
+      "suite": "auth"
+    },
+    "auth-no-token": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidW5hdXRob3JpemVkIn0=",
+      "body_len": 35,
+      "case": "auth-no-token",
+      "header_names_in_order": [
+        "Content-Type",
+        "Www-Authenticate",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "35"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "www-authenticate": [
+          "Bearer"
+        ]
+      },
+      "profile": "auth",
+      "status": 401,
+      "suite": "auth"
+    },
+    "auth-options-open": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "auth-options-open",
+      "header_names_in_order": [
+        "Access-Control-Allow-Methods",
+        "Access-Control-Allow-Origin",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-methods": [
+          "POST"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "auth",
+      "status": 204,
+      "suite": "auth"
+    },
+    "auth-prefix-401": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidW5hdXRob3JpemVkIn0=",
+      "body_len": 35,
+      "case": "auth-prefix-401",
+      "header_names_in_order": [
+        "Content-Type",
+        "Www-Authenticate",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "35"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "www-authenticate": [
+          "Bearer"
+        ]
+      },
+      "profile": "auth",
+      "status": 401,
+      "suite": "auth"
+    },
+    "auth-query-token": {
+      "body_b64": "aGVsbG8K",
+      "body_len": 6,
+      "case": "auth-query-token",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "auth",
+      "status": 200,
+      "suite": "auth"
+    },
+    "auth-ro-cannot-post": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidW5hdXRob3JpemVkIn0=",
+      "body_len": 35,
+      "case": "auth-ro-cannot-post",
+      "header_names_in_order": [
+        "Content-Type",
+        "Www-Authenticate",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "35"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "www-authenticate": [
+          "Bearer"
+        ]
+      },
+      "profile": "auth",
+      "status": 401,
+      "suite": "auth"
+    },
+    "auth-ro-cannot-write": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidW5hdXRob3JpemVkIn0=",
+      "body_len": 35,
+      "case": "auth-ro-cannot-write",
+      "header_names_in_order": [
+        "Content-Type",
+        "Www-Authenticate",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "35"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "www-authenticate": [
+          "Bearer"
+        ]
+      },
+      "profile": "auth",
+      "status": 401,
+      "suite": "auth"
+    },
+    "auth-rw-can-post": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9hdXRoLXVwLnR4dCJ9",
+      "body_len": 39,
+      "case": "auth-rw-can-post",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "39"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "auth",
+      "status": 201,
+      "suite": "auth"
+    },
+    "auth-rw-can-write": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9hdXRoLXJ3LnR4dCJ9",
+      "body_len": 39,
+      "case": "auth-rw-can-write",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "39"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "auth",
+      "status": 201,
+      "suite": "auth"
+    },
+    "auth-unmatched-404": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoibm90IGZvdW5kIn0=",
+      "body_len": 32,
+      "case": "auth-unmatched-404",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "32"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "auth",
+      "status": 404,
+      "suite": "auth"
+    },
+    "clean-dot": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "clean-dot",
+      "header_names_in_order": [
+        "Location",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "0"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "location": [
+          "/files/a.txt"
+        ]
+      },
+      "profile": "default",
+      "status": 301,
+      "suite": "routing"
+    },
+    "clean-dotdot": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "clean-dotdot",
+      "header_names_in_order": [
+        "Location",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "0"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "location": [
+          "/a.txt"
+        ]
+      },
+      "profile": "default",
+      "status": 301,
+      "suite": "routing"
+    },
+    "clean-dotdot-encoded": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "clean-dotdot-encoded",
+      "header_names_in_order": [
+        "Location",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "0"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "location": [
+          "/a.txt"
+        ]
+      },
+      "profile": "default",
+      "status": 301,
+      "suite": "routing"
+    },
+    "clean-double-slash": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "clean-double-slash",
+      "header_names_in_order": [
+        "Location",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "0"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "location": [
+          "/files/a.txt"
+        ]
+      },
+      "profile": "default",
+      "status": 301,
+      "suite": "routing"
+    },
+    "clean-keeps-query": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "clean-keeps-query",
+      "header_names_in_order": [
+        "Location",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "0"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "location": [
+          "/a.txt?x=1&y=2"
+        ]
+      },
+      "profile": "default",
+      "status": 301,
+      "suite": "routing"
+    },
+    "clean-sub-dotdot": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "clean-sub-dotdot",
+      "header_names_in_order": [
+        "Location",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "0"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "location": [
+          "/files/a.txt"
+        ]
+      },
+      "profile": "default",
+      "status": 301,
+      "suite": "routing"
+    },
+    "directory": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoic3ViIGlzIGEgZGlyZWN0b3J5In0=",
+      "body_len": 41,
+      "case": "directory",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "41"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "encoded-slash": {
+      "body_b64": "bmVzdGVkCg==",
+      "body_len": 7,
+      "case": "encoded-slash",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "7"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "routing"
+    },
+    "files-bare": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBub3QgZm91bmQifQ==",
+      "body_len": 37,
+      "case": "files-bare",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "37"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "files-slash": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBub3QgZm91bmQifQ==",
+      "body_len": 37,
+      "case": "files-slash",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "37"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "flow-post-then-get": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9mbG93LnR4dCJ9",
+      "body_len": 36,
+      "case": "flow-post-then-get",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "36"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "flows"
+    },
+    "flow-post-then-get.get": {
+      "body_b64": "ZmxvdyBib2R5Cg==",
+      "body_len": 10,
+      "case": "flow-post-then-get.get",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "10"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "<MASKED-WALLCLOCK>"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "flows"
+    },
+    "flow-put-then-get": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9mbG93LWEudHh0In0=",
+      "body_len": 38,
+      "case": "flow-put-then-get",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "38"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "flows"
+    },
+    "flow-put-then-get.again": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidGhlIGZpbGUgYWxyZWFkeSBleGlzdHMifQ==",
+      "body_len": 46,
+      "case": "flow-put-then-get.again",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "46"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 409,
+      "suite": "flows"
+    },
+    "flow-put-then-get.get": {
+      "body_b64": "ZmxvdyBhCg==",
+      "body_len": 7,
+      "case": "flow-put-then-get.get",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "7"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "<MASKED-WALLCLOCK>"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "flows"
+    },
+    "flow-put-then-get.notfilename": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBub3QgZm91bmQifQ==",
+      "body_len": 37,
+      "case": "flow-put-then-get.notfilename",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "37"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "flows"
+    },
+    "flow-put-then-get.overwrite": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9mbG93LWEudHh0In0=",
+      "body_len": 38,
+      "case": "flow-put-then-get.overwrite",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "38"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "flows"
+    },
+    "flow-truncation": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBzaXplIGxpbWl0IGV4Y2VlZGVkIn0=",
+      "body_len": 47,
+      "case": "flow-truncation",
+      "header_names_in_order": [
+        "Connection",
+        "Content-Type",
+        "Date",
+        "Content-Length"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "47"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "maxsize",
+      "status": 413,
+      "suite": "flows"
+    },
+    "flow-truncation.reput": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidGhlIGZpbGUgYWxyZWFkeSBleGlzdHMifQ==",
+      "body_len": 46,
+      "case": "flow-truncation.reput",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "46"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "maxsize",
+      "status": 409,
+      "suite": "flows"
+    },
+    "flow-truncation.retry": {
+      "body_b64": "MDEyMzQ1Njc4OWFiY2RlZg==",
+      "body_len": 16,
+      "case": "flow-truncation.retry",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "16"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "<MASKED-WALLCLOCK>"
+        ]
+      },
+      "profile": "maxsize",
+      "status": 200,
+      "suite": "flows"
+    },
+    "get-big": {
+      "body_b64": "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",
+      "body_len": 4096,
+      "case": "get-big",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "4096"
+        ],
+        "content-type": [
+          "application/octet-stream"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-html": {
+      "body_b64": "PCFkb2N0eXBlIGh0bWw+Cjx0aXRsZT5maXh0dXJlPC90aXRsZT4K",
+      "body_len": 39,
+      "case": "get-html",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "39"
+        ],
+        "content-type": [
+          "text/html; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-json": {
+      "body_b64": "eyJvayI6dHJ1ZSwibiI6NDJ9Cg==",
+      "body_len": 19,
+      "case": "get-json",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "19"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-nested": {
+      "body_b64": "bmVzdGVkCg==",
+      "body_len": 7,
+      "case": "get-nested",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "7"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-noext": {
+      "body_b64": "bm8gZXh0ZW5zaW9uIGhlcmUK",
+      "body_len": 18,
+      "case": "get-noext",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "18"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-plus-encoded": {
+      "body_b64": "cGx1cythbmQlcGN0Cg==",
+      "body_len": 13,
+      "case": "get-plus-encoded",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "13"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-plus-literal": {
+      "body_b64": "cGx1cythbmQlcGN0Cg==",
+      "body_len": 13,
+      "case": "get-plus-literal",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "13"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-png": {
+      "body_b64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ",
+      "body_len": 33,
+      "case": "get-png",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "33"
+        ],
+        "content-type": [
+          "image/png"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-space-pct": {
+      "body_b64": "c3BhY2VkIG5hbWUK",
+      "body_len": 12,
+      "case": "get-space-pct",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "12"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "get-text": {
+      "body_b64": "aGVsbG8K",
+      "body_len": 6,
+      "case": "get-text",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "body"
+    },
+    "head-big": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "head-big",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "4096"
+        ],
+        "content-type": [
+          "application/octet-stream"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "headers"
+    },
+    "head-text": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "head-text",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "headers"
+    },
+    "ims-equal": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "ims-equal",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 304,
+      "suite": "headers"
+    },
+    "ims-head": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "ims-head",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 304,
+      "suite": "headers"
+    },
+    "ims-older": {
+      "body_b64": "aGVsbG8K",
+      "body_len": 6,
+      "case": "ims-older",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 200,
+      "suite": "headers"
+    },
+    "maxsize-exact": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9leGFjdDE2LnR4dCJ9",
+      "body_len": 39,
+      "case": "maxsize-exact",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "39"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "maxsize",
+      "status": 201,
+      "suite": "flows"
+    },
+    "maxsize-over": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBzaXplIGxpbWl0IGV4Y2VlZGVkIn0=",
+      "body_len": 47,
+      "case": "maxsize-over",
+      "header_names_in_order": [
+        "Connection",
+        "Content-Type",
+        "Date",
+        "Content-Length"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "47"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "maxsize",
+      "status": 413,
+      "suite": "flows"
+    },
+    "maxsize-put-over": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBzaXplIGxpbWl0IGV4Y2VlZGVkIn0=",
+      "body_len": 47,
+      "case": "maxsize-put-over",
+      "header_names_in_order": [
+        "Connection",
+        "Content-Type",
+        "Date",
+        "Content-Length"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "47"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "maxsize",
+      "status": 413,
+      "suite": "flows"
+    },
+    "method-not-allowed-files": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiREVMRVRFIGlzIG5vdCBhbGxvd2VkIG9uIC9maWxlcyJ9",
+      "body_len": 54,
+      "case": "method-not-allowed-files",
+      "header_names_in_order": [
+        "Allow",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "allow": [
+          "GET, PUT"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "54"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 405,
+      "suite": "routing"
+    },
+    "method-not-allowed-upload": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiR0VUIGlzIG5vdCBhbGxvd2VkIG9uIC91cGxvYWQifQ==",
+      "body_len": 52,
+      "case": "method-not-allowed-upload",
+      "header_names_in_order": [
+        "Allow",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "allow": [
+          "POST"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "52"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 405,
+      "suite": "routing"
+    },
+    "missing-file": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBub3QgZm91bmQifQ==",
+      "body_len": 37,
+      "case": "missing-file",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "37"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "nocors-404": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoic3ViIGlzIGEgZGlyZWN0b3J5In0=",
+      "body_len": 41,
+      "case": "nocors-404",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "41"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "nocors",
+      "status": 404,
+      "suite": "headers"
+    },
+    "nocors-get": {
+      "body_b64": "aGVsbG8K",
+      "body_len": 6,
+      "case": "nocors-get",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "nocors",
+      "status": 200,
+      "suite": "headers"
+    },
+    "nocors-options": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "nocors-options",
+      "header_names_in_order": [
+        "Access-Control-Allow-Methods",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-methods": [
+          "POST"
+        ],
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "nocors",
+      "status": 204,
+      "suite": "headers"
+    },
+    "options-file": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "options-file",
+      "header_names_in_order": [
+        "Access-Control-Allow-Methods",
+        "Access-Control-Allow-Origin",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-methods": [
+          "GET, PUT, HEAD"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 204,
+      "suite": "routing"
+    },
+    "options-missing": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "options-missing",
+      "header_names_in_order": [
+        "Access-Control-Allow-Methods",
+        "Access-Control-Allow-Origin",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-methods": [
+          "GET, PUT, HEAD"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 204,
+      "suite": "routing"
+    },
+    "options-upload-204": {
+      "body_b64": "",
+      "body_len": 0,
+      "case": "options-upload-204",
+      "header_names_in_order": [
+        "Access-Control-Allow-Methods",
+        "Access-Control-Allow-Origin",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-methods": [
+          "POST"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 204,
+      "suite": "routing"
+    },
+    "post-nested-upload": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9kZWVwLnR4dCJ9",
+      "body_len": 36,
+      "case": "post-nested-upload",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "36"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "post-upload": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy91cC50eHQifQ==",
+      "body_len": 34,
+      "case": "post-upload",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "34"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "post-upload-empty": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9lbXB0eS50eHQifQ==",
+      "body_len": 37,
+      "case": "post-upload-empty",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "37"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "post-upload-nofile": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiY2Fubm90IG9idGFpbiB0aGUgdXBsb2FkZWQgY29udGVudCJ9",
+      "body_len": 57,
+      "case": "post-upload-nofile",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "57"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 500,
+      "suite": "upload"
+    },
+    "post-upload-wrong-field": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiY2Fubm90IG9idGFpbiB0aGUgdXBsb2FkZWQgY29udGVudCJ9",
+      "body_len": 57,
+      "case": "post-upload-wrong-field",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "57"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 500,
+      "suite": "upload"
+    },
+    "prefix-files-suffix": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiUFVUIGlzIGFjY2VwdGVkIG9uIC9maWxlcy86bmFtZSJ9",
+      "body_len": 54,
+      "case": "prefix-files-suffix",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "54"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 405,
+      "suite": "routing"
+    },
+    "prefix-nearly": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoibm90IGZvdW5kIn0=",
+      "body_len": 32,
+      "case": "prefix-nearly",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "32"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "prefix-not-segment": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBub3QgZm91bmQifQ==",
+      "body_len": 37,
+      "case": "prefix-not-segment",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "37"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "prefix-not-segment-deep": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiZmlsZSBub3QgZm91bmQifQ==",
+      "body_len": 37,
+      "case": "prefix-not-segment-deep",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "37"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "put-bare-files": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiUFVUIGlzIGFjY2VwdGVkIG9uIC9maWxlcy86bmFtZSJ9",
+      "body_len": 54,
+      "case": "put-bare-files",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "54"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 405,
+      "suite": "upload"
+    },
+    "put-encoded-slash": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9zdWIvcHV0LWVuYy50eHQifQ==",
+      "body_len": 43,
+      "case": "put-encoded-slash",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "43"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "put-existing": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoidGhlIGZpbGUgYWxyZWFkeSBleGlzdHMifQ==",
+      "body_len": 46,
+      "case": "put-existing",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "46"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 409,
+      "suite": "upload"
+    },
+    "put-nested-new": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9zdWIvcHV0LWRlZXAudHh0In0=",
+      "body_len": 44,
+      "case": "put-nested-new",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "44"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "put-new": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9wdXQtbmV3LnR4dCJ9",
+      "body_len": 39,
+      "case": "put-new",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "39"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "put-overwrite-boolish": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9hLnR4dCJ9",
+      "body_len": 33,
+      "case": "put-overwrite-boolish",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "33"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "put-overwrite-flag": {
+      "body_b64": "eyJvayI6dHJ1ZSwicGF0aCI6Ii9maWxlcy9hLnR4dCJ9",
+      "body_len": 33,
+      "case": "put-overwrite-flag",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "33"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 201,
+      "suite": "upload"
+    },
+    "put-raw-body": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoiY2Fubm90IG9idGFpbiB0aGUgdXBsb2FkZWQgY29udGVudCJ9",
+      "body_len": 57,
+      "case": "put-raw-body",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "57"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 500,
+      "suite": "upload"
+    },
+    "range-ignored-bad": {
+      "body_b64": "aW52YWxpZCByYW5nZQo=",
+      "body_len": 14,
+      "case": "range-ignored-bad",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Type",
+        "X-Content-Type-Options",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "14"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "x-content-type-options": [
+          "nosniff"
+        ]
+      },
+      "profile": "default",
+      "status": 416,
+      "suite": "headers"
+    },
+    "range-multi": {
+      "body_b64": "LS08Qk9VTkRBUlk+DQpDb250ZW50LVJhbmdlOiBieXRlcyAxMDAtMTk5LzQwOTYNCkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vb2N0ZXQtc3RyZWFtDQoNCmRlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxscNCi0tPEJPVU5EQVJZPg0KQ29udGVudC1SYW5nZTogYnl0ZXMgMzAwLTM5OS80MDk2DQpDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbQ0KDQosLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PDQotLTxCT1VOREFSWT4tLQ0K",
+      "body_len": 402,
+      "case": "range-multi",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "552"
+        ],
+        "content-type": [
+          "multipart/byteranges; boundary=<BOUNDARY>"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 206,
+      "suite": "headers"
+    },
+    "range-prefix": {
+      "body_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiYw==",
+      "body_len": 100,
+      "case": "range-prefix",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Range",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "100"
+        ],
+        "content-range": [
+          "bytes 0-99/4096"
+        ],
+        "content-type": [
+          "application/octet-stream"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 206,
+      "suite": "headers"
+    },
+    "range-suffix": {
+      "body_b64": "bG8K",
+      "body_len": 3,
+      "case": "range-suffix",
+      "header_names_in_order": [
+        "Accept-Ranges",
+        "Access-Control-Allow-Origin",
+        "Content-Length",
+        "Content-Range",
+        "Content-Type",
+        "Last-Modified",
+        "Date",
+        "Connection"
+      ],
+      "headers": {
+        "accept-ranges": [
+          "bytes"
+        ],
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "3"
+        ],
+        "content-range": [
+          "bytes 3-5/6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "last-modified": [
+          "Thu, 01 Jan 2026 00:00:00 GMT"
+        ]
+      },
+      "profile": "default",
+      "status": 206,
+      "suite": "headers"
+    },
+    "range-unsatisfiable": {
+      "body_b64": "aW52YWxpZCByYW5nZTogZmFpbGVkIHRvIG92ZXJsYXAK",
+      "body_len": 33,
+      "case": "range-unsatisfiable",
+      "header_names_in_order": [
+        "Access-Control-Allow-Origin",
+        "Content-Range",
+        "Content-Type",
+        "X-Content-Type-Options",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "access-control-allow-origin": [
+          "*"
+        ],
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "33"
+        ],
+        "content-range": [
+          "bytes */6"
+        ],
+        "content-type": [
+          "text/plain; charset=utf-8"
+        ],
+        "date": [
+          "<MASKED>"
+        ],
+        "x-content-type-options": [
+          "nosniff"
+        ]
+      },
+      "profile": "default",
+      "status": 416,
+      "suite": "headers"
+    },
+    "root": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoibm90IGZvdW5kIn0=",
+      "body_len": 32,
+      "case": "root",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "32"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "unmatched": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoibm90IGZvdW5kIn0=",
+      "body_len": 32,
+      "case": "unmatched",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "32"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    },
+    "upload-trailing-slash": {
+      "body_b64": "eyJvayI6ZmFsc2UsImVycm9yIjoibm90IGZvdW5kIn0=",
+      "body_len": 32,
+      "case": "upload-trailing-slash",
+      "header_names_in_order": [
+        "Content-Type",
+        "Date",
+        "Content-Length",
+        "Connection"
+      ],
+      "headers": {
+        "connection": [
+          "close"
+        ],
+        "content-length": [
+          "32"
+        ],
+        "content-type": [
+          "application/json"
+        ],
+        "date": [
+          "<MASKED>"
+        ]
+      },
+      "profile": "default",
+      "status": 404,
+      "suite": "routing"
+    }
+  }
+}

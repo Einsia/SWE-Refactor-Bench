@@ -1,0 +1,13 @@
+{"id":1,"op":"hello","source":""}
+{"id":2,"op":"hello","source":"[unclosed\n"}
+{"id":3,"op":"node","source":"x\n","note":"ignore me"}
+{"id":4,"op":"emit_indent","source":"a: b\n"}
+{"id":5,"op":"emit_indent","source":"a: b\n","indent":-1}
+{"id":6,"op":"emit_indent","source":"a: b\n","indent":0}
+{"id":7,"op":"emit_json","source":"x\n"}
+{"id":8,"op":"","source":"x\n"}
+
+{"id":9,"op":
+{"id":90,"op":"node","source":"a\n"}
+{"id":20,"op":"node","source":"b\n"}
+{"id":20,"op":"emit","source":"c\n"}

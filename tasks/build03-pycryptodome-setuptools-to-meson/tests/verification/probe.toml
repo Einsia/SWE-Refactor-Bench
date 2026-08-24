@@ -1,0 +1,256 @@
+schema = "swerefactor.verification-probe/1"
+task = "build03-pycryptodome-setuptools-to-meson"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file. It asks for a configuration by name --
+# "default", "no-aesni", "no-clmul", "no-isa" -- and the helper builds a wheel from
+# whichever tree is in front of it and installs it. A candidate therefore sees a
+# wheel and an install prefix and cannot tell which build system produced them,
+# except by the answers they give.
+#
+# Both trees are PEP 517 packages, so unlike the other build tasks there is no
+# dialect to switch on: `python -m build --wheel --no-isolation` builds either one,
+# and the backend it dispatches to is the only difference. A configuration is
+# therefore a property of the COMPILER -- a gcc that rejects `-maes`, say -- which
+# is one request expressed identically to both trees, and what each build system
+# does with a compiler that says no is exactly the thing worth comparing.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: no two build
+# systems produce identical output, and a candidate could always find some
+# difference in a tag, a timestamp, a zip entry order or a generator string.
+#
+# The allow list is what a consumer of this library gets: the artifacts, the
+# symbols they export, the Python payload beside them, and the 39,245 answers the
+# library's own suite gives when run against the install. The deny list is what
+# instruction.md told the agent is not compared, plus the class of thing that is
+# genuinely unattackable here.
+[scope]
+allow = [
+  "the 41 compiled artifacts: that every one State A ships is installed, at the same package-relative path, under the same name, and that the wheel contains no compiled object State A does not have",
+  "the 277 symbols the artifacts export -- 217 distinct names, since 29 arithmetic helpers are linked into several objects: every name `Crypto/Util/_raw_api.py` looks up through ctypes must be in the corresponding artifact's dynamic symbol table, in every configuration -- Meson's `py.extension_module()` applies hidden visibility by default, which produces a file that loads and then fails on the first getattr",
+  "loading each artifact the way the library loads it: `ctypes.CDLL` on the installed file, then resolving the symbols that artifact's Python caller resolves. An artifact that is a CPython extension module rather than a plain shared library -- one that defines `PyInit_`, or links libpython -- is a defect however well it builds",
+  "the Python payload: all 192 `.py`, all 96 `.pyi`, `py.typed`, at their exact package-relative paths, byte-identical to State A's, with nothing extra and nothing missing",
+  "the library's own test suite run against the install: `Crypto.SelfTest`, whole or by subpackage, and every one of its 39,245 test ids. A test that passes against State A's install and fails against the submission's is the strongest finding available here",
+  "the integer backend the install actually gets: `Crypto.Math.Numbers.Integer` resolving to the GMP implementation rather than to a fallback, and the arithmetic answers agreeing with State A's",
+  "the per-unit instruction-set partition as it survives into the delivered objects: an artifact containing an AES-NI or CLMUL instruction whose State A counterpart does not, or missing one its counterpart has. A baseline object holding an unguarded AES-NI instruction is a SIGILL on hardware without it, and pycryptodome dispatches by loading one artifact or another, so it is a crash rather than a slow path",
+  "the probe-driven artifact set: under a compiler that rejects `-maes`, the artifact set must change exactly as State A's does -- and under a compiler that rejects nothing it must change back. A build that produces the same 41 files whatever the compiler accepts has stopped probing",
+  "the compile-time decisions that are visible from outside the object: the libc functions each artifact imports, which is where a macro that stopped being defined shows up -- `posix_memalign` against `malloc`, a fortified `__memcpy_chk` against `memcpy`",
+  "the wheel's own consistency as an installer sees it: RECORD naming every member with a digest and size that match the bytes, `.dist-info` present and parseable, the METADATA fields instruction.md §2.5 requires, and `pip install` of the wheel succeeding into a clean prefix",
+  "`abi3` as the ABI component of the wheel tag, and the `.abi3.so` artifact filenames -- both required. The INTERPRETER component of the tag is not; see the deny list",
+  "the same sources built a second time producing the same wheel members and the same installed payload -- `build_again()` builds a fresh copy, so this is reproducibility rather than an incremental rebuild",
+  "anything that makes the installed library unusable to a consumer where State A's is usable: an artifact that will not dlopen, a symbol the loader cannot find, a `.py` that imports a module the build did not install, a stub that does not sit beside the module it describes",
+]
+deny = [
+  "the INTERPRETER component of the wheel tag, and the wheel's filename. State A tags `cp35-abi3-linux_x86_64` because setuptools writes the historical minimum for a limited-API build; meson-python writes the building interpreter, so a correct submission tags `cp312-abi3-linux_x86_64` on this image. Both are valid abi3 wheels and both install on 3.12. A candidate comparing the tags, or the filenames that carry them, passes on the original and fails on a correct submission -- it is the single cheapest false break in this task and it is rejected on sight. `abi3` itself is in scope.",
+  "sdist. `meson dist` requires a Git or Mercurial checkout and this snapshot has neither, so `--sdist` is impossible for any Meson submission and instruction.md says so. A candidate that builds one is asserting something the task explicitly did not ask for.",
+  "`.dist-info/LICENSE.rst`, `.dist-info/AUTHORS.rst` and `.dist-info/top_level.txt`, and the `Platform:` metadata field. instruction.md lists all four as out of scope: the license files require PEP 639 `license-files`, which would replace the required `License: BSD, Public Domain` field, and the other two are legacy setuptools output PEP 621 has no equivalent for.",
+  "the `Generator:` field of the WHEEL file, and any other string whose whole content is the name of the build backend. A field that says `meson` instead of `bdist_wheel` is the migration having happened.",
+  "what the build wrote into the source tree, and where it wrote it. setuptools leaves `build/lib.linux-x86_64-cpython-312/` and a `pycryptodome.egg-info/`; meson-python builds in a temporary directory and leaves neither. Every form of this assertion passes on the original and fails on a correct submission, and it is a question about how the build works rather than about what it ships.",
+  "wall-clock build time, compile time, the number of processes a build spawns, and the size in bytes of any artifact -- a Meson build may be faster or slower and neither is a migration defect",
+  "compiler and linker diagnostics: which warnings appear, their wording, their order, and whether the build is warning-clean. The instruction says warnings are non-fatal.",
+  "the contents of the build directory, the names and layout of intermediate artifacts, zip entry order inside the wheel, member timestamps, and anything in a build log",
+  "the internal organisation of the submission's build system: how many `meson.build` files there are, what its variables and options are called, which directory each target is declared in, and whether it uses a helper module the original had no equivalent of. Stage 1 reads the build system; this stage does not.",
+  "byte-for-byte comparison of a compiled artifact against the original's. Two build systems reach a compiler by different routes and a differing byte is not a defect; what the object DOES -- its symbols, its imports, its instructions, its answers under the self-test -- is in scope and is where an actual defect appears.",
+  "the `Cryptodome` / `pycryptodomex` dual-namespace build. `setup.py` grows a second distribution when a `.separate_namespace` marker is present, that marker is not in this snapshot, and instruction.md says not to reimplement the machinery.",
+  "`__pycache__` and `.pyc` files anywhere, and byte-compilation generally: both installs here are made with `--no-compile`, so their presence or absence is a property of how this stage installs rather than of either build",
+  "behaviour the original also gets wrong. A candidate must pass on the original, which is what makes it a migration defect rather than an upstream bug.",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the interpreter tag on the wheel, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times. Little here is timing-adjacent, but a
+# flake that costs a submission ten points is a bug in the benchmark rather than a
+# finding, and a 39,245-test suite is a large enough surface for a borderline one to
+# appear in.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# One candidate, on one tree, including whatever configurations it asks for. A
+# configuration is 47 translation units -- about seven seconds -- and then an
+# install; the expensive thing here is the self-test, at roughly eighty seconds for
+# all 39,245 ids. Configurations are cached across every candidate and every round,
+# so only the first to ask for one pays. 1800s is the ceiling for a candidate that
+# asks for all four cold and runs the whole suite in each.
+candidate_timeout_sec = 1800.0
+run_timeout_sec = 600.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets. It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one thing the setuptools build
+gets right and the Meson build does not -- an installed artifact, an exported
+symbol, a resolved ctypes lookup, a self-test id, an instruction in an object, a
+probe that stopped probing. A round that finds nothing pays the submission 10
+points; a round that errors pays nothing and is reported as an error rather than as
+either verdict.
+
+The candidate reaches the library through a wheel and the install that wheel
+produces, and asks it questions the way its own callers do: `ctypes.CDLL` on an
+artifact, a symbol lookup, and the library's own 39,245-test suite.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures is
+# how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another. Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific. Six unguided rounds
+# converge on the same two obvious things -- the artifact list and the symbol table
+# -- and both are already stage-2 modules. Six pointed ones cover the build.
+
+[[adversary]]
+id = "a01-symbols-and-loading"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the exported symbol set, artifact by artifact, in every configuration: every
+name `Crypto/Util/_raw_api.py` and its callers resolve through ctypes present
+in the right artifact's `.dynsym`, and nothing exported that hidden visibility
+should have hidden. Read `_raw_api.py` and the `load_pycryptodome_raw_lib`
+call sites first -- they are the definitive list of what has to be reachable,
+and Meson's `py.extension_module()` hides symbols by default.
+
+Then loading the artifacts the way the library loads them, not the way an
+importer would: 41 files opened with `ctypes.CDLL` from their installed paths,
+each one's symbols resolved, and none of them a CPython extension module -- no
+`PyInit_`, no libpython in DT_NEEDED. State A's 41 objects export 277 names
+and not one `PyInit_`, and a port that reached for a normal extension module
+produces something that imports and then cannot be called.
+"""
+
+[[adversary]]
+id = "a02-selftest-and-integers"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the library's own suite as a differential instrument: run it against both
+installs, whole or by subpackage, and find an id that passes on one and not
+the other. 42,784 instances over 39,245 distinct ids, and the known-answer
+tests among them are what would notice a wrong compiler flag or a missing
+macro. `Cipher`, `Hash` and `PublicKey` are the largest groups; a whole run is
+about eighty seconds, so you can afford several.
+
+Then the integer backend the install actually resolves to.
+`Crypto.Math.Numbers.Integer` comes from `_IntegerGMP`, `_IntegerCustom` or
+`_IntegerNative` depending on what loaded, State A gets GMP, and a fallback is
+both slower and a different implementation of the arithmetic every public-key
+operation runs on. Ask the install which module it got, then check the
+arithmetic and the public-key self-tests agree with State A's.
+"""
+
+[[adversary]]
+id = "a03-isa-partition-and-probes"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the instruction-set elevation in the delivered objects. State A confines it to
+two units: `-maes` on the one behind `_raw_aesni`, `-mpclmul -mssse3` on the
+one behind `_ghash_clmul`, `-msse2` everywhere. Disassemble the installed
+artifacts and compare family by family. Both directions are defects: an
+unguarded AES-NI instruction in a baseline object is a SIGILL on hardware
+without it, and an elevated unit that lost its flags is a silent fallback.
+Note that SSE2 is in the x86-64 baseline ABI, so its presence proves nothing.
+
+Then whether the build still probes the compiler or has memorised the answers.
+The three crippled configurations are the instrument: `no-aesni`, `no-clmul`
+and `no-isa` each remove a capability, and the artifact set State A produces
+changes in response. A submission that ships the same 41 files under every
+compiler has replaced a probe with a conclusion -- and the reverse, an
+artifact that disappears when it should not, is equally a defect.
+"""
+
+[[adversary]]
+id = "a04-macros-and-artifact-shape"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the ten global and two module-scoped macros, seen from outside the object
+rather than in a build file. A macro that stopped being defined changes which
+code compiled, and the trace is in what the artifact imports: `posix_memalign`
+against a plain `malloc`, a `__*_chk` symbol appearing or not, a 128-bit-
+integer path taken or not. `nm_undefined` answers this in one call per
+artifact.
+
+Then the shape of the 41 artifacts rather than their contents: the `.abi3.so`
+filenames, `abi3` as the ABI component of the wheel tag, what each object
+declares it needs in DT_NEEDED, whether anything acquired an RPATH or RUNPATH
+pointing into the machine that built it, and whether an artifact State A does
+not ship appeared. An RPATH into a build directory works in the container that
+made it and nowhere else.
+"""
+
+[[adversary]]
+id = "a05-payload-and-wheel-contract"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the Python payload as an installed tree: 192 `.py`, 96 `.pyi` and `py.typed`
+across 20 packages, each at its exact package-relative path and byte-identical
+to State A's. Meson does not glob, so these are enumerated lists in the
+submission's build files and a single omission is invisible until someone
+imports the module. Check the stubs sit beside the modules they describe, and
+that no package lost its `__init__.py`.
+
+Then the wheel as an installer sees it: RECORD naming every member with a
+digest and size that match the bytes, no member missing from RECORD and none
+named that is not there, `.dist-info` parseable, the METADATA fields
+instruction.md §2.5 requires with the values it requires, and `pip install`
+into a clean prefix producing exactly the payload. Read the deny list before
+you start -- the interpreter tag, top_level.txt, the license files and
+`Platform:` are all out of scope and are where an unwary round spends its
+hour.
+"""
+
+[[adversary]]
+id = "a06-determinism-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the same sources built twice. `build_again()` builds a fresh copy of the tree,
+so what this asks is whether the build is a function of its inputs: the same
+wheel members, the same installed payload, the same symbols in the same
+artifacts. A build that embeds a path, a timestamp beyond SOURCE_DATE_EPOCH,
+or anything ordered by a filesystem walk answers differently the second time.
+Compare the two builds of ONE tree against each other, not one tree against
+the other.
+
+Then, with whatever budget remains, nothing in particular: read State A's
+`setup.py` and `compiler_opt.py` and follow whatever looks least likely to
+have survived being rewritten in Meson. The other five rounds were told where
+to look, so this tail is where anything they were not told about has to be
+found.
+"""

@@ -1,0 +1,73 @@
+# Stream-leading comment, before any document marker.
+# It continues onto a second line.
+
+# A blank line separates the block above from this one, which is the
+# head comment of the document.
+---
+# Head comment of the root mapping's first key.
+first: 1 # Line comment on the first value.
+
+# Head comment separated from `first` by a blank line, so it belongs
+# to `second` rather than being the foot of `first`.
+second: two # trailing
+
+third: # line comment on a key whose value is a nested mapping
+  # head comment of the nested mapping's first key
+  nested_a: alpha # line
+  nested_b: beta
+  # foot comment of the nested mapping
+
+fourth:
+  # head comment of the first sequence entry
+  - one # line comment on an entry
+  # head comment of the second entry
+  - two
+  - three # line comment on the last entry
+  # foot comment of the sequence
+
+fifth:
+  - key_a: 1 # line comment inside a map inside a seq
+    # head of key_b
+    key_b: 2
+  # between two seq entries that are maps
+  - key_c: 3
+
+sixth: [1, 2, 3] # line comment after a flow sequence
+seventh: {a: 1, b: 2} # line comment after a flow mapping
+
+eighth: |
+  A literal block scalar.  # This is content, not a comment.
+  So is this.
+ninth: >-
+  A folded scalar whose text mentions # a hash
+  and continues.
+
+tenth: null # explicit null with a comment
+eleventh: # a key with an empty value and a comment
+twelfth: ~
+
+# Foot comment of the root mapping, at the end of the first document.
+---
+# Head comment of the second document.
+second_document: yes
+# Foot comment of the second document.
+---
+# A document whose only content is a scalar.
+just a scalar # with a line comment
+---
+# A document that is only comments and an empty node.
+---
+# Comment before the final document's mapping.
+last:
+  # deeply
+  a:
+    # nested
+    b:
+      # comment
+      c: value # innermost line comment
+      # foot of c
+    # foot of b
+  # foot of a
+
+# Final foot comment of the stream, after everything.
+# On two lines.

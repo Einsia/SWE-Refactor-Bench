@@ -1,0 +1,241 @@
+# =============================================================================
+# SWERefactorBench -- language rewrite
+#
+#   State A : zlib 1.3.1, 18 C translation units and 9 private headers built by
+#             CMake 3.25 into libz.so.1.3.1, libz.a, the two example drivers
+#             (example, minigzip) and an installed zlib.pc, with the public
+#             surface declared by zlib.h and pinned by zlib.map.
+#   State B : the same library's behaviour in Java 17 -- seven public types in a
+#             single JPMS module, built by the same CMakeLists.txt driving javac
+#             and jar, producing bit-identical deflate output at every level,
+#             strategy and window size.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs a library builds
+# one from the submitted source with the published argv.  That is what makes "the
+# build compiled no C" a fact about the repository rather than a claim about a
+# directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, ten gates, all of them required.  Failing one is a zero and
+#      nothing after it runs.
+#   2. eighteen behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the C library passes
+#      and this one fails.  60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has no
+# JDK and no cmake, because a review that can build grades a build log instead of
+# an implementation, and the question here -- were 18 C files reimplemented or
+# transliterated -- is not one a build log answers.  Stage 2 has a C compiler that
+# belongs to its own freeze rather than to the grading: the submission is
+# configured and built under a shim that refuses every compile of a repository
+# source and records the attempt, so a tree that still needs cc is unbuildable
+# there by construction.  Stage 3 is the only image where both toolchains are
+# usable, because "the C library passes this test" is a claim that has to be
+# executed.
+#
+# One gate deserves naming here, because it is why the task is shaped the way it
+# is: the JDK ships zlib.  `java.util.zip.Deflater` is the same algorithm at the
+# same defaults, so a class forwarding to it matches the C reference bit for bit
+# and passes nearly every behavioural case stage 2 runs.  It is a few lines of
+# work and it is the whole task not done, so it is asked twice -- measured on the
+# artifact in stage 2, read out of the source in stage 1.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions are build and install debris only, and the line they draw is
+# deliberate: a path the published build *writes* is dropped, and a compiled file
+# the submission *checked in* is kept.
+#
+# Dropping the first kind is what makes the grading mean anything -- a stale
+# install/ carried over from the agent container would let a verifier grade
+# artifacts the submitted source no longer produces, which for this task is the
+# whole ball game.
+#
+# Keeping the second kind is the less obvious half.  It would be easy to add
+# `*.jar` and `*.class` here, and it would be wrong: a prebuilt jar checked in at
+# `lib/zlib.jar` and installed by CMakeLists.txt is exactly what stage 1's
+# `no-embedded-artifacts` gate exists to find, and a submission doing that should
+# fail *that gate*, with the jar named in the transcript.  Excluding the pattern
+# would instead delete the evidence and turn the outcome into "the build produced
+# no artifacts" -- a zero with no reason attached, for a defect the ladder has a
+# specific finding for.  The compiled files that remain cannot be used without
+# tripping a gate that says so, so keeping them costs nothing and buys the reason.
+#
+# Solutions must therefore live in tracked source files, never inside these
+# paths, a rule instruction.md states outright.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "build",
+    "_build",
+    "cmake-build*",
+    "CMakeFiles",
+    "CMakeCache.txt",
+    "cmake_install.cmake",
+    "CTestTestfile.cmake",
+    "install",
+    "prefix",
+    "*.o",
+    "*.lo",
+    "*.d",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+]
+
+[task]
+name = "swerefactor/lang02-zlib-c-to-java"
+description = "Reimplement the complete zlib 1.3.1 compression library in pure Java 17 without java.util.zip, JNI or any external dependency, preserving bit-exact deflate output, the full behavioural surface re-expressed as a specified Java API, and a modular-jar release layout built by the original CMake driver."
+authors = []
+keywords = [
+    "swe-refactor",
+    "language-migration",
+    "c",
+    "java",
+    "jvm",
+    "zlib",
+    "deflate",
+    "bit-exact-output",
+    "api-migration",
+    "jpms",
+    "offline",
+]
+
+[metadata]
+category = "language-rewrite"
+difficulty = "frontier"
+license = "Zlib"
+upstream = "https://github.com/madler/zlib"
+upstream_version = "1.3.1"
+source_repository = "https://github.com/madler/zlib"
+source_version = "1.3.1"
+state_a = "zlib 1.3.1 in C89 (18 library translation units, 9 private headers, ~13.2k hand-written lines), CMake 3.25.1"
+state_b = "the same behaviour in Java 17: 7 public types in one JPMS module (org.zlib), no java.util.zip, no JNI, no dependency outside java.base, deflate output bit-identical at every level, strategy and window size"
+scale = "58 files, ~13.2k lines of C, 88 exported symbols (32 of them the gz* stream layer)"
+tags = [
+    "whole-repository",
+    "language-rewrite",
+    "cross-paradigm",
+    "bit-exact-output",
+    "differential-testing",
+    "jpms-module",
+    "class-file-inspection",
+    "platform-library-ban",
+    "offline",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 20h wall clock: 18 C translation units and 88 exported entry points mapped onto
+# a specified seven-type Java API, and a compressor whose output has to match bit
+# for bit -- which means reproducing zlib's specific match choices, block
+# boundaries and Huffman trees, not merely producing valid DEFLATE.  The JVM adds
+# a second axis the C-to-C form of this task does not have: every unsigned
+# arithmetic site in the original has to be re-derived, because Java has no
+# unsigned int, and the places where that matters are the CRC table, the hash
+# chain and every window index.
+#
+# The State A sources stay in the image as the oracle, so the time goes on
+# reimplementation rather than on reverse-engineering behaviour.
+#
+# no-network: there is no Maven or Gradle cache and no registry, so "no external
+# dependency" is enforced by the environment rather than audited afterwards.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 72000.0
+network_mode = "no-network"
+user = "agent"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+JAVA_HOME = "/usr/lib/jvm/java-17-openjdk-amd64"
+CMAKE_BUILD_PARALLEL_LEVEL = "4"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.  Stage 2 alone is budgeted generously
+# because it builds the submission twice, shared and static, and runs ~4100 cases
+# through a JVM in each configuration -- State A is rejected in about 30 seconds,
+# and a real Java submission is not.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota to
+# be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+# The behavioural image builds the upstream C reference, generates the corpus and
+# freezes ~4100 expectations, so its build is slower than the agent
+# environment's.
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+JAVA_HOME = "/usr/lib/jvm/java-17-openjdk-amd64"
+CMAKE_BUILD_PARALLEL_LEVEL = "4"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a smoke
+# test that the suite can be passed at all.  The suite's own gate answers that:
+# stage 3 is asked only of a submission that scored stage 2 in full, so a tree
+# that reaches it has already passed every recorded check.  What six models add is
+# the other half -- an hour each spent hunting for a behaviour nobody thought to
+# record.

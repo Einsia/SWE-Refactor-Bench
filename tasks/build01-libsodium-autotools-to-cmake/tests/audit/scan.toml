@@ -1,0 +1,93 @@
+schema = "swerefactor.scan-suite/1"
+task = "build01-libsodium-autotools-to-cmake"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Everything here reads and nothing here scores. `swerefactor.scan` records every
+# check with required = false and `scoring.grade_audit` gates on the required
+# checks -- the six prose gates and nothing else. A scan finding costs a
+# submission nothing on its own.
+#
+# That is why a string match belongs here rather than in the stage that scores, and
+# `hardening` is where it would do the most damage:
+#
+#   * requiring the literal string `check_c_compiler_flag` to appear in some CMake
+#     file fails a submission that probes through a helper function of its own, and
+#     passes one that wrote `# TODO: use check_c_compiler_flag`.
+#
+#   * requiring each hardening flag to appear in `CMakeCache.txt` as part of an
+#     INTERNAL variable's *name* asks about a convention of how the caller of
+#     `check_c_compiler_flag` chose its result variable, not about having probed for
+#     anything.
+#
+# The behaviour underneath is measured as behaviour: stage 2 configures under a
+# compiler that exits 1 on sight of `-fstack-protector` and requires the build to
+# configure anyway with the flag gone. A build system that probes reacts that way
+# and one that hardcodes cannot, and neither outcome depends on how the probe is
+# spelled.
+#
+# The one place that deserves a note is the 352 source checksums. A sha256 mismatch
+# is not a judgement, so it would be fair to ask why it cannot fail the stage by
+# itself. It effectively does: `sources_untouched` is a required gate and its prompt
+# says that a reported mismatch is to be opened, confirmed and failed on. What the
+# reviewer adds is the half a hash cannot see -- a new file compiled in, a header
+# shadowed earlier on the include path, a source left byte-identical and then
+# excluded from the build.
+#
+# Weights are recorded and unused: nothing here is scored. They are kept so a module
+# can move back to a scored stage without a rewrite, which is the same reason the
+# module contract is byte-for-byte stage 2's.
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check in this suite can fail the audit gate; the gate is the six
+prose questions in evaluation.toml, answered by a model that reads both build
+systems. These modules answer the sub-questions a string can answer -- does this
+file exist, does this hash match, does this build file name a harness variable --
+so that the reviewer spends its turns on the ones a string cannot: whether the
+feature detection is detection, whether the ISA partition was understood, whether
+Autotools left or was renamed.
+"""
+
+[[module]]
+id = "provenance"
+title = "the Autotools build system is gone, not hidden"
+weight = 1.0
+about = """
+configure.ac, the six Makefile.am files, m4/, build-aux/, autogen.sh, the .pc.in
+templates, generated Autotools output by name, and -- the one content match here --
+the GNU Autoconf generation banner in the first 4 KiB of every delivered text file,
+which catches a `configure` renamed to anything at all. Plus what must *not* have
+been removed: README, LICENSE, AUTHORS, ChangeLog, and `version.h.in`, which looks
+like Autotools output and is not.
+"""
+
+[[module]]
+id = "sources"
+title = "not one byte of C, C++ or assembly changed"
+weight = 1.0
+about = """
+sha256 of all 352 immutable sources against State A, one check each, plus the three
+things a hash cannot see: a source added under src/ or test/, an immutable source
+delivered as a symlink, and a truncated manifest. Feeds `sources_untouched`, whose
+prompt treats a reported mismatch as a fail rather than as a lead.
+"""
+
+[[module]]
+id = "buildsystem"
+title = "delivered build state, the shape of the detection, grader awareness"
+weight = 1.0
+about = """
+Three kinds of claim. Delivered build state -- object files, a CMakeCache.txt, a
+config.h in the source tree, a vendored directory, VCS metadata -- a claim about
+the repository rather than what a build produces, which is why it is here and not
+in the stage that builds. Where the feature detection appears to happen, as a
+lead only: the count and location of check_*
+calls, with no requirement that any particular one be present. And whether a build
+file reads a harness environment variable or names one of the harness's own
+directories, which is the mechanical half of `no_grader_awareness`.
+"""

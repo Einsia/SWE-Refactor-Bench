@@ -1,0 +1,195 @@
+TASK {{task}} -- find what the migration got wrong.
+
+miniserve is a single-binary static file server: you point it at a directory and
+it serves that directory over HTTP, rendering a browsable listing, streaming
+files, generating tar/tar.gz/zip archives of any subtree on demand, and
+optionally accepting uploads. Almost everything it does is switched on by a
+command-line flag, and there are about forty of them.
+
+The original's HTTP layer is actix-web 4: routing, the static file service with
+its conditional-request and byte-range handling, the multipart parser behind
+uploads, the basic-auth extractor, and the TLS acceptor all come from actix-web
+or from one of its companion crates (actix-files, actix-multipart,
+actix-web-httpauth). The submission is supposed to be the same program with that
+layer rewritten on axum 0.7 over tower, tower-http and hyper 1, the old stack
+removed entirely, and every observable behaviour preserved.
+
+Preserved means byte for byte where it can be: the same status codes, the same
+bodies, the same semantic headers, the same archives, the same command line, the
+same exit statuses. That the migration is real, and that a recorded corpus of 612
+requests and 53 invocations still gets the right answers, has already been
+checked. Your job is the part a recording cannot do: find a request or an
+invocation nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original, on actix-web 4
+  {{submission}}   the submission, which claims to be the same program on axum
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you -- you
+attack the programs they build, not the source.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner compiles
+it offline in release mode, then runs your file against the resulting binary. You
+are told the outcome on each tree separately.
+
+Unlike a server that has one configuration, nothing is booted for you. Your test
+starts the target itself, as many times and with as many command lines as it
+likes, through a module the runner puts on your path:
+
+    import srbtarget
+
+    def test_tar_of_a_subdirectory():
+        with srbtarget.serve("--enable-tar") as t:
+            r = t.request("GET", "/dira/?download=tar")
+            assert r.status == 200
+            assert r.get("Content-Type") == "application/x-tar"
+
+    def test_a_bad_port_is_refused():
+        r = srbtarget.run_cli(["--port", "notanumber"])
+        assert r.exit_code != 0
+
+`serve(*argv)` boots the target and yields a server; the command line it builds
+is the one the graded corpus uses:
+
+    <binary> <serve-path> --interfaces 127.0.0.1 --port <port> <your argv>
+
+so any flag combination from the original's own documentation works, and
+`{tls}`, `{authfile}` and `{tree}` expand to the shipped TLS directory, the
+shipped credentials file and the directory being served. On the server you get
+`request()` for a normal request -- the path is sent exactly as you wrote it, not
+quoted or normalised, so `%2F`, `..`, a doubled slash and a literal space all
+reach the target intact -- `raw()` for bytes too malformed for a client library
+to express, `log` for what the process wrote to stdout and stderr, and `root`
+for the path being served. `run_cli(argv)` runs an invocation to completion and
+gives you its exit status, stdout and stderr separately. Read the module; it is
+short and it documents what it does and does not do.
+
+    srbtarget.TREE      a read-only reference copy of the sample tree
+    srbtarget.TLS_DIR   the certificates and keys
+    srbtarget.AUTH_FILE the credentials file
+    SRB_TMP             scratch space you may write to
+
+The tree each server serves is a fresh private copy of `TREE`, with every mtime
+pinned to 2021-06-15T12:34:56Z -- the listing renders timestamps, so this is what
+makes the listing testable at all. Read `TREE` to compute what you expect; do not
+expect one test's upload to be visible to the next.
+
+The standard library is available, and pytest. There is no third-party HTTP
+client, deliberately: `http.client` and `socket` show you the response as it came
+off the wire, and every client in the index normalises something this task
+grades. Do not read the tree under test from inside your test, and do not open
+the binary you are running -- what is being graded is behaviour, and a test that
+reads a source file or greps an executable is measuring something else. See the
+last item of the scope: it is the one way to satisfy every mechanical condition
+for a break while establishing nothing, and it is rejected on sight.
+
+Exit status is the verdict: zero means your test passed against that tree,
+non-zero means it failed. pytest does this for you.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter,
+and the first is where most attempts die: a test that fails on both trees has
+found a bug in your test, or a behaviour the original never had. Run every idea.
+You have budget for many, and one call tells you which of the four outcomes you
+got.
+
+Then it has to assert on something that was promised. The scope below is
+miniserve's observable contract; a divergence outside it is thrown out on review
+however real it is, and you will have spent the budget for nothing. The Server
+and Date headers, header name casing, reason phrases, the humanised "2 years ago"
+column, the exact layout of `--help`: all genuinely different or genuinely
+per-run, all excluded, none worth a candidate.
+
+It also has to give the same answer three times. Ports are fresh per boot and
+mtimes are pinned, so there is little left to be flaky -- but an archive is built
+by a background thread and streamed, and a test that races it will be discarded
+rather than believed.
+
+WHERE THIS PARTICULAR MIGRATION ACTUALLY FAILS
+
+Not on the main path. Listing a directory and downloading a file work in every
+submission, because they are the first thing anyone tries. What gets left out is
+what actix-files used to do for free and tower-http now does slightly
+differently, or does not do at all:
+
+  * Conditional requests. actix-files answered If-None-Match, If-Modified-Since,
+    If-Match and If-Unmodified-Since, generated an ETag in a particular form, and
+    chose which headers a 304 carries. tower-http's ServeFile is a different
+    implementation with its own opinions about every one of those, and the
+    original's precedence when several conditional headers arrive together is
+    written down in neither.
+
+  * Byte ranges. Suffix ranges, open-ended ranges, a range past the end, a
+    zero-length range, several ranges in one header, and the 416 with its
+    Content-Range. Whether Content-Length describes the slice or the file. Whether
+    a multipart/byteranges response is produced at all.
+
+  * Content-Disposition, and how a filename that is not ASCII gets encoded into
+    it. Two implementations, two spellings, one of them wrong.
+
+  * The archive writers. tar, tar.gz and zip are the original's own code and are
+    the most likely thing to have been ported carelessly: the member paths, the
+    stored modes and mtimes, the ordering, what happens to a symlink, and what an
+    archive of an empty directory even is.
+
+  * The multipart parser. actix-multipart is gone and something had to replace
+    it. A part with no filename, a filename that is a path, a duplicated field, an
+    empty body, a boundary that does not close: each was handled by a library and
+    is now handled by somebody's new code.
+
+  * Auth. actix-web-httpauth produced the challenge, parsed the header and chose
+    the realm. The original accepted plain, sha256 and sha512 credential forms
+    from `--auth` and from `--auth-file`; a port that handles the first and not
+    the others passes every test anyone writes by hand.
+
+  * TLS. The acceptor came from actix-web with a feature flag. Whether
+    `--tls-cert` and `--tls-key` still produce HTTPS -- rather than being accepted
+    and quietly ignored, which is the failure mode that looks like success -- and
+    whether the bytes served over TLS match the plaintext ones.
+
+  * Path decoding. Where the percent-decoding happens, and whether `%2F` inside a
+    segment is a separator or a literal, differ between routers; the served path is
+    a filesystem path, so this is also where an escape from the served root would
+    live.
+
+  * The listing's own HTML. Entry order under each `?sort=` and `?order=` and
+    their `--default-sorting-*` defaults, `--dirs-first`, the size column's units,
+    breadcrumbs, symlink rows, `--hidden`, and the escaping of names containing
+    quotes, ampersands, angle brackets, newlines and emoji. The sample tree
+    contains all of those on purpose.
+
+  * The generated assets and the error pages. The favicon and the stylesheet are
+    served from routes that had to be rebuilt, with their own content types. The
+    404 and 500 pages are rendered by the original's own templates.
+
+  * The command line. Forty flags, each with a value parser, plus the
+    `MINISERVE_*` environment aliases, plus `--print-completions` and
+    `--print-manpage` which must write to the right stream to remain usable in a
+    pipeline. An invalid invocation's exit status and stderr are part of the
+    contract; so is the startup banner.
+
+  * Flags that interact: `--index` with `--spa`, `--route-prefix` with
+    `--random-route`, `--readme`, `--pretty-urls`, `--disable-indexing`,
+    `--no-symlinks`, `--header` given several times, `--compress-response`. One
+    process can hold any combination, and you can boot as many as you like.
+
+Read the original's implementation of whatever you are attacking before you write
+the test. The point is not to guess what the original does -- it is right there,
+and it is the standard your test has to meet first.
+
+REPORTING
+
+If you find a divergence that holds up, report it with the candidate name and a
+description of what the submission gets wrong in terms of behaviour, plus which
+part of the contract it violates.
+
+If you do not, report that you found nothing, and say what you tried and where
+you looked. That is a real result -- it is what a sound submission is supposed to
+produce -- and a claim you cannot support is worth nothing more.

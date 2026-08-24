@@ -1,0 +1,44 @@
+# The candidate's test stack for stage 3.  One set of versions, used against both
+# trees.
+#
+# This is not the server's dependency list -- the server is a Go binary and has no
+# Python dependencies at all.  It is what a candidate test file may import beyond
+# the standard library, and both trees get it at identical versions, because a
+# candidate whose own test framework differed between the two halves of a
+# comparison would not be comparing the two routers.
+#
+# The same seven lines as stage 1's requirements-scan.txt and stage 2's
+# requirements-suite.txt, at the same versions.  A benchmark should not run three
+# pytests: a candidate that passes stage 3's pytest and would have failed stage
+# 2's is reporting a difference between two test runners, and the report would
+# name the submission for it.
+#
+# Deliberately absent: httpx, requests, aiohttp, urllib3 -- and http.client, which
+# is absent by being in the standard library and never imported.  fw01's stage 3
+# pins httpx because its subject is reached over HTTP through a normal client;
+# this task's subject is reached over HTTP through `lib/wire.py`, a raw socket
+# sender copied byte for byte from stage 2, and the difference is the whole point.
+# Every convenience client rewrites the request target it is handed, and on this
+# task the request target IS the thing under test: `GET /files/sub%2Fb.txt`
+# answers 200 on the retired router and 404 on a naive port, and any client that
+# normalised `%2F` would send the same bytes in both cases and find nothing.  A
+# candidate given such a client would spend its hour unable to see the central
+# defect this task is built around.
+#
+# pytest-timeout is not optional, for the reason it is not optional in stage 2:
+# every request is a blocking read on a raw socket, and a submission that accepts
+# a connection without answering would hang the candidate until the stage-level
+# timeout killed it -- which reads as "failed on the submission" for a reason that
+# is not the candidate's assertion.
+#
+# No hashes, matching the other two stages: these wheels are installed
+# --no-index from a wheelhouse built inside the image, so there is no index for a
+# hash to defend against.
+
+pytest==8.3.4
+pytest-timeout==2.3.1
+iniconfig==2.0.0
+packaging==24.2
+pluggy==1.5.0
+exceptiongroup==1.2.2
+tomli==2.2.1

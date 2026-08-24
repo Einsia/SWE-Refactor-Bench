@@ -1,0 +1,392 @@
+# =============================================================================
+# SWERefactorBench -- framework rewrite (application framework replacement)
+#
+#   State A : GraphHopper 11.0, whose entire web layer is Dropwizard 4.0.16 --
+#             a Jersey/JAX-RS resource set registered by hand inside a Dropwizard
+#             Bundle, an HK2 object graph assembled by an AbstractBinder, a
+#             YAML-bound Configuration/Application pair, codahale metrics and
+#             health checks on a second connector, an argparse4j command line, and
+#             an AssetsBundle serving the bundled map UI.
+#   State B : the same HTTP and CLI surface on Spring Boot 3.5, with no
+#             Dropwizard, Jersey, HK2 or JAX-RS artifact anywhere in the module
+#             graph.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository inside
+# independent verifier containers that the agent never touches and whose tests/
+# tree the agent never sees.
+#
+# WHY THIS TARGET.  Spring Boot is the framework most Java web code is actually
+# written in, and Dropwizard-to-Spring-Boot is a migration real teams perform --
+# which is the point of choosing it over a comparison between two niche stacks.
+# The two are also close enough to be genuinely confusing: both are Jakarta EE 10,
+# both embed Jetty, both read YAML, both do dependency injection, and both can
+# serve JSON through Jackson.  Nothing here is blocked by an incompatibility.
+# Everything here is a decision about which of two similar mechanisms expresses
+# what the original meant.
+#
+# WHAT MAKES IT HOURS RATHER THAN MINUTES.  The migration touches 4 of the 11 poms
+# -- the root, web-bundle, web and navigation -- and 58 source files: 33 in main
+# (27 in web-bundle, 5 in web, 1 in navigation) and 25 in test, all of the latter
+# under web.  The other seven modules -- core, web-api, reader-gtfs, map-matching,
+# client-hc, tools and example -- come out unchanged, because none of them names
+# the retired stack.  So the work is a whole-repository rewrite of the web tier
+# with a hard boundary around it, and the boundary is part of the task: a
+# submission that starts rewriting core has misread the job.
+#
+# One module sits on that boundary and stays where it is: reader-gtfs's three
+# PtRouter implementations carry `@Inject` on their constructors.  That is
+# JSR-330, not the framework -- `jakarta.inject-api` is version-managed on its own
+# in the root pom rather than through the Dropwizard BOM, the prune leaves it in
+# the repository, and the target framework honours the annotation natively.  A
+# submission that "cleans up" those three files has done work the task did not ask
+# for; one that concludes reader-gtfs must be ported has misread an import.
+#
+# Inside that boundary the volume is mechanical and the difficulty is not:
+#
+#   - 25 explicit `environment.jersey().register(...)` calls become whatever the
+#     target framework's discovery does.  Five of them are conditional on the
+#     configuration -- the transit resources exist only when a GTFS feed is
+#     configured -- and a rewrite that makes registration unconditional exposes
+#     endpoints that should not exist.  Two more are the either/or branches of a
+#     second condition, on whether a realtime feed is configured.
+#
+#   - 16 bound types in a hand-written AbstractBinder become beans.  Three of them
+#     are competing implementations of ONE interface, chosen by configuration
+#     flags at bootstrap; a framework that resolves by type has to be told which,
+#     and a wrong resolution starts, serves, and answers differently.
+#
+#   - The error contract comes from three exception mappers and a message-body
+#     writer, producing a JSON document with `message` and a `hints` array.  The
+#     target framework has its own error machinery with its own default document.
+#     Keeping the status codes while losing the shape is the single easiest way to
+#     pass a smoke test and fail this task.
+#
+#   - Two connectors.  The admin surface -- /healthcheck, /ping, /tasks, /metrics,
+#     /threads and an index -- is on its own port, and reproducing that split is
+#     deliberate work rather than configuration.
+#
+#   - An argparse4j command line: two subcommands the repository wrote (`import`,
+#     `match`) alongside the ones the framework supplied (`server`, `check`), which
+#     means the launch convention itself is part of what has to keep working.
+#
+#   - Two asset roots -- the bundled map UI under /maps/ and webjars under
+#     /webjars/ -- plus a CORS filter installed as a servlet filter across every
+#     pattern and dispatcher type, so it applies to error responses and to paths no
+#     resource claims.  A framework that only adds CORS to controller responses
+#     narrows that.
+#
+#   - A YAML file whose shape the configuration must keep: `config-example.yml`
+#     documents it, and operators depend on it more than on any single route
+#     parameter.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review: a model reads State A against the submission with no
+#      toolchain and no network.  Seven gates, all required.  Failing one is a
+#      zero and nothing after it runs.
+#   2. twelve behavioural modules, 40 points, measured as a LIVE differential --
+#      both trees built by the same offline Maven command, both launched, and 88
+#      cases asked of each.  The points are paid only for a submission that
+#      passed every scored check in every module; short of that the ladder stops
+#      here with nothing from this stage.
+#   3. six adversaries with a budget each to write one test the original passes and
+#      the submission fails.  60 points, 10 for every adversary that finds nothing.
+#
+# The three stages sit on three different axes, and each is measured where it can
+# be measured well.  Whether the rewrite happened: stage 1, reading both trees.
+# Whether behaviour survived: stage 2, comparing two running servers.  Whether
+# anything else broke: stage 3, constructing requests stage 2's corpus does not
+# contain.
+#
+# Stage 2 therefore builds against a COMPLETE closure and State A scores 1.000 on
+# it, which is the calibration a behaviour-preservation suite has to pass: the
+# expectations ARE State A's answers, measured in the same run, so a suite State A
+# fails is a suite disagreeing with itself.  A submission that changed nothing also
+# passes stage 2, and that is the correct outcome there -- it is stage 1 that
+# rejects it, on sight, with gates whose failure is a zero.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has no
+# JDK and no Maven, because a review that can build grades a build log instead of
+# an implementation.  Stage 3 builds both trees and serves four graph profiles,
+# because "the original passes this test" is a claim that has to be executed.
+#
+# THE DEPENDENCY GATE LIVES IN THE AGENT'S ENVIRONMENT, enforced by omission: the
+# local Maven repository holds no dropwizard-core jar and there is no network to
+# reach past it, so a tree that still imports the retired stack is one the agent
+# could not have compiled.  That is a harder constraint than a grader check, and it
+# is why the grading stages do not repeat it.  One asymmetry is deliberate and
+# documented in prune-m2.sh: the jars go, the POMs stay.  State A's root pom
+# imports dropwizard-dependencies as a BOM, and a BOM with no pom stops Maven
+# before it can load the reactor at all -- which would turn the task from a
+# migration into a repair.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# What Harbor collects from the agent container after the trial.
+#
+# `target` is excluded, and on this task that exclusion is load-bearing rather
+# than tidiness.  Every grading stage builds the tree it was given, and
+# `find_app_jar` picks the largest launchable jar under any `target/`; a committed
+# jar would otherwise be discovered and graded in place of the sources it was
+# supposed to have been built from.  Stages 2 and 3 both scrub every `target/`
+# before either side is built, so the hole is closed twice -- here by not
+# collecting it, and there by removing it symmetrically.
+#
+# The Maven repository is excluded because every verifier stage resolves from its
+# own closure; an agent's ~/.m2 never influences a score, and a submitted one
+# holding a dropwizard jar would undo the ban that the environment enforces by
+# omission.
+#
+# Graph caches and node_modules are excluded because they are run products: a
+# GraphHopper run writes an imported graph beside its config, and
+# frontend-maven-plugin unpacks a node tree.  Both are large, neither is source,
+# and every stage builds its own.
+#
+# Solutions must therefore live in tracked source files, never inside these paths
+# -- a rule instruction.md states explicitly.
+#
+# What is NOT excluded, and why the omission is deliberate: this list once carried
+# `*.osm.pbf` and `*.zip`, and between them they matched fourteen paths that State A
+# tracks -- every one a test fixture, none a run product.  One of them is
+# `core/files/andorra.osm.pbf`, which is what `datareader.file` resolves to under
+# @REPO_ROOT@ in the graded base config: the submission's OWN copy, named that way so
+# that neither side can read the other's.  Collected under the old list, the
+# submission arrived without it, could not import a graph, and never bound a port.
+# Measured on an identity tree -- reference intact, this list applied to the
+# submission alone -- that passed 0.2904 of the stage's weighted checks, with `pt` at
+# 8/8 because its fixtures are a bare `.osm` and two directories that neither glob
+# matches.  A perfect port would have measured the same 0.2904, and since stage 2
+# pays for a submission that answered every scored check or pays nothing, both are
+# paid nothing and neither reaches stage 3.
+#
+# The globs were there for a downloaded extract, which cannot happen: the agent
+# container runs with no network at all, so nothing enters the tree that State A did
+# not ship.  GraphHopper's own product is a graph DIRECTORY, already covered by
+# `graph-cache` and `*-gh`, and Maven's archives land under `target/`.  So neither
+# pattern could ever match a run product, and both could only match fixtures.
+#
+# The remaining archive globs match nothing State A tracks and stay for the same
+# reason they were written.  What keeps that true is not this comment: `swerefactor
+# validate` fails a task whose exclude list matches any path inside
+# original.tar.gz, so a re-record that adds a fixture named like a build product is
+# caught while the task is being authored rather than by a submission's score.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "target",
+    ".m2",
+    "node",
+    "node_modules",
+    "graph-cache",
+    "*-gh",
+    "*.class",
+    "*.jar",
+    "*.war",
+    "*.tar.gz",
+    "*.tgz",
+    "*.tar",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".git",
+    ".venv",
+]
+
+[task]
+name = "swerefactor/fw07-graphhopper-dropwizard-to-springboot"
+description = """
+Migrate GraphHopper 11.0's web layer off Dropwizard 4 onto Spring Boot 3.5,
+across the whole repository, preserving the HTTP contract on both connectors and
+the command-line surface, and leaving no Dropwizard, Jersey, HK2 or JAX-RS
+artifact in the module graph.
+"""
+authors = []
+keywords = [
+    "swe-refactor",
+    "framework-rewrite",
+    "java",
+    "dropwizard",
+    "spring-boot",
+    "jersey",
+    "jax-rs",
+    "hk2",
+    "dependency-injection",
+    "http-contract",
+    "maven-reactor",
+    "offline",
+]
+
+[metadata]
+category = "framework-rewrite"
+difficulty = "hard"
+license = "Apache-2.0"
+source_repository = "https://github.com/graphhopper/graphhopper"
+source_version = "11.0"
+state_a = "GraphHopper 11.0 on Dropwizard 4.0.16: Jersey/JAX-RS resources registered by hand in a Bundle, an HK2 object graph from an AbstractBinder, a YAML-bound Configuration/Application pair, codahale metrics and health checks on a second connector, an argparse4j command line, and an AssetsBundle serving the bundled map UI"
+state_b = "The same HTTP and CLI surface on Spring Boot 3.5, with no Dropwizard, Jersey, HK2 or JAX-RS artifact anywhere in the module graph"
+language = "java"
+java_version = "17"
+build_system = "maven"
+tags = [
+    "whole-repository",
+    "framework-rewrite",
+    "web-tier-replacement",
+    "conditional-registration",
+    "two-connectors",
+    "error-contract",
+    "offline-maven-repository",
+    "live-differential",
+    "dependency-closure",
+    "audit-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 16h wall clock, and the shape of the work is why it is more than fw06's 6.  The
+# volume is 58 files, but the cost is not typing: the tree does not compile when
+# the agent receives it -- the web layer's dependencies are gone -- so there is no
+# green baseline to refactor from.  The agent has to stand up the new stack far
+# enough to compile before it can run anything at all, and only then does the
+# differential work start.
+#
+# That differential work is the afternoon.  State A is buildable and runnable here,
+# so the agent can start the Dropwizard server, curl it, and compare -- which is
+# the same oracle the behavioural stage uses and no more.  The surface it has to
+# match is ~40 endpoints across two connectors, an error document with a `hints`
+# array, three routing back-ends whose acceptance rules differ per profile, and a
+# transit stack that only exists under one configuration.
+#
+# Two graph imports are also real time: bringing up State A on the Andorra extract
+# runs contraction-hierarchy and landmark preparations before the port binds.  An
+# agent that wants a fast loop learns to keep a warm graph cache, which is a normal
+# thing to learn about this repository.
+#
+# no-network: every artifact the target stack needs is already in the local Maven
+# repository, and that repository holds no jar of the retired one.  Offline is what
+# turns "the old framework left the module graph" from a code-review opinion into a
+# mechanical fact -- Maven reports it, and there is no repository to fall back to.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 57600.0
+network_mode = "no-network"
+
+[environment]
+build_timeout_sec = 7200.0
+network_mode = "no-network"
+cpus = 4
+# 12 GB rather than 8.  A Maven reactor build of eleven modules, plus a JVM holding
+# an imported Andorra graph with CH and LM preparations, plus the agent's own
+# tooling, does not fit comfortably in 8 -- and an OOM here would read to the agent
+# as its own code failing.
+memory_mb = 12288
+# The tree is ~29 MB packed, the local Maven repository is the bulk, and a graph
+# cache per configuration is a few hundred MB more.  30 GB leaves room for the
+# agent to keep several.
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+TZ = "UTC"
+LANG = "C.UTF-8"
+LC_ALL = "C.UTF-8"
+SOURCE_DATE_EPOCH = "1705276800"
+# Named explicitly rather than left to the image, because every stage sets the same
+# thing and a divergence between them would be a divergence in what was compiled.
+# `-Dmaven.repo.local` rather than a settings entry so that a submitted
+# settings.xml cannot move the repository out from under the offline closure.
+MAVEN_OPTS = "-Dmaven.repo.local=/root/.m2/repository"
+MAVEN_ARGS = "-o"
+# npm's two paths, repeated here identically to the image's own ENV because this
+# table is passed to the container as explicit -e flags and therefore REPLACES the
+# image values rather than adding to them: a fix made only in the Dockerfile would
+# be silently undone here.  Setting both to the same string makes it independent of
+# which one wins.
+#
+# They are HOME-relative by default, and the offline plumbing they point at lives
+# under /root -- `offline=true`, and a _cacache holding the map bundle's packument
+# and tarball.  An agent at a uid whose HOME is not /root gets neither, so
+# web-bundle's `npm pack` reaches for the registry, finds no egress, and fails at
+# EAI_AGAIN on a step the submission did not write and cannot fix.  See the
+# environment Dockerfile's ENV comment and npmrc.offline's header.
+NPM_CONFIG_USERCONFIG = "/root/.npmrc"
+NPM_CONFIG_CACHE = "/root/.npm"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ is the build
+# context of the verifier images and Harbor never uploads it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The rest is for building three images -- two
+# of which warm a Maven closure by compiling State A -- and for the ladder's own
+# overhead.  It is a ceiling rather than an expectation: most submissions never
+# reach stage 3, because stage 1 zeroed them or stage 2 came in short of full marks.
+#
+# A run that does reach stage 3 spends most of its day there: six adversaries,
+# sequentially, and the first of them pays for both trees' Maven builds and all
+# four cold graph imports out of its own budget.  Everything after that is cached
+# for the rest of the stage, which is why one round carries 7200s and the other
+# five carry 3600.
+#
+# 16 GB and 8 CPUs for the verifier, against the agent's 12 and 4, and the reason
+# is stage 3: it holds four JVMs at once -- two graph profiles per tree -- each
+# with an imported graph, while a Maven build may also be running.  Stage 2 builds
+# two trees and holds two servers per profile in turn.  Neither fits the agent's
+# allocation, and an OOM in either would be scored as the submission's fault.
+#
+# No verifier stage ships a State A source tree to a place a submission could
+# reach.  Stage 1 reads State A as a snapshot with no build toolchain present;
+# stages 2 and 3 unpack it into their own work directories from a digest-checked
+# tarball, build it with the same command they build the submission with, and
+# compare the two live.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 82800.0
+environment_mode = "separate"
+
+[verifier.environment]
+build_timeout_sec = 10800.0
+network_mode = "no-network"
+cpus = 8
+memory_mb = 16384
+storage_mb = 40960
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+TZ = "UTC"
+LANG = "C.UTF-8"
+LC_ALL = "C.UTF-8"
+SOURCE_DATE_EPOCH = "1705276800"
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+# MAVEN_OPTS is deliberately absent here and set per stage instead.  Stage 1 has no
+# Maven at all; stages 2 and 3 compose the environment for every graded invocation
+# in harness/maven.py, which drops JAVA_TOOL_OPTIONS and MAVEN_ARGS so that a
+# submitted tree cannot inject flags into a command the harness composed
+# deliberately.  A value inherited from here would defeat that.
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a smoke
+# test that the suite can be passed at all.  The suite's own gate answers that:
+# stage 3 is asked only of a submission that scored stage 2 in full, so a tree
+# that reaches it has already passed every recorded check.  What six models add is
+# the other half -- an hour each spent hunting for a behaviour nobody thought to
+# record.

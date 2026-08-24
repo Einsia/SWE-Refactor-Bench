@@ -1,0 +1,225 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "build01-libsodium-autotools-to-cmake"
+
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing?
+#
+# The corpus carries the most, because a build system is judged by what it
+# produces: 80 of libsodium's own test programs, compiled against the library the
+# submission installed and compared byte for byte. `ctest` comes next -- the
+# migration is required to keep the test suite runnable through the new build
+# system, and a CMake project whose tests do not run has moved the build but not
+# the development workflow. `isa` and `configure` follow, because per-file ISA
+# dispatch through seven convenience libraries is the part of this Autotools build
+# that a naive CMakeLists.txt flattens, and flattening it is the most likely way
+# to arrive at something that compiles and is wrong.
+#
+# `build` is first, and the others depend on it. Every module after it measures the
+# trees it produced, so a submission whose default configuration does not build leaves
+# them nothing behavioural to measure: each fails its own checks on its own evidence.
+# No module here needs a veto to zero the stage, because every weighted module has to
+# pass every scored check for the stage to pay at all.
+
+default_timeout_sec = 1200
+lib_dir = "lib"
+
+# No [env] block: the matrix, the delivered snapshot, the Autotools stubs and the
+# ledger that names them all live under $SRB_SUITE_WORK, which the runner sets.
+# Pinning any of those to an absolute path here would let two runs in one
+# container share a build tree.
+
+[metadata]
+generators = ["Ninja", "Unix Makefiles"]
+configurations = 11
+corpus_programs = 80
+translation_units = 119
+
+# --------------------------------------------------------------------------- #
+# The matrix everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "the build matrix, run once and published"
+weight = 0.04
+timeout_sec = 5400
+command = ["python3", "run.py"]
+about = """
+Snapshots the delivered sources, shadows the Autotools binaries with recording
+stubs, then configures/builds/installs seven configurations out of tree and
+configures three more against a compiler that pretends to lack a capability. The
+trees stay under $SRB_SUITE_WORK and a ledger names them, so the fourteen modules
+after this one read builds instead of repeating them. Scored, not setup: "the
+default configuration installs" is a measurement, and its failure belongs in the
+report with its log rather than as a harness error.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: what the build produces has to match State A
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "corpus"
+# The largest weight in the stage, a quarter of fifteen modules summing to 1.0. It
+# is here rather than spread around because of what this module alone can do: two
+# neighbouring questions -- "are these still libsodium's sources" and "did the
+# Autotools toolchain get reached for" -- are answered by reading the delivered
+# tree, which is stage 1's, and the one thing this stage can say that no reading
+# can is "does this library still compute what libsodium computes".
+title = "libsodium's own test programs against the installed library"
+weight = 0.25
+timeout_sec = 3600
+about = """
+Unpacks the verifier's checksum-verified copy of the 80 test programs -- never the
+agent's test/ directory -- compiles each against the installed library, shared and
+static, and compares exit status and the byte-exact hash of the .res file it
+produced. This is the only module that runs the delivered library rather than
+reading it.
+"""
+
+[[module]]
+id = "ctest"
+title = "the test suite still runs through the build system"
+weight = 0.08
+timeout_sec = 2400
+about = """
+`ctest` registers the suite, runs it serially and in parallel, and reports the
+same results both ways. A migration that produces a library but no runnable tests
+has moved the build and left the workflow behind.
+"""
+
+[[module]]
+id = "configure"
+title = "the matrix configures, builds and installs"
+weight = 0.07
+about = """
+Per-configuration verdicts across both generators, the option combinations, and
+the cache: default values, Debug, SODIUM_MINIMAL, shared-only, static-only,
+tests-off. The `build` module already ran these; this one says what each of them
+was worth.
+"""
+
+[[module]]
+id = "isa"
+title = "per-translation-unit ISA dispatch"
+weight = 0.07
+about = """
+libsodium compiles individual files with -maes, -mavx512f and friends and links
+them into one library that dispatches at runtime. This reads
+compile_commands.json and the delivered objects and requires the partition to
+match State A file by file: a build that puts -mavx512f on everything produces a
+library that crashes on older hardware, and one that puts it nowhere is slower
+than what it replaced.
+"""
+
+[[module]]
+id = "install"
+title = "the install tree"
+weight = 0.07
+about = """
+Every file, directory and symlink State A installed, with the same soname chain
+and the same permissions -- compared as a set, so an extra file is as visible as
+a missing one.
+"""
+
+[[module]]
+id = "symbols"
+title = "the exported symbol table"
+weight = 0.06
+about = """
+Dynamic symbols, versions and visibility against the frozen State A list. A
+library that exports its internals has changed its ABI even when every test
+passes.
+"""
+
+[[module]]
+id = "evidence"
+title = "what the build transcript shows"
+weight = 0.06
+about = """
+Reads the actual build logs: no undefined references tolerated by a permissive
+link, no network fetch, no shelling out to a generator the project does not
+declare, no in-source writes. Evidence from the transcript, which is why it is
+scored here rather than judged in stage 1.
+"""
+
+[[module]]
+id = "macros"
+title = "compile-time configuration"
+weight = 0.05
+about = """
+The macro set delivered to library translation units, against State A's:
+HAVE_*, CONFIGURED, the minimal-build switches. A header that compiles because a
+macro is missing is a different library.
+"""
+
+[[module]]
+id = "probe"
+title = "feature detection actually detects"
+weight = 0.05
+about = """
+Four configure-only builds whose compiler rejects -mavx512f, rejects -maes,
+rejects -fstack-protector, or cannot find sys/random.h. A build system that probes
+drops the corresponding macro or flag; one that hardcodes State A's answers does
+not notice. This is the difference between a port and a transcription, and it is
+measured by running configure rather than by reading CMake source.
+"""
+
+[[module]]
+id = "headers"
+title = "the installed headers"
+weight = 0.05
+about = """
+Content and the generated parts of sodium/version.h and export.h, compiled
+standalone in C99 and C++ to catch a header that only works because something
+else was included first.
+"""
+
+[[module]]
+id = "cmake-package"
+title = "find_package(sodium) works from outside"
+weight = 0.05
+about = """
+Consumes the installed package from a separate project: config file, version
+file, imported targets with usable INTERFACE properties, shared and static. The
+new build system's own public interface.
+"""
+
+[[module]]
+id = "hardening"
+title = "the flags that were not optional"
+weight = 0.04
+about = """
+Optimisation, visibility, fortification, stack protection, relro and PIE, per
+configuration, read from compile lines and from the delivered ELF objects. State
+A set these deliberately; a CMakeLists.txt that omits them builds a library that
+is measurably weaker.
+"""
+
+# No `sources` module here, and no file-absence checks. Hashing 352 delivered files
+# and asking whether a path exists are statements about the repository, and this
+# stage builds both sides and compares what came out. Both belong to stage 1: the
+# scan takes the checksums and hands them to the `sources_untouched` gate, whose
+# prompt says a mismatch is a fail and not a judgement call. What this stage spends
+# its weight on instead is `corpus`, which measures whether the library still
+# computes what libsodium computes.
+
+
+[[module]]
+id = "pkgconfig"
+title = "libsodium.pc"
+weight = 0.03
+about = """
+The .pc file's fields against State A's, and `pkg-config --cflags --libs` used to
+compile and link a program for real, static and shared.
+"""
+
+[[module]]
+id = "package"
+title = "the source and binary packages"
+weight = 0.03
+about = """
+`cpack` and the source archive: what they contain, what they omit, and whether an
+archive extracted into a clean directory configures and builds.
+"""

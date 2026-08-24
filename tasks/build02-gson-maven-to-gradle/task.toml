@@ -1,0 +1,307 @@
+# =============================================================================
+# SWERefactorBench -- build toolchain rewrite
+#
+#   State A : Google Gson 2.10.1 as released, built by a Maven multi-module
+#             reactor: a parent POM plus gson, extras, metrics and proto.  Four
+#             artifacts, 241 immutable sources, and seven build behaviours that
+#             are not compile-and-jar -- source templating that filters the
+#             project version into GsonBuildConfig.java, two compile levels in
+#             ONE module (main at release 7, tests at release 17), a Java 9
+#             module descriptor compiled separately and placed at
+#             META-INF/versions/9/module-info.class and nowhere else, a
+#             bnd-generated OSGi manifest, a ProGuard pass over a single *test*
+#             class that a test then asserts happened, protobuf codegen against a
+#             vendored protoc, and a published POM that must carry no runtime
+#             dependencies at all.
+#   State B : the same four artifacts, comparable entry by entry and class byte
+#             for class byte, produced by an offline Gradle multi-project build --
+#             with Maven gone from the source, dependency and release closure.
+#
+# What makes this one hard is that almost none of the deliverable is stated in the
+# POMs as a value to be copied.  The main sources compile at release 7 and the
+# tests at 17 inside the same module, so a port that sets one release level per
+# project cannot express it.  module-info.java sits in src/main/java but must NOT
+# appear at the jar root, so a port that simply compiles it at 17 puts a Java 9
+# class where Java 7 consumers will read it.  The published POM lists no runtime
+# dependencies, which is the opposite of what Gradle's `implementation` and `api`
+# configurations produce, so the correct answer is a configuration the Maven POMs
+# never mention.  And the version is an input: it reaches five different places in
+# the output, and a port that writes "2.10.1" into each of them passes every check
+# until the build is run with a different one.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent grading containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs a jar builds one
+# from the submitted source.  That is what makes "there is no Maven in this tree"
+# a fact about the repository rather than a claim about a target/ somebody left
+# behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, six gates, all required.  Failing one is a zero and nothing
+#      after it runs.  The count is the one tests/evaluation.toml declares.
+#   2. ten behavioural modules, 40 points, paid only for a submission that passed
+#      every scored check in every one of them.  Short of that the ladder stops
+#      here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the Maven build passes
+#      and this one fails.  60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has
+# neither build system nor a JDK, because a review that can build grades a build
+# log instead of a build system, and the question here -- is the OSGi manifest
+# generated from the project model or transcribed out of the released jar -- is not
+# one a build log answers.
+#
+# Stages 2 and 3 both carry both endpoints of the migration, and for the same
+# reason: each measures a claim about two artifacts, and a stage that cannot build
+# one of them cannot show the claim is satisfiable.  Stage 2's expectations were
+# every one of them frozen from State A, so State A has to build there and score
+# what it is worth -- full marks, because nothing about the repository's behaviour
+# is supposed to change.  Stage 3 executes "the Maven build ships this and yours
+# does not", which is worth nothing until both have been built and compared.
+#
+# Neither of them is therefore where the migration is judged.  That is stage 1's
+# question, asked over the files by a reviewer through required gates --
+# `maven_retired` and `gradle_is_the_build` -- and a required-gate failure zeroes
+# the submission before either image runs.  A submission that kept Maven scores
+# zero for the reason it should, named in the words that describe it, rather than
+# by failing 2,678 artifact checks that would each have read as something else.
+#
+# What both images do assert at build time is the absence of every *other* engine
+# -- ant, make, cmake, bazel, the wrappers -- and the absence of any gson 2.10.1
+# artifact from the offline repository, so a build that reaches for an engine this
+# repository declares nowhere fails for a reason no build script can talk its way
+# around, and a prebuilt gson cannot be resolved and repackaged in place of one
+# that was built.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate grading containers.
+#
+# The exclusions drop build output, plus one directory the environment image
+# creates itself (`.git`) -- see the note on it below.  `.gradle` is Gradle's
+# project cache and belongs to the first group: the image does not ship one, it
+# appears when a build runs.  The build-output entries exist so no stage can be
+# handed a
+# prebuilt gson-2.10.1.jar and be fooled into inspecting something the submitted
+# *source* no longer produces -- which for this task is the whole ball game, since
+# a tree that kept its POMs would otherwise ship four perfectly good jars built
+# from them.  Solutions must therefore live in tracked source files, never inside
+# these paths, a rule instruction.md states outright.
+#
+# `target` and `build` are named without a path prefix so they are dropped at
+# every depth: Maven writes gson/target/, Gradle writes gson/build/, and both
+# appear under four project directories.  Nothing upstream delivers is called
+# either -- checked against the 257-path State A inventory, which has no `build`
+# or `target` directory at any depth.
+#
+# `.git` is not build output, and it is dropped for a different reason: the
+# environment image creates it itself.  environment/Dockerfile git-inits
+# /workspace/repo and commits State A as SWERefactorBench so the agent can see
+# what it has changed.  That directory is scaffolding, not deliverable, and
+# leaving it in the collected tree fails
+# provenance::test_no_version_control_directory_is_delivered on *every*
+# submission -- a stage-1 finding about the harness charged to the agent.  The
+# collection contract has to mirror what the scan expects to see; the scan
+# compares against the 257-path State A inventory, which has no `.git`.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "target",
+    "build",
+    "out",
+    ".git",
+    ".gradle",
+    "gradle-app.setting",
+    "srb-publish",
+    "*.class",
+    "*.jar",
+    "*.jar.md5",
+    "*.jar.sha1",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+]
+
+[task]
+name = "swerefactor/build02-gson-maven-to-gradle"
+description = "Migrate the whole Google Gson 2.10.1 build from a Maven multi-module reactor to a Gradle multi-project build, reproducing the four artifacts entry for entry and class byte for class byte -- main sources at release 7 and tests at 17 in one module, the templated GsonBuildConfig version, the Java 9 module descriptor at META-INF/versions/9 and nowhere else, the bnd OSGi bundle manifest, the ProGuard pass a test asserts happened, protobuf codegen, and a published POM with no runtime dependencies -- with Maven gone from the source, dependency and release closure."
+authors = []
+keywords = [
+    "swe-refactor",
+    "build-toolchain-migration",
+    "java",
+    "gradle",
+    "maven",
+    "gson",
+    "osgi",
+    "multi-release-jar",
+    "jpms",
+    "offline",
+]
+
+[metadata]
+category = "build-toolchain"
+difficulty = "frontier"
+license = "Apache-2.0"
+upstream = "https://github.com/google/gson"
+upstream_version = "gson-parent-2.10.1"
+upstream_artifact = "gson-parent-2.10.1.tar.gz"
+# Provenance is pinned by content, not by ref: this is the SHA-256 of the GitHub
+# source archive for the tag above, from which the delivered snapshot was built
+# deterministically.
+upstream_sha256 = "e358710d663ca799101a51d0568ccc6dbd30be9bc55b1a85b1a21a93e96e8a9b"
+source_repository = "https://github.com/google/gson"
+source_version = "gson-parent-2.10.1"
+# The delivered snapshot is a repack of the above with VCS metadata removed; its
+# own digest is pinned in environment/original.sha256 and asserted by the
+# Dockerfile at image-build time.
+snapshot_sha256 = "abc7b3c2efd15c0acac6ebfe227f2801ca2f64d377230d7358f37132fc226ab3"
+state_a = "Google Gson 2.10.1 built by a Maven multi-module reactor: a parent POM plus gson, extras, metrics and proto, with templating, moditect, bnd, ProGuard and protobuf plugins carrying seven behaviours that are not compile-and-jar"
+state_b = "the same four artifacts, comparable entry by entry and class byte for class byte, produced by one offline Gradle multi-project build, with Maven gone from the source and release closure"
+scale = "241 immutable sources, 4 artifacts, 282 packaged entries, 271 class files at two class-file levels, 21 manifest headers, 1 JPMS descriptor, 1309 tests"
+tags = [
+    "whole-repository",
+    "build-system-rewrite",
+    "bytecode-forensics",
+    "two-release-levels-one-module",
+    "osgi-metadata",
+    "jpms-multi-release",
+    "build-time-source-generation",
+    "code-generation",
+    "publication-metadata",
+    "offline",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 6h wall clock: 257 delivered files across four Maven modules; 282 jar entries
+# whose per-artifact placement is the deliverable; 271 class files compared byte
+# for byte at two class-file levels produced by one module; 21 manifest headers
+# generated by bnd from instructions rather than written out; a module descriptor
+# that must be compiled at 9 and placed where Java 7 will not see it; 1,309 tests
+# that must keep passing case by case, including the one that asserts a ProGuard
+# pass happened; and a second complete build under -Pversion= to prove the version
+# is an input rather than five literals.  The State A tree stays in the image as
+# the oracle, so the time goes on the port rather than on discovering what the old
+# build did.
+#
+# no-network: the JDK, Maven, Gradle and a warmed offline repository are already in
+# the image, so offline costs the agent nothing and removes "downloaded somebody
+# else's build script" as a possibility.  Every gson 2.10.1 artifact is
+# deliberately absent from that repository, because resolving a prebuilt gson is
+# the shortest way to appear to have built one.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 21600.0
+network_mode = "no-network"
+user = "root"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+GRADLE_USER_HOME = "/root/.gradle"
+# These three are DECLARATIVE ONLY for the agent phase, and an earlier version of
+# this comment claimed the opposite -- that the table is passed as explicit -e flags
+# and replaces the image value.  That is not what happens for this environment type.
+# Measured on a live agent container: the variables that exist only in this table
+# (GRADLE_USER_HOME, JAVA_TOOL_OPTIONS as it was then written) were absent from both
+# `printenv` inside the container and `docker inspect .Config.Env`, while every
+# variable that was present also appeared in the image's own ENV.  So this table
+# reached nothing, and an image fix that had relied on it would have shipped broken
+# while looking complete.
+#
+# They are kept, at values identical to the image ENV, for two reasons: they document
+# the intent at the level a reader looks first, and they are harmless precisely
+# because they agree with the image.  The load-bearing copy is the Dockerfile ENV
+# block -- see its comment for why each of the three is needed and why each is a
+# no-op for a root harness.  If one is ever changed, change it THERE; changing it
+# here alone has no effect on the agent phase.
+GRADLE_OPTS = "-Dorg.gradle.daemon=false -Dmaven.repo.local=/root/.m2/repository"
+MAVEN_OPTS = "-Dmaven.repo.local=/root/.m2/repository"
+JAVA_TOOL_OPTIONS = "-Dfile.encoding=UTF-8"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means each stage
+# directory under tests/ becomes the build context of its own grading image and
+# Harbor does not upload tests/ to the agent container.  That is what keeps the
+# suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.
+#
+# Stage 2 is budgeted generously because a build here is four artifacts from 241
+# sources and it does one in each of eight configurations -- as delivered, with the
+# test suite, published, under a different version, twice in a row, relocated to
+# another path, with a source added, and with a test edited -- every one of them
+# offline.  Stage 3's budget is
+# deliberately not 6 * 3600: an adversary that concludes early returns early, and
+# the hour is a limit on one round rather than a quota to be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+# Three images.  The stage-2 and stage-3 ones warm an offline repository from the
+# same pinned deps.txt the agent environment uses, and stage 3 additionally has to
+# be able to run State A's build system, so their builds are slower than a
+# review-only image's.
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 8192
+storage_mb = 24576
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+GRADLE_USER_HOME = "/root/.gradle"
+GRADLE_OPTS = "-Dorg.gradle.daemon=false"
+JAVA_TOOL_OPTIONS = "-Dfile.encoding=UTF-8"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a smoke
+# test that the suite can be passed at all.  The suite's own gate answers that:
+# stage 3 is asked only of a submission that scored stage 2 in full, so a tree
+# that reaches it has already passed every recorded check.  What six models add is
+# the other half -- an hour each spent hunting for a behaviour nobody thought to
+# record.

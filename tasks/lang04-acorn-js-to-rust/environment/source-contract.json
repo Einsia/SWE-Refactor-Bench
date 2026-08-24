@@ -1,0 +1,308 @@
+{
+  "build_contract": {
+    "build": [
+      "make",
+      "build"
+    ],
+    "driver": "make wrapping cargo",
+    "environment_during_build": {
+      "cargo": "offline, via CARGO_NET_OFFLINE and a CARGO_HOME config.toml",
+      "discarded_before_build": [
+        "target",
+        "node_modules",
+        "dist",
+        ".cargo",
+        "vendor"
+      ],
+      "interpreters": "node, npm, npx, yarn, pnpm, deno, bun, qjs and similar resolve to a tripwire that refuses and records. Unlike the C-compiler shim in the sibling C-to-Rust task there is no forwarded case: a Rust build of a Rust parser has no legitimate use for a JavaScript interpreter.",
+      "network": "none",
+      "rust_toolchain": "1.90.0, pinned via RUSTUP_TOOLCHAIN"
+    },
+    "in_source_build": "expected: cargo writes to target/ inside the repository",
+    "install": [
+      "make",
+      "install",
+      "PREFIX=<prefix>"
+    ],
+    "optional_targets": [
+      "test",
+      "clean"
+    ]
+  },
+  "forbidden_paths": {
+    "description": "No file matching these patterns may exist anywhere under the submission root, at any depth, under any name. The JavaScript implementation, its build toolchain and its package metadata all leave the source closure. Out-of-source build directories (target/) are excluded from the check and are discarded before grading.",
+    "extensions": [
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".jsx",
+      ".ts",
+      ".mts",
+      ".cts",
+      ".tsx",
+      ".node",
+      ".wasm",
+      ".map"
+    ],
+    "names": [
+      "package.json",
+      "package-lock.json",
+      "npm-shrinkwrap.json",
+      "yarn.lock",
+      "pnpm-lock.yaml",
+      "bun.lockb",
+      ".npmrc",
+      ".npmignore",
+      ".eslintignore",
+      ".tern-project",
+      "node_modules"
+    ],
+    "note": "test/bench/fixtures/*.js are third-party JavaScript bundles used as State A benchmark input; they are .js files and go with the rest. The verifier keeps its own copies and feeds them to the submission on stdin."
+  },
+  "native_code_policy": {
+    "allowed_rust_dependencies": "std, core and alloc only. No crates.io dependencies, no git dependencies, no vendored third-party crates, no build scripts that download or generate code from outside the submission. Workspace members may depend on each other.",
+    "description": "Every byte of executable code in the delivered binaries must be produced by the pinned Rust toolchain from Rust sources inside the submission.",
+    "forbidden_build_actions": [
+      "running node, npm, npx, yarn, pnpm, deno or bun at build time",
+      "compiling or bundling JavaScript in any form",
+      "linking a prebuilt object file, static archive or shared library that ships inside the submission",
+      "reaching the network"
+    ],
+    "min_rust_logic_lines": 4000,
+    "rust_edition_max": "2024",
+    "rust_toolchain": "1.90.0"
+  },
+  "probe_protocol": {
+    "binary": "acorn-probe",
+    "operations": [
+      "version",
+      "default_options",
+      "token_types",
+      "keyword_types",
+      "parse",
+      "parse_collect",
+      "parse_expression_at",
+      "tokenize",
+      "loose_parse",
+      "walk_full",
+      "walk_full_ancestor",
+      "walk_simple",
+      "walk_recursive",
+      "find_node_at",
+      "find_node_around",
+      "find_node_after",
+      "find_node_before",
+      "get_line_info",
+      "is_identifier_start",
+      "is_identifier_char",
+      "is_new_line",
+      "line_break_test",
+      "nonascii_whitespace_test"
+    ],
+    "response_key_order": [
+      "id",
+      "ok",
+      "result",
+      "error"
+    ],
+    "specification": "instruction.md, section 'The probe protocol'",
+    "transport": "NDJSON on stdin/stdout, one request per line, one response per line, in order"
+  },
+  "product": {
+    "name": "acorn",
+    "packages": [
+      "acorn 8.14.0",
+      "acorn-loose 8.4.0",
+      "acorn-walk 8.3.4"
+    ],
+    "state_a_language": "JavaScript (ES modules, Node.js)",
+    "state_b_language": "Rust",
+    "upstream_commit": "3c6a5a98e8c6dcefef391e6114cc7e64657979d3",
+    "upstream_repository": "https://github.com/acornjs/acorn",
+    "upstream_version": "8.14.0"
+  },
+  "retained_paths": {
+    "description": "These files must survive the migration unchanged in intent.",
+    "required": [
+      "README.md",
+      "AUTHORS",
+      "acorn/LICENSE",
+      "acorn/CHANGELOG.md",
+      "acorn-loose/LICENSE",
+      "acorn-loose/CHANGELOG.md",
+      "acorn-walk/LICENSE",
+      "acorn-walk/CHANGELOG.md"
+    ]
+  },
+  "schema_version": "swerefactor-source-contract-v1",
+  "state_a": {
+    "anchor_files": [
+      "acorn/src/index.js",
+      "acorn/src/state.js",
+      "acorn/src/expression.js",
+      "acorn/src/statement.js",
+      "acorn/src/tokenize.js",
+      "acorn/src/tokentype.js",
+      "acorn/src/regexp.js",
+      "acorn/src/bin/acorn.js",
+      "acorn-loose/src/index.js",
+      "acorn-walk/src/index.js",
+      "package.json"
+    ],
+    "archive_sha256": "11ba84c50c3ef2d63cfd665e7128f6c78d5cdc6d2bd4a0b3127fe8f34a0f019e",
+    "build_toolchain": {
+      "commands": [
+        [
+          "npm",
+          "run",
+          "build"
+        ],
+        [
+          "node",
+          "test/run.js"
+        ]
+      ],
+      "driver": "npm + rollup",
+      "install_root": "/workspace/node_modules",
+      "note": "State A's dependencies live outside the repository, at /workspace/node_modules, and are not part of the submission. They are provided so the reference implementation can be built and run for study; State B must not need them."
+    },
+    "content_bytes": 6228290,
+    "exclusions": [
+      ".DS_Store",
+      ".agit",
+      ".agit/*",
+      ".bzr",
+      ".bzr/*",
+      ".git",
+      ".git/*",
+      ".gitattributes",
+      ".github",
+      ".github/*",
+      ".gitignore",
+      ".gitlab",
+      ".gitlab/*",
+      ".gitmodules",
+      ".hg",
+      ".hg/*",
+      ".mailmap",
+      ".svn",
+      ".svn/*",
+      "CVS",
+      "CVS/*",
+      "_darcs",
+      "_darcs/*",
+      "node_modules"
+    ],
+    "file_count": 116
+  },
+  "state_b": {
+    "binaries": [
+      {
+        "name": "acorn",
+        "path": "target/release/acorn",
+        "role": "byte-compatible replacement for State A's acorn/bin/acorn"
+      },
+      {
+        "name": "acorn-probe",
+        "path": "target/release/acorn-probe",
+        "role": "NDJSON library-surface probe defined in instruction.md"
+      }
+    ],
+    "build_driver": "cargo (workspace) behind a Makefile",
+    "crates": [
+      {
+        "kind": "lib",
+        "name": "acorn",
+        "role": "the ECMAScript parser and tokenizer",
+        "version": "8.14.0"
+      },
+      {
+        "depends_on": [
+          "acorn"
+        ],
+        "kind": "lib",
+        "name": "acorn-loose",
+        "role": "the error-tolerant parser",
+        "version": "8.4.0"
+      },
+      {
+        "depends_on": [
+          "acorn"
+        ],
+        "kind": "lib",
+        "name": "acorn-walk",
+        "role": "the ESTree AST walker",
+        "version": "8.3.4"
+      },
+      {
+        "depends_on": [
+          "acorn",
+          "acorn-loose",
+          "acorn-walk"
+        ],
+        "kind": "bin",
+        "name": "acorn-cli",
+        "role": "the acorn and acorn-probe executables",
+        "version": "8.14.0"
+      }
+    ],
+    "install_inventory": [
+      {
+        "kind": "file",
+        "mode": "0755",
+        "native": true,
+        "path": "bin/acorn"
+      },
+      {
+        "kind": "file",
+        "mode": "0755",
+        "native": true,
+        "path": "bin/acorn-probe"
+      },
+      {
+        "kind": "file",
+        "mode": "0644",
+        "path": "share/doc/acorn/README.md"
+      },
+      {
+        "kind": "file",
+        "mode": "0644",
+        "path": "share/licenses/acorn/LICENSE"
+      },
+      {
+        "kind": "file",
+        "mode": "0644",
+        "path": "share/licenses/acorn-loose/LICENSE"
+      },
+      {
+        "kind": "file",
+        "mode": "0644",
+        "path": "share/licenses/acorn-walk/LICENSE"
+      }
+    ],
+    "make_targets": [
+      {
+        "runs": [
+          "cargo",
+          "build",
+          "--release",
+          "--offline"
+        ],
+        "target": "build"
+      },
+      {
+        "args": [
+          "PREFIX=<dir>"
+        ],
+        "target": "install"
+      },
+      {
+        "optional": true,
+        "target": "test"
+      }
+    ],
+    "workspace_manifest": "Cargo.toml"
+  },
+  "submission_root": "/workspace/repo",
+  "task": "lang04-acorn-js-to-rust"
+}

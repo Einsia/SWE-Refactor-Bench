@@ -1,0 +1,40 @@
+# The scan's runner, and nothing else.
+#
+# Four packages, hash-pinned, --no-deps: this is a test runner for 663 checks
+# that open files and hash them.  Nothing here can import the submission, and that
+# is the point of keeping the list this short -- the moment an HTTP client or a
+# framework appears in this image, a scan module could start a service, and stage
+# 1's whole claim is that it cannot.
+#
+# Note what is *conspicuously* absent for this task in particular: no `meson`, no
+# `meson-python`, no `build`, no `setuptools`, no `wheel`.  A submission is a
+# Python package with a PEP 517 backend, so the one-line mistake available here is
+# `pip install /opt/workspace` in a scan module -- which would execute the
+# submission's build backend, in the stage whose entire claim is that it cannot
+# execute anything.  The stage-1 Dockerfile also deletes setuptools and pip's
+# wheel machinery after installing these four, so the import fails rather than the
+# build succeeding somewhere nobody is looking.
+#
+# The versions and hashes are the ones tests/behavioural/requirements-target.txt
+# already pins, so the scan runs on the same pytest the behavioural suite does and
+# there is one version of the runner to reason about across the two stages.  Both
+# lists pin both the wheel and the sdist digest for each name: pip verifies
+# whichever file it selects, and pinning only one of the two fails on an image
+# that prefers the other.
+#
+# `packaging` is here at a version far newer than pytest needs, and that is the
+# behavioural stage's constraint leaking in rather than a choice: `build 1.5.0`
+# requires packaging>=24.0, and the two files hold the same version on purpose.
+# Nothing in the scan imports it directly -- pytest does.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6 \
+    --hash=sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761
+iniconfig==2.0.0 \
+    --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==26.2 \
+    --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
+    --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
+pluggy==1.5.0 \
+    --hash=sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669

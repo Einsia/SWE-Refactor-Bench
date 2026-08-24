@@ -1,0 +1,44 @@
+# The candidate's test stack for stage 3, hash-pinned.
+#
+# This is not pycryptodome's dependency list -- it has none, which is part of why
+# it is a good subject for a build-system migration -- it is what a candidate's
+# test file may import beyond the standard library and srbcrypto.  Both trees get
+# the same versions from the same virtual environment, because a candidate whose
+# pytest differed between the two halves of a comparison would not be comparing the
+# two build systems.
+#
+# The same five versions build01's and fw01's stage 3 pin, for the same reason: a
+# benchmark should not run two pytests.  Python here is 3.12, so neither
+# exceptiongroup nor tomli is in the closure.
+#
+# Installed into /opt/venv, which is NOT the interpreter that builds either tree.
+# The build interpreter is the system one, named by $SRB_BUILD_PYTHON, and it is
+# where both backends live -- see requirements-toolchain.txt.  The separation is
+# the same one build01 makes: the process orchestrating the stage does not share an
+# interpreter with code an adversary wrote.  It has a second effect here that it
+# does not have in a C task, and the effect is the point: setuptools is installed
+# in the build interpreter and is NOT importable from a candidate's own process, so
+# `import setuptools` inside a test file answers the same way on both trees.
+#
+# Deliberately absent: everything else, and pycryptodome most of all.  A candidate
+# reaches this library through srbcrypto -- a wheel, the install it produces, the
+# compiled objects in it, and the library's own 39,245-test suite run against it --
+# and the only Crypto that exists during a run is the one the tree under test
+# built.  An importable one in this venv would let a candidate compare a build
+# against the image rather than against the other build.
+
+iniconfig==2.0.0 \
+    --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==26.2 \
+    --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
+    --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
+pluggy==1.5.0 \
+    --hash=sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6 \
+    --hash=sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761
+pytest-timeout==2.3.1 \
+    --hash=sha256:12397729125c6ecbdaca01035b9e5239d4db97352320af155b3f5de1ba5165d9 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e

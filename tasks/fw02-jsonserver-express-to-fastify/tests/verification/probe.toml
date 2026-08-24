@@ -1,0 +1,209 @@
+schema = "swerefactor.verification-probe/1"
+task = "fw02-jsonserver-express-to-fastify"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file, run against a target that this script installs,
+# builds and boots.  Both trees are started the same way -- through the launcher
+# the repository publishes, against the grader's own seed database and rewrite
+# rules -- so a candidate is a black-box HTTP test and cannot tell which tree it
+# is talking to except by the answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two HTTP
+# servers differ somewhere, and Express and Fastify differ in a dozen places that
+# have nothing to do with whether this migration was done.  The allow list is
+# json-server's own published contract; the deny list is what instruction.md told
+# the agent is explicitly not compared.
+#
+# The two lists have to agree with that document.  A scope that forbade something
+# the instruction promised would make the task unwinnable; a scope that permitted
+# something the instruction excluded would make it unlosable, and six rounds
+# would all find the Date header.
+[scope]
+allow = [
+  "the status code of any documented or undocumented path, including the plural collection, singular resource, item, nested-child, /db and / forms",
+  "response bodies byte for byte, including the two-space JSON indentation State A configures and the absence of a trailing newline",
+  "semantic headers: Content-Type with its exact charset spelling, X-Total-Count, the Link header with its first/prev/next/last rels in Express's order and format, Location on create, Content-Encoding when compression applies, Cache-Control, Pragma, Expires, X-Content-Type-Options, Vary's membership, and the absence of X-Powered-By",
+  "the weak ETag Express computes -- W/\"<body-length-hex>-<27 base64 sha1 chars>\" -- and the conditional-request behaviour that turns a matching If-None-Match into a 304 with no body",
+  "the query surface: equality filters, repeated keys, dotted deep paths, _gte/_lte/_ne/_like, full-text q including nested values, _sort/_order with multiple keys, _page/_limit pagination, _start/_end/_limit slicing, and _embed/_expand expansion",
+  "id handling: that a string id is not coerced to a number, that /notes/n-a and /notes/1 are different lookups, and the id-assignment rule on create (max(id)+1 for numeric collections, a generated id where ids are strings)",
+  "writes: POST, PUT as full replacement, PATCH as merge, DELETE including the cascade that removes children referencing the deleted row, and the same four through a nested route",
+  "body parsing: JSON and urlencoded bodies, and the rejection of a malformed body, a top-level scalar and null -- status and body -- the way body-parser's strict mode rejects them",
+  "error shapes: the 404 body, and the 500 pages including the error class, the message and the surrounding HTML (the stack frames themselves are excluded below)",
+  "the rewrite rules the --routes file declares, including a rule whose target carries a query string and one that captures a path segment",
+  "the static mount: the default document root, --static, index resolution, a nested path, a path that escapes the root, and the conditional-request behaviour of a static file",
+  "the CLI surface yargs publishes: --port, --host, --routes, --static, --read-only, --no-cors/--nc, --no-gzip/--ng, --delay, --id, --foreignKeySuffix, --snapshots, --quiet, --watch, --middlewares, --config, --help and --version, including how two of them interact",
+  "State A's behaviour where that behaviour is surprising: --no-cors and --no-gzip doing nothing while --nc and --ng take effect, DELETE throwing a 500 under --id _id, and _expand throwing a 500 on a collection whose rows carry no foreign key. A submission that 'fixed' one of these has changed observable behaviour, and that is a finding.",
+  "that a slow request does not block a fast one: a --delay request must not serialise unrelated traffic",
+]
+deny = [
+  "the Date, Connection, Keep-Alive, Transfer-Encoding and Content-Length headers",
+  "header name casing, and the order of a set-valued header such as Vary",
+  "HTTP reason phrases",
+  "the generated id of a record created in a string-id collection -- it is random -- and any assertion that two runs produce the same one",
+  "the ETag and Last-Modified of a static file where the assertion depends on the file's mtime rather than on its size or its bytes: both trees are pinned to one epoch here precisely so the surface stays attackable, and a candidate that reads the clock instead is measuring the filesystem",
+  "log output, the startup banner, and anything printed to stdout or stderr",
+  "the stack frames inside a 500 page -- they name the framework's internals by construction, and naming Express's is the thing the submission was told to stop doing",
+  "wall-clock timing other than the concurrency case stated above: a candidate that asserts a response arrives within N milliseconds is measuring the grader's machine",
+  "anything requiring the retired stack to be installed, importable or nameable in the submission",
+  "the internal structure of either tree: module layout, file names, function or variable names, the shape of package.json, the dependency list, and the presence or absence of any particular source file",
+  "behaviour under a request the original also mishandles -- a candidate must pass on the original",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths the runner hands the candidate, the working directory's siblings, the contents of the tree on disk, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the running service a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing whatever about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# Three runs.  One case in the allow list is deliberately concurrency-shaped and
+# another involves compression, and a flake that costs a submission ten points is
+# a bug in the benchmark rather than a finding.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Install + build + boot + pytest, for one candidate, on one tree.  The install
+# and the build happen once per tree and are then cached, so only the first
+# candidate of the stage pays for them -- but that first candidate pays a lot:
+# State A's closure is 1064 packages and its build is babel over the whole of
+# src/.  Hence 1800 rather than fw01's 900.
+candidate_timeout_sec = 1800.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a
+# candidate that has to be executed some other way is out of scope by
+# construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one request that State A
+answers correctly and the submission does not. A round that finds nothing pays
+the submission 10 points; a round that errors pays nothing and is reported as an
+error rather than as either verdict.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not six vendors: what this stage measures is how much
+# scrutiny the submission survives, and an independent attempt is an independent
+# attempt whether or not it shares a model with another round.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata.  The harness appends it after the scope, which it cannot
+# widen.  Six unguided rounds converge on `/posts?_page=2` and the ETag;
+# six pointed ones cover a repository.  The last round ends unguided on purpose,
+# as the control on the other five having been pointed anywhere at all.
+
+[[adversary]]
+id = "a01-etag-and-pagination"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the ETag: its exact format on a body that is empty, a body that is one byte, a
+body containing multibyte UTF-8, and a 304 path -- If-None-Match with a list,
+with a weak and a strong form, with a star, and on a route that was rewritten.
+
+Then _page/_limit and the Link header at the edges: page zero, page one, the
+last page, one past the last, a non-numeric page, _limit larger than the
+collection, _page together with _sort, and X-Total-Count on a filtered set.
+"""
+
+[[adversary]]
+id = "a02-query-operators-and-writes"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the filter operators: _gte/_lte/_ne/_like against strings, numbers and missing
+fields, a repeated key, a dotted deep path that does not exist, _like with a
+regex metacharacter, and q against nested values and non-string leaves.
+
+Then writes: PUT versus PATCH on a missing key, POST with an id already
+present, POST to a singular resource, the Location header's exact form, the
+cascade DELETE, and what the numeric id rule does to a collection whose ids
+are sparse or non-integer.
+"""
+
+[[adversary]]
+id = "a03-body-parsing-and-cli-flags"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the request body: malformed JSON, a top-level scalar, null, an empty body with
+and without a Content-Type, urlencoded with repeated and nested keys, a
+charset parameter, and a body sent with an unexpected method.
+
+Then the flag surface: --read-only against every method, --delay, --id,
+--foreignKeySuffix, --static with a second document root, and two flags
+together -- especially the three documented quirks, which a rewrite is likely
+to have tidied up.
+"""
+
+[[adversary]]
+id = "a04-rewrite-and-static-mount"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the rewrite rules: a rewrite whose target carries a query string, a rewrite
+that also matches a static path, a rewritten write, a rewrite plus pagination,
+and what the rewritten request's own query string does to the target's.
+
+Then the static mount: index resolution on a directory with and without a
+trailing slash, a percent-encoded path, a path that tries to escape the
+document root, a file whose name collides with a collection, HEAD and OPTIONS
+on a static file, and the second root under --static.
+"""
+
+[[adversary]]
+id = "a05-encoding-and-embed-expand"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+compression and encoding: which responses get Content-Encoding and which are
+below the threshold, Accept-Encoding with q-values and with identity,
+multibyte content in a JSON body, and a percent-encoded separator inside a
+path segment.
+
+Then _embed and _expand: both at once, on a nested route, with a
+foreignKeySuffix override, against a collection with no children, against a
+row whose foreign key points at nothing, and the 500 the original throws when
+a collection has no foreign key at all.
+"""
+
+[[adversary]]
+id = "a06-undocumented-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+what nobody wrote down: methods a route happens to accept, HEAD and OPTIONS on
+a collection, a trailing slash, a doubled slash, an unknown top-level path,
+/db, the home page, and the 404 body's exact bytes.
+
+Then, with whatever budget remains, nothing in particular -- read State A and
+follow whatever looks weakest. The other five rounds were told where to look,
+and a surface that only survives being told where to look has not been tested.
+"""

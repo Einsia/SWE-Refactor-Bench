@@ -1,0 +1,103 @@
+You are attacking a port of {{task}}.
+
+A Go HTTP file server was migrated off a third-party router onto the standard
+library's. You have the original repository and the rewrite. Find one request the
+original answers correctly and the rewrite does not.
+
+WHAT THE SERVER IS
+
+A single binary serving a document root over HTTP: GET and HEAD to read files,
+PUT and POST to upload them, plus an OPTIONS handler. Its behaviour changes with
+flags, so you are given four servers rather than one.
+
+The migration replaced the routing layer and nothing else. Every handler, every
+status code, every header the application writes is meant to be unchanged. So the
+interesting question is not "does it serve files" -- it does, or it would not have
+got this far -- but "does it still dispatch the same way".
+
+WHERE PORTS LIKE THIS GO WRONG
+
+Read the original's routing table first, and be precise about what each rule
+matches, because the two routers do not agree by default:
+
+  - A prefix rule in the original matches a STRING prefix. The standard library's
+    subtree patterns match on path SEGMENTS. These differ on real paths, in both
+    directions, and the difference is observable as a status code and as a body.
+
+  - Middleware in the original runs after a route is matched. Wrapping the whole
+    mux instead runs it before. Both look correct until you find a request that
+    matches no route, or matches one with the wrong method, while the middleware
+    would have refused it.
+
+  - The standard library ADDS behaviours the original did not have: a redirect for
+    a path that is not clean, a synthesised 405 with a header naming the allowed
+    methods, an implicit HEAD for a GET pattern. Each is a difference even though
+    it is the new stack being helpful.
+
+  - Percent-encoding: whether a router matched the raw or the decoded target is
+    observable, and the two routers do not make the same choice.
+
+None of that is a list of tests to write. It is where to look first.
+
+HOW TO RUN A TEST
+
+Write a pytest file. It gets these fixtures:
+
+  servers        the four flag profiles, by name:
+                   "default"  no flags: CORS on, auth off, uploads unlimited
+                   "nocors"   -enable_cors=false
+                   "auth"     -enable_auth, read-only token "ro1",
+                              read-write token "rw1"
+                   "maxsize"  -max_upload_size 16
+  server         shorthand for servers["default"]
+  fixture_files  the seeded document root's contents, by relative path
+  fixture_mtime  the mtime every seeded file carries
+
+Each server exposes:
+
+  .send(method, target, headers=..., body=...)   the target goes on the wire
+                                                 VERBATIM -- no normalising, no
+                                                 encoding, no tidying
+  .get / .head / .options                        shorthands
+  .upload(method, target, content, filename)     multipart, the way this server
+                                                 accepts an upload
+  .multipart(filename, content)                  headers and body, to modify
+  .bearer(token) / .basic(token)                 an Authorization header
+  .docroot                                       this server's document root, as
+                                                 a Path, readable
+
+A response has .status, .reason, .get(name), .all(name), .headers, .header_order
+and .body.
+
+Each profile has its own document root, so an upload in one is invisible in the
+others and you do not have to clean up. All four are already running.
+
+WHAT COUNTS
+
+A candidate must PASS on the original and FAIL on the rewrite. If it fails on
+both, the test is wrong about the original -- read what the original actually
+does rather than what it ought to do. That happens most often on this task with
+uploads: both PUT and POST parse the body as multipart, so a raw body is a 500 on
+the original too, and a test expecting 201 from raw bytes fails everywhere.
+
+Assert on the response. The scope in your instructions is the server's public
+contract; a divergence in log output, in file layout, in a type name, or in the
+random boundary of a multipart range response will be thrown out on review and
+your budget will have bought nothing.
+
+Do not try to work out which tree you are on. You cannot: the servers are on
+random ports, the paths you are given are opaque, and the source is not reachable
+from where your test runs. A candidate that established the identity of the tree
+by any means other than asking it a question would be rejected on sight even if it
+reproduced perfectly, because it demonstrates nothing about the migration.
+
+Run your ideas with `try_test` -- hand it a pytest file and it installs each tree,
+starts it through its own entry point and runs your file against both, telling you
+the outcome on each separately. It is the only way to execute anything here; you
+have no shell. A candidate that finds nothing costs you one call and tells you
+something, and a test you never ran has told you nothing at all.
+
+And if the port is sound, report that you found nothing. That is the correct
+answer to a correct migration. But reach it by running out of ideas rather than by
+claiming early: `report` ends the round whichever way you use it, and a claim the
+review throws out leaves whatever budget you had left unspent.

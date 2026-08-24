@@ -1,0 +1,876 @@
+{
+ "behavioral_contract": {
+  "argv_rules": {
+   "dash_is_stdin": true,
+   "double_dash_terminates": true,
+   "eval_filenames": "exactly-one",
+   "format_filenames": "zero-or-more",
+   "multichar_expansion": true
+  },
+  "errors": {
+   "channels": [
+    "cli",
+    "static",
+    "runtime"
+   ],
+   "exit_codes": {
+    "cli_error": 1,
+    "fmt_test_changed": 2,
+    "ok": 0,
+    "runtime_error": 1,
+    "static_error": 1
+   },
+   "prefix": {
+    "cli": "ERROR: ",
+    "runtime": "RUNTIME ERROR: ",
+    "static": "STATIC ERROR: "
+   },
+   "trace_format": {
+    "elision_marker": "...",
+    "field_separator": "\t",
+    "last_frame_context_empty": true,
+    "line_prefix": "\t"
+   }
+  },
+  "eval_flags": {
+   "--exec": {
+    "arg": "none",
+    "short": "-e"
+   },
+   "--ext-code": {
+    "arg": "var",
+    "short": null
+   },
+   "--ext-code-file": {
+    "arg": "varfile",
+    "short": null
+   },
+   "--ext-str": {
+    "arg": "var",
+    "short": "-V"
+   },
+   "--ext-str-file": {
+    "arg": "varfile",
+    "short": null
+   },
+   "--gc-growth-trigger": {
+    "arg": "int",
+    "short": null
+   },
+   "--gc-min-objects": {
+    "arg": "int",
+    "short": null
+   },
+   "--help": {
+    "arg": "none",
+    "short": "-h"
+   },
+   "--jpath": {
+    "arg": "dir",
+    "short": "-J"
+   },
+   "--max-stack": {
+    "arg": "int",
+    "short": "-s"
+   },
+   "--max-trace": {
+    "arg": "int",
+    "short": "-t"
+   },
+   "--multi": {
+    "arg": "dir",
+    "short": "-m"
+   },
+   "--output-file": {
+    "arg": "file",
+    "short": "-o"
+   },
+   "--string": {
+    "arg": "none",
+    "short": "-S"
+   },
+   "--tla-code": {
+    "arg": "var",
+    "short": null
+   },
+   "--tla-code-file": {
+    "arg": "varfile",
+    "short": null
+   },
+   "--tla-str": {
+    "arg": "var",
+    "short": "-A"
+   },
+   "--tla-str-file": {
+    "arg": "varfile",
+    "short": null
+   },
+   "--version": {
+    "arg": "none",
+    "short": null
+   },
+   "--yaml-stream": {
+    "arg": "none",
+    "short": "-y"
+   }
+  },
+  "excluded_surfaces": {
+   "note": "Each is excluded from the graded surface because the reference aborts or errs there, not because it is hard.  The flag in reference_bugs must still be accepted -- rejecting it as an unrecognised argument is graded and wrong -- while its output is not compared.  parser_number_overflow is stated as a rule rather than a list: an enumeration of the overflowing literals anyone happened to think of is the incomplete denylist that parseyaml.scalars is an allowlist to avoid.",
+   "parser_number_overflow": {
+    "aborts": [
+     "1e400",
+     "-1e400",
+     "1e309",
+     "1e999999",
+     "[1e400]"
+    ],
+    "fine": [
+     "1e308",
+     "1e-400",
+     "-1e308",
+     "0e400"
+    ],
+    "rule": "a JSON/YAML number literal that overflows a double aborts the reference parser; such inputs are excluded from the graded surface",
+    "source_literal_is_a_clean_error": [
+     "1e400",
+     "-1e400",
+     "1e309"
+    ]
+   },
+   "reference_bugs": [
+    {
+     "argv": [
+      "--debug-desugaring"
+     ],
+     "binary": "jsonnetfmt",
+     "consequence": "the --debug-desugaring output surface is not graded",
+     "expect_exit": 1,
+     "expect_stderr_contains": "STATIC ERROR: std.jsonnet:975:21-25: Truncated escape sequence",
+     "id": "fmt-debug-desugaring-stdlib-reparse",
+     "source": "1 + 1\n"
+    }
+   ]
+  },
+  "format_flags": {
+   "--comment-style": {
+    "arg": "choice",
+    "choices": [
+     "h",
+     "s",
+     "l"
+    ],
+    "short": null
+   },
+   "--debug-desugaring": {
+    "arg": "none",
+    "short": null
+   },
+   "--exec": {
+    "arg": "none",
+    "short": "-e"
+   },
+   "--help": {
+    "arg": "none",
+    "short": "-h"
+   },
+   "--in-place": {
+    "arg": "none",
+    "short": "-i"
+   },
+   "--indent": {
+    "arg": "int",
+    "short": "-n"
+   },
+   "--max-blank-lines": {
+    "arg": "int",
+    "short": null
+   },
+   "--output-file": {
+    "arg": "file",
+    "short": "-o"
+   },
+   "--pad-arrays": {
+    "arg": "none",
+    "negatable": true,
+    "short": null
+   },
+   "--pad-objects": {
+    "arg": "none",
+    "negatable": true,
+    "short": null
+   },
+   "--pretty-field-names": {
+    "arg": "none",
+    "negatable": true,
+    "short": null
+   },
+   "--sort-imports": {
+    "arg": "none",
+    "negatable": true,
+    "short": null
+   },
+   "--string-style": {
+    "arg": "choice",
+    "choices": [
+     "d",
+     "s",
+     "l"
+    ],
+    "short": null
+   },
+   "--test": {
+    "arg": "none",
+    "short": null
+   },
+   "--version": {
+    "arg": "none",
+    "short": null
+   }
+  },
+  "number_cases": [
+   [
+    "0",
+    "0"
+   ],
+   [
+    "-0",
+    "-0"
+   ],
+   [
+    "0.5",
+    "0.5"
+   ],
+   [
+    "100",
+    "100"
+   ],
+   [
+    "1e15",
+    "1000000000000000"
+   ],
+   [
+    "1e18",
+    "1000000000000000000"
+   ],
+   [
+    "0.1",
+    "0.10000000000000001"
+   ],
+   [
+    "0.1 + 0.2",
+    "0.30000000000000004"
+   ],
+   [
+    "1 / 3",
+    "0.33333333333333331"
+   ],
+   [
+    "2 / 3",
+    "0.66666666666666663"
+   ],
+   [
+    "1e-4",
+    "0.0001"
+   ],
+   [
+    "1e-5",
+    "1.0000000000000001e-05"
+   ],
+   [
+    "1.5e-5",
+    "1.5e-05"
+   ],
+   [
+    "1e-7",
+    "9.9999999999999995e-08"
+   ],
+   [
+    "1e-300",
+    "1e-300"
+   ],
+   [
+    "5e-324",
+    "4.9406564584124654e-324"
+   ],
+   [
+    "1e21",
+    "1000000000000000000000"
+   ],
+   [
+    "1e100",
+    "10000000000000000159028911097599180468360808563945281389781327557747838772170381060813469985856815104"
+   ],
+   [
+    "123456789012345678",
+    "123456789012345680"
+   ],
+   [
+    "12345678901234567890",
+    "12345678901234567168"
+   ],
+   [
+    "9007199254740993",
+    "9007199254740992"
+   ],
+   [
+    "4.35",
+    "4.3499999999999996"
+   ],
+   [
+    "1.005",
+    "1.0049999999999999"
+   ],
+   [
+    "0.3",
+    "0.29999999999999999"
+   ],
+   [
+    "4503599627370495.5",
+    "4503599627370495.5"
+   ],
+   [
+    "1e-4 - 1e-20",
+    "9.9999999999999991e-05"
+   ],
+   [
+    "-1e-7",
+    "-9.9999999999999995e-08"
+   ]
+  ],
+  "number_nonfinite": {
+   "0 / 0": "division by zero.",
+   "1 / 0": "division by zero.",
+   "1e400": "overflow",
+   "std.log(0)": "overflow",
+   "std.sqrt(-1)": "not a number"
+  },
+  "number_rule": {
+   "exponent_always_signed": true,
+   "exponent_min_digits": 2,
+   "finite_only": true,
+   "fractional_format": "%.17g",
+   "integral_format": "%.0f",
+   "integral_uses_exponent": false,
+   "negative_zero": "-0",
+   "significant_digits": 17
+  },
+  "number_tie_cases": [
+   "2.9802322387695312e-08",
+   "1.0251998901367188e-05",
+   "1.0728836059570312e-05",
+   "1.1205673217773438e-05",
+   "1.1682510375976562e-05",
+   "1.2159347534179688e-05",
+   "942033065782386.6"
+  ],
+  "parseyaml": {
+   "documents": [
+    [
+     "flow-seq",
+     "[1, 2, 3]"
+    ],
+    [
+     "flow-map",
+     "{a: 1, b: 2}"
+    ],
+    [
+     "block-seq",
+     "- 1\n- 2\n"
+    ],
+    [
+     "block-map",
+     "a: 1\nb: 2\n"
+    ],
+    [
+     "nested",
+     "a:\n  b:\n    - 1\n    - c: 2\n"
+    ],
+    [
+     "multidoc",
+     "---\na: 1\n---\nb: 2\n"
+    ],
+    [
+     "multidoc-one",
+     "---\na: 1\n"
+    ],
+    [
+     "block-strip",
+     "a: |-\n  one\n"
+    ],
+    [
+     "comment",
+     "# c\na: 1\n"
+    ],
+    [
+     "dup-key",
+     "a: 1\na: 2\n"
+    ],
+    [
+     "empty-value",
+     "a:\n"
+    ],
+    [
+     "quoted-key",
+     "\"a b\": 1\n"
+    ],
+    [
+     "unclosed-flow",
+     "[1, 2\n"
+    ],
+    [
+     "utf8",
+     "a: café\n"
+    ],
+    [
+     "deep-nest",
+     "a:\n  b:\n    b:\n      b:\n        b:\n          b:\n            b:\n              b:\n                b:\n                  b:\n                    b:\n                      b:\n"
+    ]
+   ],
+   "excluded": {
+    "documents": [
+     "empty-string",
+     "anchor",
+     "merge",
+     "block-scalar-literal",
+     "block-scalar-folded",
+     "block-keep",
+     "tab-indent",
+     "bad-indent",
+     "tag-unknown"
+    ],
+    "reason": "aborts the reference (SIGABRT); an abort is not a behavior",
+    "scalars": [
+     ".5",
+     "5.",
+     "0x10",
+     "010",
+     "0o10",
+     "0b101",
+     "",
+     "1,000",
+     "+1",
+     "!!str 1",
+     "!!int 1",
+     "!!bool yes",
+     "!!null ~",
+     "!!float 1"
+    ]
+   },
+   "scalars": [
+    "1",
+    "-1",
+    "0",
+    "1.5",
+    "-1.5",
+    "1e3",
+    "1E3",
+    "1.0",
+    "true",
+    "True",
+    "TRUE",
+    "false",
+    "False",
+    "yes",
+    "Yes",
+    "no",
+    "No",
+    "on",
+    "On",
+    "off",
+    "Off",
+    "y",
+    "n",
+    "null",
+    "Null",
+    "NULL",
+    "~",
+    ".inf",
+    ".Inf",
+    ".INF",
+    "-.inf",
+    ".nan",
+    ".NaN",
+    "inf",
+    "nan",
+    "Infinity",
+    "abc",
+    "'1'",
+    "\"1\"",
+    "a b",
+    " a ",
+    "a:b",
+    "1:2",
+    "12:30",
+    "2001-12-14",
+    "1_000"
+   ]
+  },
+  "schema_version": "1.0",
+  "stdlib": {
+   "dunder": [
+    "__array_greater",
+    "__array_greater_or_equal",
+    "__array_less",
+    "__array_less_or_equal",
+    "__compare",
+    "__compare_array"
+   ],
+   "native": [
+    "acos",
+    "asciiLower",
+    "asciiUpper",
+    "asin",
+    "atan",
+    "ceil",
+    "char",
+    "codepoint",
+    "cos",
+    "decodeUTF8",
+    "encodeUTF8",
+    "exp",
+    "exponent",
+    "extVar",
+    "filter",
+    "floor",
+    "join",
+    "length",
+    "log",
+    "makeArray",
+    "mantissa",
+    "md5",
+    "modulo",
+    "native",
+    "objectFieldsEx",
+    "objectHasEx",
+    "parseJson",
+    "parseYaml",
+    "pow",
+    "primitiveEquals",
+    "range",
+    "sin",
+    "splitLimit",
+    "sqrt",
+    "strReplace",
+    "substr",
+    "tan",
+    "thisFile",
+    "trace",
+    "type"
+   ],
+   "native_shadowing": [
+    "asciiLower",
+    "asciiUpper",
+    "join",
+    "range",
+    "splitLimit",
+    "strReplace",
+    "substr"
+   ],
+   "non_function": {
+    "thisFile": "string"
+   },
+   "public": [
+    "abs",
+    "acos",
+    "all",
+    "any",
+    "asciiLower",
+    "asciiUpper",
+    "asin",
+    "assertEqual",
+    "atan",
+    "base64",
+    "base64Decode",
+    "base64DecodeBytes",
+    "ceil",
+    "char",
+    "clamp",
+    "codepoint",
+    "cos",
+    "count",
+    "decodeUTF8",
+    "deepJoin",
+    "encodeUTF8",
+    "endsWith",
+    "equals",
+    "escapeStringBash",
+    "escapeStringDollars",
+    "escapeStringJson",
+    "escapeStringPython",
+    "escapeStringXML",
+    "exp",
+    "exponent",
+    "extVar",
+    "filter",
+    "filterMap",
+    "find",
+    "findSubstr",
+    "flatMap",
+    "flattenArrays",
+    "floor",
+    "foldl",
+    "foldr",
+    "format",
+    "get",
+    "isArray",
+    "isBoolean",
+    "isEmpty",
+    "isFunction",
+    "isNumber",
+    "isObject",
+    "isString",
+    "join",
+    "length",
+    "lines",
+    "log",
+    "lstripChars",
+    "makeArray",
+    "manifestIni",
+    "manifestJson",
+    "manifestJsonEx",
+    "manifestJsonMinified",
+    "manifestPython",
+    "manifestPythonVars",
+    "manifestToml",
+    "manifestTomlEx",
+    "manifestXmlJsonml",
+    "manifestYamlDoc",
+    "manifestYamlStream",
+    "mantissa",
+    "map",
+    "mapWithIndex",
+    "mapWithKey",
+    "max",
+    "md5",
+    "member",
+    "mergePatch",
+    "min",
+    "mod",
+    "modulo",
+    "native",
+    "objectFields",
+    "objectFieldsAll",
+    "objectFieldsEx",
+    "objectHas",
+    "objectHasAll",
+    "objectHasEx",
+    "objectKeysValues",
+    "objectKeysValuesAll",
+    "objectValues",
+    "objectValuesAll",
+    "parseHex",
+    "parseInt",
+    "parseJson",
+    "parseOctal",
+    "parseYaml",
+    "pow",
+    "primitiveEquals",
+    "prune",
+    "range",
+    "repeat",
+    "resolvePath",
+    "reverse",
+    "round",
+    "rstripChars",
+    "set",
+    "setDiff",
+    "setInter",
+    "setMember",
+    "setUnion",
+    "sign",
+    "sin",
+    "slice",
+    "sort",
+    "split",
+    "splitLimit",
+    "splitLimitR",
+    "sqrt",
+    "startsWith",
+    "strReplace",
+    "stringChars",
+    "stripChars",
+    "substr",
+    "sum",
+    "tan",
+    "thisFile",
+    "toString",
+    "trace",
+    "type",
+    "uniq",
+    "xnor",
+    "xor"
+   ]
+  },
+  "stdlib_sha256": "006e2051f3db3bc8311dbd98b421b01740cfc078f7432bfda715669e664fff5f",
+  "upstream": "google/jsonnet",
+  "upstream_version": "0.20.0"
+ },
+ "build_contract": {
+  "build_closure": "The tree builds with the .NET SDK alone.  No Makefile, CMake, Bazel or MSBuild call-out to a native compiler, and nothing fetched at build time.",
+  "cli_projects": "Each command-line program must be produced by an executable project (OutputType Exe or WinExe) whose assembly name is exactly `jsonnet` or `jsonnetfmt` -- <AssemblyName> when set, otherwise the .csproj filename.  Project file names, directory layout and the number of library projects are unconstrained.",
+  "external_packages": "None.  The implementation must build against the .NET base class library alone, and nothing else is resolvable.  The pre-seeded folder carries test frameworks only, so a submission that wants to ship its own xunit tests can.",
+  "invariant_globalization": "Required.  Number and string formatting must not depend on ICU or on the ambient locale.",
+  "publish_command": "dotnet publish -c Release, with single-file, AOT, trimming, ReadyToRun and self-contained publishing all forced off.",
+  "restore": "Offline, and closed rather than merely unreachable.  No package source is configured: the NuGet source list is cleared, and NUGET_PACKAGES points at a pre-seeded packages folder that restore resolves from directly.  A package that is not already in that folder fails with NU1100 -- including at grading time, which passes the cleared configuration explicitly, so a nuget.config added to the submission cannot put a source back.  The agent container also has no network, but the rule does not depend on that.",
+  "toolchain": "the .NET 8 SDK, offline"
+ },
+ "category": "language-rewrite",
+ "conformance_data": {
+  "directories": [
+   "test_suite",
+   "test_cmd",
+   "examples"
+  ],
+  "no_answer_lookup": "The implementation computes its output.  It may not consult recorded expected output at run time, carry the text of it -- plain, encoded or compressed -- in a file you add or change, hold a table of outputs keyed by input, filename or digest, or behave differently on inputs it recognises as being under test.  Your own test projects are free to read the conformance data, which is what it is for.",
+  "no_harness_awareness": "Nothing in the submission names the grading harness or its filesystem.",
+  "note": "Grading materialises every case from its own copy of State A, so editing these files changes nothing that is measured.",
+  "rule": "These directories are graded *input*, and they also hold upstream's recorded expected output -- the .golden files, and the .stdout/.stderr files under test_cmd/.  Preserve them; do not mine them."
+ },
+ "forbidden_paths": {
+  "bazel_build_extensions": [
+   ".bzl"
+  ],
+  "bazel_build_names": [
+   "BUILD",
+   "BUILD.bazel",
+   "WORKSPACE",
+   "WORKSPACE.bazel"
+  ],
+  "bazel_note": "Bazel build files are matched by basename at any depth, not by exact path.  Five sit outside the forbidden directories -- including stdlib/BUILD, in a directory that must otherwise be preserved -- and all of them describe a build system State B does not use.",
+  "directories": [
+   "core",
+   "cmd",
+   "cpp",
+   "include",
+   "python",
+   "third_party",
+   "vs2017"
+  ],
+  "files": [
+   "Makefile",
+   "CMakeLists.txt",
+   "CMakeLists.txt.in",
+   "setup.py",
+   "MANIFEST.in",
+   "stdlib/to_c_array.cpp",
+   "Dockerfile",
+   ".travis.yml",
+   "tests.sh"
+  ],
+  "note": "Every path listed here exists in State A and must be absent from State B.  This is the migration, stated as paths."
+ },
+ "migration": {
+  "from": {
+   "build_system": "GNU Make (with Bazel and CMake alternates)",
+   "language": "C++ (C++11)",
+   "upstream": "google/jsonnet",
+   "version": "0.20.0"
+  },
+  "note": "Behavior, both command-line interfaces and the embedded standard library are preserved.  The C ABI (include/), the C++ binding (cpp/) and the CPython extension (python/) are out of scope and must be removed.",
+  "to": {
+   "build_system": "MSBuild (dotnet build / dotnet publish)",
+   "language": "C#",
+   "runtime": ".NET 8",
+   "target_framework": "net8.0"
+  },
+  "unit_of_work": "the whole repository"
+ },
+ "native_code_policy": {
+  "allowed_prefixes": [
+   "test_cmd/",
+   "case_studies/",
+   "doc/"
+  ],
+  "allowed_prefixes_note": "Files under these prefixes with a native extension are not implementation source: test_cmd/ holds golden *output* whose names end in .cpp, case_studies/ holds an unrelated Mandelbrot demo, doc/ holds documentation assets.",
+  "extensions": [
+   ".c",
+   ".cc",
+   ".cpp",
+   ".cxx",
+   ".h",
+   ".hh",
+   ".hpp",
+   ".hxx",
+   ".inc",
+   ".ipp"
+  ],
+  "managed_implementation": "The evaluating and the formatting are done by managed C# in this repository.  Spans, pointers and unsafe blocks are ordinary C#; a call into libjsonnet is not.",
+  "no_pinvoke": "No assembly may declare a P/Invoke or reference a native module.  Read from the CLR ImplMap and ModuleRef metadata tables of the published output, not by scanning IL text.",
+  "no_prebuilt_binary": "No compiled artefact may be retained in the source tree: no ELF or PE file, no shared object, static archive or object file, and no assembly checked in rather than built.  An out-of-source build or publish directory is exempt.",
+  "no_subprocess": "No assembly may reference the process-creation APIs, and nothing in the implementation may hand an input to another program and return what came back.  A port that shells out to a retained jsonnet is not a port.",
+  "rule": "no C or C++ source may remain in the implementation"
+ },
+ "preserved_paths": {
+  "byte_identical": {
+   "stdlib/std.jsonnet": "006e2051f3db3bc8311dbd98b421b01740cfc078f7432bfda715669e664fff5f"
+  },
+  "directories": {
+   "doc": "the website and language reference",
+   "examples": "the documented examples",
+   "test_suite": "the upstream conformance suite"
+  },
+  "files": {
+   "CONTRIBUTING": "contributor guide (upstream ships it without an extension)",
+   "LICENSE": "the Apache-2.0 license",
+   "README.md": "the project readme",
+   "release_checklist.md": "the release procedure",
+   "stdlib/std.jsonnet": "the Jsonnet standard library, embedded and evaluated"
+  },
+  "note": "stdlib/std.jsonnet is the Jsonnet standard library written in Jsonnet.  It is data, not C++, and porting it to C# is not the task: it must be embedded unmodified and evaluated by the ported evaluator, the way State A lexes and parses it at startup and binds its native fields over the result.  Its sha256 is checked."
+ },
+ "product": {
+  "evaluator": {
+   "filenames": "exactly-one",
+   "flags": [
+    "--exec",
+    "--ext-code",
+    "--ext-code-file",
+    "--ext-str",
+    "--ext-str-file",
+    "--gc-growth-trigger",
+    "--gc-min-objects",
+    "--help",
+    "--jpath",
+    "--max-stack",
+    "--max-trace",
+    "--multi",
+    "--output-file",
+    "--string",
+    "--tla-code",
+    "--tla-code-file",
+    "--tla-str",
+    "--tla-str-file",
+    "--version",
+    "--yaml-stream"
+   ],
+   "name": "jsonnet",
+   "role": "evaluate a Jsonnet program and print the result"
+  },
+  "formatter": {
+   "filenames": "zero-or-more",
+   "flags": [
+    "--comment-style",
+    "--debug-desugaring",
+    "--exec",
+    "--help",
+    "--in-place",
+    "--indent",
+    "--max-blank-lines",
+    "--output-file",
+    "--pad-arrays",
+    "--pad-objects",
+    "--pretty-field-names",
+    "--sort-imports",
+    "--string-style",
+    "--test",
+    "--version"
+   ],
+   "name": "jsonnetfmt",
+   "role": "reformat Jsonnet source, preserving comments"
+  },
+  "publish": "Both must be produced by `dotnet publish` of a project in the tree, as managed .NET 8 assemblies.  The verifier publishes from source with PublishSingleFile, PublishAot, PublishTrimmed, PublishReadyToRun and SelfContained all forced off, so the assemblies must remain inspectable."
+ },
+ "schema_version": "swerefactor/source-contract/1.0",
+ "submission_root": "/workspace/repo",
+ "task": "lang06-jsonnet-cpp-to-csharp"
+}

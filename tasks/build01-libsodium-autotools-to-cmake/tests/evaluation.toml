@@ -1,0 +1,275 @@
+schema = "swerefactor.evaluation/1"
+task = "build01-libsodium-autotools-to-cmake"
+title = "libsodium 1.0.20: GNU Autotools to CMake, whole build system"
+results_dir = "/logs/verifier"
+
+# The published ladder. Stage 1 is pass/fail and a failure is the whole score;
+# stage 2 is worth 40 and pays only for every scored check, which is also what
+# stage 3 is asked of; stage 3 pays 10 points for each of 6 adversaries that
+# fails to break the submission.
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "build-toolchain"
+state_a = "libsodium 1.0.20 built by autoconf 2.71 / automake 1.16 / libtool 2.4.7, 119 translation units, per-file ISA dispatch through 7 convenience libraries"
+state_b = "the same libsodium.so.26, the same install tree and the same hardening flags, produced by CMake 3.20+, with Autotools gone from the source and release closure"
+scale = "119 translation units, 15 ISA-elevated sources, ~40 feature probes, 67 installed headers, 80 test programs"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Six gates, all required.  They are the questions about this migration that were
+# doing semantic work with regexes and cannot be settled that way: whether a
+# CMakeLists.txt "shells out to Autotools" is not a question about the string
+# `configure`, and whether feature detection is real detection rather than a
+# copied macro list is not a question about which `check_include_file` calls
+# appear.  Those need something that can read a build system and follow what it
+# does, which is what this stage is.
+#
+# The task's mechanical audit checks are not here.  A stub on PATH either
+# recorded a call to `autoconf` or it did not, a source file's sha256 either
+# matches State A's or it does not, `compile_commands.json` either carries
+# `-mavx512f` on that one translation unit or it does not.  Those are
+# measurements, they cannot be argued with, and they are stage-2 modules, where a
+# partial migration is measured and reported rather than argued -- because "the
+# .pc file has the wrong Libs.private" and "there is no CMake build system here"
+# must not read the same in the report.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+# The read-only scan that runs before the review and is rendered into its prompt.
+#
+# Three modules, ~390 checks, none of them scored: `swerefactor.scan` sets
+# required = false on everything it emits and `grade_audit` gates on the
+# required checks, which are the six gates below. What the scan buys is that the
+# reviewer does not spend its first minutes hashing 352 files or grepping for
+# `configure.ac`; it is handed those and spends them on the questions that need a
+# reader.
+#
+# Everything in it was a scored stage-2 check until now. Two of those were doing
+# real damage: `hardening` required the literal string `check_c_compiler_flag` to
+# appear in a CMake file, and required each hardening flag to appear inside an
+# INTERNAL variable's *name* in CMakeCache.txt. Both are properties of how a probe
+# is written rather than of whether anything was probed. The behaviour is measured
+# in stage 2 now -- configure under a compiler that rejects `-fstack-protector`,
+# require the build to configure anyway with the flag gone -- and the scan says
+# where the probing appears to live, which is a lead and not a verdict.
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+allowed_commands = []
+# Each stage is its own image because each needs a different thing to be true of
+# it: this one has neither CMake nor a compiler (a review that can build grades a
+# build log), stage 2 has CMake and no Autotools at all, stage 3 is the only one
+# that can configure either build system, because "the Autotools build passes
+# this test" is a claim that has to be executed. `context` is the build context,
+# relative to this file; `image` is the tag the runner is expected to use.
+image = "swerefactor/build01-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+"""
+
+[[stages.audit.gate]]
+id = "autotools_retired"
+title = "the Autotools build system is gone, not hidden"
+required = true
+question = """
+Is the old build system actually absent from the submission, or has it been moved
+somewhere the obvious checks do not look?
+Start with the mechanical part, because this gate owns it outright: configure.ac,
+the Makefile.am files, m4/, build-aux/, autogen.sh. Stage 2 records what the build
+reached for at weight 0 and scores none of it, so nothing counts this but you. A
+tree that still carries a working Autotools build is a fail here.
+Then look for the harder case, the same content under another name: an
+`Makefile.am` renamed to `sources.mk` and included by CMake, the m4 macros copied
+into a `cmake/` directory as `.cmake` files that still shell out to a configure
+script, a vendored copy of the generated `configure` under a different extension,
+a shell script that reproduces what `autogen.sh` did.
+Files that merely mention Autotools in prose -- README, ChangeLog, a migration
+note -- are not findings. A file that *is* the Autotools build under a new name is.
+"""
+
+[[stages.audit.gate]]
+id = "cmake_is_the_build"
+title = "CMake describes the build, rather than driving something else"
+required = true
+question = """
+Read the CMake code and decide what actually produces the library. Does CMake
+declare the targets, the sources, the flags and the install rules -- or does it
+delegate?
+Delegation looks like: `execute_process` or `add_custom_command` invoking make,
+sh, a script in the tree, or a configure script; a target whose build command is
+a shell pipeline that does the real work; a CMakeLists.txt that globs a
+hand-written Makefile fragment for its source list and would stop working if that
+fragment were deleted; `ExternalProject_Add` pointed at the repository itself.
+Generating a header with `configure_file` is normal CMake and is not a finding.
+Running a small script to produce a version string is not a finding. Running a
+script that compiles, links, or decides the compile flags is.
+"""
+
+[[stages.audit.gate]]
+id = "detection_is_real"
+title = "feature detection probes the compiler instead of asserting a conclusion"
+required = true
+question = """
+libsodium's build asks the compiler about forty questions -- does this header
+exist, does this intrinsic compile, does the linker take this flag -- and writes
+the answers into a config header and into per-file compile flags.
+Read how the submission answers them. Is each answer produced by compiling
+something and looking at the result, or is it asserted?
+Asserted looks like: a hardcoded list of macros copied from State A's config.h;
+`if(CMAKE_SYSTEM_NAME STREQUAL "Linux")` standing in for a header check; an ISA
+flag applied because the file name matches a pattern rather than because the
+compiler accepted the flag; a check whose result is discarded and a constant used
+instead.
+Stage 2 measures whether the conclusions *change* when the compiler is crippled,
+which is the harder evidence, so a submission that fools you here fails there
+anyway. What you can see that stage 2 cannot is a check written to look like a
+probe whose result never reaches the compile line.
+"""
+
+[[stages.audit.gate]]
+id = "isa_partition_is_deliberate"
+title = "the per-file ISA partition is a build-system decision, not a copied table"
+required = true
+question = """
+Fifteen of the 119 translation units are compiled with an elevated instruction
+set -- AVX2, AVX512F, AES-NI, SSE4.1 and so on -- and the other 104 must not be,
+because the library dispatches at run time and a baseline object compiled with
+AVX2 crashes on hardware without it.
+Read how the submission decides which file gets which flag. Is the partition
+expressed as a property of the build (a target per ISA, a per-source property
+list, a variable set where the probe succeeded), and is it guarded by whether the
+compiler accepted the flag?
+What is not acceptable: applying an elevating flag globally and relying on the
+sources to not use the instructions; a partition that is right for the fifteen
+files but would silently elevate a new file added to the wrong directory; a flag
+applied unconditionally without checking the compiler supports it.
+The list of fifteen files is not a secret -- it is in State A's Makefile.am. This
+gate is about whether the mechanism is sound, not whether the list is right;
+stage 2 measures the list, per file, from the compile database and from objdump.
+"""
+
+[[stages.audit.gate]]
+id = "sources_untouched"
+title = "the C sources were not edited to make the build system work"
+required = true
+question = """
+This is a build-system migration. The library's C, C++ and assembly sources are
+the thing being built and are not part of what may change.
+The scan checksums all 352 of them against State A and its findings are above, so
+a byte-level edit to a file State A shipped is already located for you: if the
+scan reports a mismatch, open the file, confirm it differs, and fail this gate --
+that is not a judgement call, and a mismatch is not excused by a good reason for
+it.
+What the checksums cannot see is the edit that hides from them, and that is the
+part that needs you: a new source file added under src/ or test/ and compiled in,
+a header shadowed by an identically-named one earlier on the include path, a
+source file replaced by a symlink or by a generated file with the same name, a
+`#include` redirected by a `-I` ordering that puts the submission's own copy
+first, a file left byte-identical but excluded from the build.
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "the build behaves the same whether or not it thinks it is being graded"
+required = true
+question = """
+Does anything in the build system change what it does according to how it was
+invoked or where it is running?
+Look for: a branch on an environment variable belonging to a harness, on a
+directory name, on whether a particular path exists; a target that is defined
+only when some variable is set; a compile flag added or removed when a test
+directory is present; code that special-cases the presence of `compile_commands.json`
+or of a stub on PATH; a CMake option whose two branches produce differently
+correct builds.
+Ordinary configuration is not a finding: `BUILD_SHARED_LIBS`, `CMAKE_BUILD_TYPE`,
+a `SODIUM_MINIMAL` option, a platform branch, an option that turns tests off. The
+distinction is whether the branch is about the target platform and the user's
+choices, or about recognising the grader.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural modules
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/build01-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Fifteen modules, one process each, weight-normalised, and every one of them grades a
+built artifact -- the questions about what the submitted files say are stage 1's.
+`build` runs first: it configures the submission eleven times across
+both generators -- seven full builds and four configure-only probes -- into a
+shared workspace the other fifteen read, so nothing is graded against a build tree
+the agent left behind. Recording stubs for the whole Autotools toolchain go first
+on PATH, so a build that reaches for one records which tool it wanted, and the
+`provenance` module reads that ledger.
+
+The image carries the Autotools toolchain the stubs shadow, deliberately. State A
+needs autoreconf, and State A is the oracle every expectation under
+behavioural/data/ was recorded from, so it has to be able to run through the stage
+those expectations make up -- a stage whose own oracle scores zero cannot tell a
+regression from a baseline. Whether the migration happened is stage
+1's, over both trees, with a reviewer, and its gates are required: an unmigrated
+repository scores zero before this image is built. What is measured here is
+preserved capability, and the checks that can only be phrased in one build system's
+terms -- `find_package`, CTestTestfile.cmake, SODIUM_BUILD_TESTS -- carry a
+licensed skip for the other rather than a vacuous pass.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/build01-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and try to write a test the
+Autotools build passes and the CMake one fails. A candidate is upheld only if it
+passes on the original, fails on the submission, reproduces, and is inside the
+declared scope. Each model that finds nothing is worth 10 points.
+"""

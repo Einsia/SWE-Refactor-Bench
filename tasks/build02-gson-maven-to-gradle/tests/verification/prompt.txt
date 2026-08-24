@@ -1,0 +1,376 @@
+{{task}}
+
+You are looking for a real defect in a build migration, and you have one round to
+find one.
+
+Two source trees are in front of you.  They are the same project, and they are meant
+to build into the same artifacts: one by the build system the project has always
+used, the other by a replacement somebody wrote to produce the same thing.  Your job
+is to write a test that PASSES against the original and FAILS against the submission,
+where the difference it catches is one a user of this library would care about.
+
+  ORIGINAL     {{original}}   built by the project's Maven reactor
+  SUBMISSION   {{submission}}   claims to be the same artifacts, built by Gradle
+
+You know which is which, and you should: the Maven build is the specification of what
+the answer ought to be, and reading it is among the most productive things you can do
+with the round.  Your TEST does not get to know.  It runs twice, once against each
+tree, under a different path each time and with nothing in its environment naming the
+role, and the harness compares the two outcomes.  That is the measurement rather than
+an obstacle to work around: a test that could tell the trees apart by something other
+than the defect it claims would pass on one and fail on the other for free, which
+establishes nothing and is rejected on sight.
+
+--------------------------------------------------------------------------------
+THE PROJECT
+--------------------------------------------------------------------------------
+
+Google Gson 2.10.1, the JSON library.  Four sub-projects, each producing one jar:
+
+  gson        the library.  221 entries, 218 classes.  A multi-release OSGi bundle:
+              release-7 classes in the root, a release-9 module descriptor overlaid
+              under META-INF/versions/9, OSGi headers computed by bnd, and a
+              version string filtered into a generated source file at build time.
+  extras      22 entries, 19 classes.  Depends on gson.
+  metrics     40 entries, 36 classes.  Ships a resource, ParseBenchmarkData.zip.
+  proto       7 entries, 4 classes.  Runs protoc to generate sources first, and its
+              jar carries no version in its name.
+
+Those entry counts are the original's own jars.  A correct Gradle build produces two
+fewer per jar, because Maven adds META-INF/maven/<group>/<artifact>/pom.{xml,properties}
+and Gradle does not.  219/20/38/5 is right, not a difference worth reporting.
+
+Measured on the original build, so you do not have to spend a candidate finding it
+out:
+
+  jar names           gson-2.10.1.jar, gson-extras-2.10.1.jar,
+                      gson-metrics-2.10.1.jar, gson-proto.jar
+  class-file major    51 (release 7) on all 217 root classes, and 53 on the one
+                      overlay, META-INF/versions/9/module-info.class.  The parent
+                      POM sets maven.compiler.release to 7; the 11 you will find
+                      next to it belongs to the javadoc plugin and reaches no
+                      bytecode.  extras, metrics and proto are 51 throughout.
+  module              com.google.gson, version 2.10.1, exporting exactly
+                      com.google.gson, .annotations, .reflect, .stream
+  OSGi                Bundle-SymbolicName: com.google.gson
+                      Bundle-Version: 2.10.1
+                      Multi-Release: true
+                      Export-Package: those same four packages, each
+                        version="2.10.1", and com.google.gson additionally
+                        uses:="com.google.gson.reflect,com.google.gson.stream"
+                      Import-Package: sun.misc;resolution:=optional,
+                        com.google.gson.annotations
+  test suite          1,277 cases in gson (1,258 pass, 19 skip),
+                      37 in extras, 14 in proto, and none in metrics
+  published POM       com.google.code.gson:gson:2.10.1, packaging jar.  Read it
+                      through the chain -- Pom.coordinates(), Pom.inherited(),
+                      Pom.dependencies() -- and not by reading a top-level element
+                      out of the file.  The original publishes a thin POM that
+                      inherits groupId, version, description, url, scm and
+                      developers from a <parent> pointing at gson-parent, and
+                      publishes gson-parent beside it; Gradle's maven-publish
+                      writes every field into one file and no parent.  Both resolve
+                      to the same model, and which shape a publication has is not a
+                      finding -- Tree.published_pom() carries the repository root,
+                      so the chain-reading methods give you the same answer on both
+                      sides.  A probe asserting the file's shape rather than the
+                      model it resolves to differs on every submission for a reason
+                      that involves neither repository.  Likewise the original
+                      publishes gson alone -- extras, metrics and proto set
+                      maven-deploy-plugin's <skip> -- so four artifacts on either
+                      side is the finding, not one; gson-parent is filtered out of
+                      published() as publisher bookkeeping and is not a fifth.
+
+Those numbers are the original's.  Do not assert them against the submission as if
+they were a specification -- assert them against the ORIGINAL as a sanity check on
+your own test, and compare the two trees against each other for the finding.
+
+--------------------------------------------------------------------------------
+YOUR TOOLBOX
+--------------------------------------------------------------------------------
+
+A candidate is a pytest file, and you hand it to `try_test`.  That is the only way
+to execute anything here -- you have no shell.  `try_test` runs your file against
+both trees and tells you the outcome on each separately, so a candidate that finds
+nothing still costs you only one call and still tells you something.  A test you
+reasoned about but never ran has told you nothing at all; run your ideas, you have
+budget for many.
+
+A candidate runs with `/tests/verification/lib` on the path, so:
+
+    import srbgson
+
+Everything below is documented with what it returns.  Getting one wrong costs you a
+candidate, so read the shapes.
+
+  srbgson.tree(config="default") -> Tree
+      Build the tree in front of you.  Cached across every candidate in the stage,
+      so the first one to ask pays and the rest are free.  Four configurations:
+
+        "default"    the jars, no tests run
+        "full"       the jars, with the project's own test suite
+        "publish"    the artifacts written into a file repository, laid out as a
+                     consumer would fetch them
+        "relocated"  the same sources, built at a deeper absolute path
+
+      Raises srbgson.BuildFailed if the tree will not build that way.  Catch it and
+      report what happened -- see WHAT IS NOT A FINDING.
+
+  Tree.jars() -> {project: Path}        keys are "gson", "extras", "metrics",
+                                        "proto" -- the directory names, which both
+                                        trees share.  Sidecars excluded.
+  Tree.jar(project) -> Jar              raises FileNotFoundError if none was built
+  Tree.jar_name(project) -> str|None    the file name, e.g. "gson-2.10.1.jar"
+  Tree.entries(project) -> (str, ...)   every entry, sorted
+  Tree.read(project, entry) -> bytes
+  Tree.sha256(project, entry) -> str
+  Tree.manifest(project) -> {header: value}
+  Tree.majors(project) -> {entry: int}  class-file major of every class
+
+  Tree.tests() -> TestRun               empty unless the config ran tests
+      .total .passed .failures .errors .skipped     ints
+      .counts(project=None) -> {"tests": n, "failures": n, ...}
+      .classes(project=None) -> (str, ...)          "com.google.gson.FooTest"
+      .cases(project=None) -> (str, ...)            "...FooTest#bar"
+      .outcome(case) -> "pass"|"fail"|"error"|"skip"|"absent"
+      A TestRun with .total == 0 means the tests did not run, which is NOT the
+      same as the tests passing.  Check .total before believing .all_passed.
+
+  Tree.published() -> {repo_relative_path: Path}    "publish" config only
+  Tree.published_pom(artifact, version="2.10.1") -> Pom|None
+      Pom has .text(), .findall(path), .child_text(el, tag), .dependencies(),
+      .coordinates().  There is no .find().
+
+  Tree.java(source, *args, classpath="", module_path="", modules="", main=None,
+            stdin=None, timeout=None) -> Output
+      Compile a consumer program against this build's jars and run it.  The four
+      jars are on the classpath already.  Class in the default package unless you
+      pass `main`.  Returns an Output for BOTH halves -- a compile failure comes
+      back as an Output with .returncode != 0, not as an exception, because "does
+      not compile against one tree" is itself a finding.
+        Output: .ok .returncode .stdout .stderr (bytes) .text() .lines() .json()
+                .timed_out .duration_sec, and str(out) prints a readable dump --
+                put it in your assert message.
+
+  Tree.with_sources({path: text_or_bytes}, config=None) -> Tree
+      Build again with those files written into the sources first.  Paths are
+      repository-relative.  This is the sharpest thing you have; see below.
+      Refuses to write a build file, and the refusal is deliberate: the two trees
+      do not have the same build files, so a mutation only one of them can receive
+      is not a comparison.
+
+  Tree.build_again() -> Tree             same config, fresh copy, built again
+
+  srbgson.class_bytes_major(data) -> int         51 is release 7, 53 is 9, 61 is 17
+  srbgson.class_strings(data) -> set[str]        String constants in the pool
+  srbgson.class_module(data) -> dict             a module-info decoded:
+      {'name': str, 'open': bool, 'version': str | None,
+       'requires': [{'name', 'transitive', 'static', 'version'}],
+       'exports':  [{'package', 'flags', 'to'}],   # 'to' is [] when unqualified
+       'opens':    [{'package', 'flags', 'to'}],
+       'uses':     [str],  'provides': [{'service', 'with'}]}
+    So the exported package names are
+      sorted(e['package'] for e in class_module(data)['exports'])
+    and not the 'exports' list itself, whose elements are dicts.
+  srbgson.jar_of(path) -> Jar                    open any jar you produced
+  srbgson.zip_entries(path), srbgson.zip_read(path, member)
+
+  Jar, properties:  .entries .dir_entries .manifest
+  Jar, methods:     .read(name) .text(name) .sha256(name) .size(name)
+                    .compress_type(name) .classes() .matching(regex)
+                    .manifest_raw() .major(name) .majors() .digests()
+                    .major_histogram() .nested(name)
+
+--------------------------------------------------------------------------------
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+--------------------------------------------------------------------------------
+
+Two asserts.  The first states what the original does, and fails loudly if your own
+test is wrong.  The second is the finding.
+
+    import srbgson
+
+    def test_serializes_a_generic_map():
+        t = srbgson.tree("default")
+        out = t.java('''
+            import com.google.gson.Gson;
+            import com.google.gson.reflect.TypeToken;
+            import java.util.*;
+            public class Probe {
+              public static void main(String[] a) {
+                Map<String, List<Integer>> m = new LinkedHashMap<>();
+                m.put("x", Arrays.asList(1, 2, 3));
+                System.out.println(new Gson().toJson(m,
+                    new TypeToken<Map<String, List<Integer>>>(){}.getType()));
+              }
+            }''')
+        assert out.ok, "the consumer did not run:\n%s" % out
+        assert out.text().strip() == '{"x":[1,2,3]}', out.text()
+
+If that fails against one tree and not the other, you have found something a user
+would hit, and there is no argument to be had about it.
+
+--------------------------------------------------------------------------------
+THE MOST PRODUCTIVE THING YOU CAN DO
+--------------------------------------------------------------------------------
+
+Add a source file that did not exist when anything was frozen, and ask the build
+where it went.
+
+Everything else in this task -- every entry name, every checksum, every manifest
+header, every test count -- is satisfiable by a build that was told what to produce
+and produces exactly that.  A new source file is not.  Where it lands is decided by
+the source-set wiring, the resource handling, the release setting, and whatever
+computes the OSGi exports, and a build that hardcoded its answers has nothing to
+say about it.
+
+    def test_a_new_class_lands_in_the_jar_and_is_exported():
+        t = srbgson.tree("default")
+        t2 = t.with_sources({
+            "gson/src/main/java/com/google/gson/SrbProbe.java":
+                "package com.google.gson;\n"
+                "public final class SrbProbe {\n"
+                "  private SrbProbe() {}\n"
+                "  public static String hello() { return \"hi\"; }\n"
+                "}\n"})
+        assert "com/google/gson/SrbProbe.class" in t2.entries("gson")
+        assert t2.majors("gson")["com/google/gson/SrbProbe.class"] == 51
+
+Variations worth a candidate each: a class in a package the manifest exports, and
+one in a package it does not; a resource in a directory that already has resources,
+and one in a directory that does not; a test case, to see whether the test task
+picks it up; a class in each of the four projects, to see whether all four source
+sets are really wired.
+
+If you write a probe class that the build compiles, keep it plain.  The original
+compiles under `-Xlint:all,-options` with failOnWarning, so a warning is an error:
+no raw types, no deprecated API, no serializable class without a serialVersionUID.
+(`-options` is excluded only to silence the one warning release 7 itself provokes.)
+A probe that trips a lint check fails against both trees and tells you nothing --
+and if the submission merely forgot to turn warnings-as-errors on, a probe that
+trips lint fails on the original and passes on the submission, which scores as a
+break in the wrong direction.  Keep the probe clean and test that separately.
+
+--------------------------------------------------------------------------------
+WHERE MIGRATIONS OF THIS KIND ACTUALLY FAIL
+--------------------------------------------------------------------------------
+
+In rough order of how often they are the real defect:
+
+  A source set or resource directory that was never wired up.  Nothing fails to
+  compile, no test necessarily reads it, and a whole package or a whole resource
+  directory is simply absent from the jar.
+
+  The multi-release overlay.  Getting a release-9 module descriptor into
+  META-INF/versions/9, compiled at 53, with Multi-Release: true in the manifest,
+  while the root classes stay at 51, is four things that have to be true at once.
+  A descriptor in the jar root breaks every consumer on release 7 or 8.
+
+  The OSGi headers.  bnd computes them from an instruction file plus whatever the
+  build tells it about the project's classpath and version.  Told the wrong
+  classpath, it emits plausible headers with wrong Import-Package ranges, which
+  nothing notices until an OSGi container refuses to resolve the bundle.
+
+  The published POM.  A build can produce a perfect jar and publish a POM with no
+  dependencies in it at all, and no inspection of the artifact reveals it.  Check
+  the dependencies, their scopes, their optional flags, their exclusions.
+
+  A generated or filtered source.  gson's version reaches a constant through
+  build-time filtering of a template.  A migration that hardcoded it, or that
+  filtered a copy while compiling the unfiltered one, is wrong in a way that only
+  shows in the compiled constant pool or at runtime.
+
+  A code-generation step dropped.  The proto project runs protoc.  Losing that
+  step produces a jar with the hand-written classes and none of the generated ones.
+
+  Test scope leaking into the artifact, or a compile dependency becoming runtime.
+  Either changes what a consumer resolves.
+
+--------------------------------------------------------------------------------
+WHAT IS NOT A FINDING
+--------------------------------------------------------------------------------
+
+These are rejected, and each one costs you a candidate:
+
+  Anything about the build files.  Their names, contents, structure, task names,
+  plugin names, property names, how many there are.  Another stage read the code;
+  this one reads what the code produced.
+
+  Anything that tells the two trees apart other than the defect.  Looking for a
+  pom.xml, looking at the recorded dialect, looking at anything that names the
+  role.  Such a candidate discriminates perfectly and establishes nothing, and it
+  is rejected on sight.
+
+  Console output, task names, ordering, warnings, exit codes beyond success.
+
+  Where a build puts things before it packages them.  Output directory names,
+  staging copies, intermediate class directories.  Read the jar.
+
+  Jar entry order, entry timestamps, compression method, or the digest of a whole
+  archive.  A jar is a set of named entries.  Compare entries and bytes.
+
+  Timing, parallelism, incremental behaviour.
+
+  A submission that does not build.  That verdict has already been rendered by
+  another stage, and a broken build must not be punished six times over.  If a
+  configuration raises BuildFailed for one tree, report that and stop.
+
+  Absolute paths, and the layout of the directories the harness staged.
+
+  A version other than the one both builds are given.  There is no way to ask the
+  original for a different version -- its version is a literal in a POM with no
+  property indirection -- so any candidate involving an overridden version fails
+  against the original, which reads as a broken test rather than a defect found.
+
+--------------------------------------------------------------------------------
+REPRODUCIBILITY
+--------------------------------------------------------------------------------
+
+Your candidate is run three times against each tree, and a candidate that
+discriminates once out of three is measuring the build scheduler rather than the
+build.  So:
+
+  Do not compare a whole jar's bytes or digest between two builds.  Timestamps and
+  entry order vary legitimately and are out of scope besides.
+
+  Do not depend on the order of anything the build enumerated -- sort it.
+
+  Do not depend on a HashMap iteration, a directory listing order, or a set's
+  repr.
+
+  If you want to ask about reproducibility, compare a tree against ITSELF:
+  `t.build_again()`, or `tree("relocated")` against `tree("default")`, and compare
+  named entries' bytes.  An entry whose content changes between one tree's own two
+  builds is a defect in that tree whatever the other one did.
+
+--------------------------------------------------------------------------------
+HOW TO SPEND THE BUDGET
+--------------------------------------------------------------------------------
+
+Your wall-clock budget is stated at the end of these
+instructions.  The builds are the expensive part: "default" is a few minutes, "full"
+runs 1,328 test cases, "publish" runs a deploy.  They are cached across the whole
+stage, so asking for one that another round already built is free -- and asking for
+all four when you needed one is not.
+
+A workable shape:
+
+  1. One candidate that builds "default" and dumps what you want to see: entry
+     sets, manifests, majors, jar names.  Assert something you are confident of so
+     it registers as a pass, and read the output.
+  2. Two or three that chase whatever looked wrong in that dump.
+  3. If the artifacts look right, stop comparing them and start using them:
+     consumer programs via `Tree.java`, and new sources via `with_sources`.  A
+     migration that survives an entry-by-entry comparison usually fails on one of
+     those two.
+  4. Report.
+
+Report `found=False` if you find nothing.  Most rounds should: these trees are
+supposed to be equivalent, and a report of "no defect found" from a round that spent
+its budget honestly is the outcome this stage is built to produce.  A speculative
+claim is worse than none -- it is checked, and a claim whose candidate does not
+currently discriminate is rejected anyway.
+
+The trees, once more, since you will want them while writing paths:
+
+  {{roots}}

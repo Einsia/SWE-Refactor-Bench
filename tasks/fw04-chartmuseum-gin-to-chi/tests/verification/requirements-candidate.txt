@@ -1,0 +1,39 @@
+# The stack a candidate test may import, hash-pinned.
+#
+# Same versions as tests/behavioural/requirements-runner.txt, and that is the
+# point rather than a convenience: a candidate is asked to write a test in the
+# shape of a stage 2 test, so the library it writes against has to be the one
+# stage 2 runs.  A candidate that passed here under a different pytest would be
+# reporting on a suite the benchmark does not own.
+#
+# Nothing beyond the standard library for HTTP.  A candidate compares two servers
+# byte for byte, and http.client shows a response as it came off the socket --
+# header casing, header order, duplicate headers, the exact reason phrase, an
+# empty body that is present versus absent.  A higher-level client normalises all
+# of that away, so adding one would remove differences a candidate is hired to
+# find.  urllib.request is available for the same reason and with the same caveat
+# (it follows redirects unless told not to).
+#
+# PyYAML is here because index.yaml is the task's one structured document: a
+# candidate that wants to claim two indexes disagree should be able to say which
+# entry and which field, not print two YAML blobs.
+#
+# pytest-timeout so a candidate that writes a request with no deadline fails its
+# own round instead of consuming the stage's wall clock.
+#
+# Installed with --require-hashes into /opt/venv, so a substituted artefact fails
+# the build rather than the stage.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6
+iniconfig==2.0.0 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759
+pluggy==1.5.0 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest-timeout==2.3.1 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e
+PyYAML==6.0.2 \
+    --hash=sha256:70b189594dbe54f75ab3a1acec5f1e3faa7e8cf2f1e08d9b561cb41b845f69d5 \
+    --hash=sha256:0ffe8360bab4910ef1b9e87fb812d8bc0a308b0d0eef8c8f44e0254ab3b07133 \
+    --hash=sha256:d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e

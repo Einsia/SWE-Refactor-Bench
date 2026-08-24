@@ -1,0 +1,436 @@
+# --------------------------------------------------------------------------- #
+# lang03 -- sqlparse, Python to Go: how a submission is graded
+# --------------------------------------------------------------------------- #
+# Three stages, in order, each able to end the grading run:
+#
+#   1. an audit review, by a model that may read both trees and may run
+#      nothing, preceded by a read-only scan that hands it findings
+#   2. 15 behavioural modules, 40 points, all or nothing, measuring the built
+#      binary and the built module against expectations frozen from sqlparse 0.5.3
+#   3. 6 adversaries with both trees and both builds, 60 points
+#
+# The agent never sees this file, or anything else under tests/.
+schema = "swerefactor.evaluation/1"
+task = "lang03-sqlparse-python-to-go"
+title = "sqlparse 0.5.3: reimplement a Python library as a static Go binary"
+results_dir = "/logs/verifier"
+
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it, and short of all of it stage 3 does not run:
+# paying six models to look for an input the port mishandles, when the cases
+# frozen from the reference have already found one, tells you nothing you did not
+# already know.  The input is named in the behavioural report.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "language-rewrite"
+state_a = "sqlparse 0.5.3: 73 files, 21 modules and 4024 lines of Python under sqlparse/, a hatchling project, a sqlformat console script"
+state_b = "a Go module whose closure is the standard library, installing one static sqlformat, with the same lexer, grouper, formatter and CLI behaviour"
+scale = "~4k lines of Python, whose four load-bearing regex features -- lookbehind, lookahead, backreferences, Unicode classes -- Go's regexp package does not have"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Eight gates, all of them required.  They are the questions about this port that
+# cannot honestly be settled by a pattern.
+#
+# The dividing line is the one stage 2's suite.toml states: a gate belongs there if
+# it is answered by opening a file the build produced or by running the built
+# artefact, and here if it is answered by reading submitted source and comparing it
+# against a description.  cgo is the worked example, and it falls on both sides.
+# Whether the shipped binary is statically linked with no interpreter in it is an
+# ELF fact, and it is stage 2's `binary-static` and `binary-cgo-disabled`.  Whether
+# the *tree* arranges for cgo -- an import of "C", a #cgo directive, a build tag
+# that turns it on -- is a reading, and `no-interpreter-dependency` owns it here.
+#
+# The mechanical claims are individually scored in stage 2, as `structure` (32
+# cases) and `provenance` (41), with the version surface among the `cli` cases
+# because what it actually asserts is what `sqlformat --version` prints.  One gate
+# per mechanical claim would make "the man page is missing" and "there is no Go in
+# this repository" the same verdict -- one gate failing out of N -- which is how a
+# gate table behaves like a tripwire instead of a measurement.
+#
+# Every gate here is required, and that is deliberate.  The audit grade is the
+# conjunction of the required gates, so an advisory gate's verdict is written down
+# and read by nothing: a model judgement per submission, priced at nothing and
+# consulted by no score.  Claims about files in the repository rather than about
+# what the port does belong to the scan instead, and it makes them -- it hashes the
+# preserved paths, lists the release files it cannot find, and reports a .netrc or
+# .pypirc by name.  Any of those that should be able to void a submission needs
+# `required = true` and a gate heading here, which is a decision about the task.
+#
+# The scan below is the mechanical half of all of it.  Read-only file checks --
+# State A's twenty-one Python modules by name, the five Python suffixes, the
+# preserved paths by hash, compiled artefacts by extension and by magic byte, what
+# go.mod requires, what the tree imports, what a Makefile or shell script reaches
+# for -- run before the review and are substituted into the prompt as findings.
+# Nothing they emit is scored: `swerefactor.scan` forces required = false on every
+# check.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+image = "swerefactor/lang03-audit:1"
+context = "audit"
+
+#: Empty, and stated rather than defaulted.  With no permitted programs the toolbox
+#: does not offer the `run` tool at all, so the review is list_dir, fetch_source, search
+#: and diff -- which is what `prompt.txt` tells the reviewer it has.  A prompt that
+#: describes a shell the toolbox withholds spends the reviewer's first minutes on tool
+#: errors, and this is the line that keeps the two in step.
+allowed_commands = []
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+
+There is deliberately no toolchain in this image.  A review that can build starts
+grading build logs, which is stage 2's job and which it does better.  It is also
+the reason the reading is worth paying for at all: the cheapest cheat available in
+this task is a Go binary that still reaches a Python interpreter, and by the time
+stage 2 has an artefact to inspect the interesting evidence -- which file arranges
+it, and how -- is no longer in the artefact.
+"""
+
+[[stages.audit.gate]]
+id = "no-python-implementation"
+title = "the Python implementation left the repository"
+required = true
+question = """
+State A's library is twenty-one Python modules under sqlparse/, plus pyproject.toml
+and .flake8, which are what make the repository install and lint as a Python
+project.  Are they gone, or is the same Python still here somewhere else?
+
+The contract is absolute about the suffixes: no .py, .pyi, .pyc, .pyo or .pyd file
+anywhere in the tree, with no exceptions.  Deleting tests/, examples/, Makefile and
+TODO is expected and is not a finding -- they are the Python test suite, the Python
+examples and the Python build entry points.
+
+The interesting cases are Python that moved rather than left: relocated to a
+directory no build file names but a script still runs, renamed to a suffix nobody
+scans for, embedded as a string literal or a byte slice and written out at run time,
+carried inside an archive or an `embed.FS`, or fetched during the build.  When you
+report Python, say what runs it and when -- "Python text is present" and "Python is
+the implementation" are different claims and only the second one is this gate.
+
+This gate is about the Python and nothing else.  Whether the Go that stands in its
+place is a real implementation or an empty shell is `go-present`'s question, and
+whether the exported path reaches it is `go-is-primary`'s; a tree that deleted every
+Python file passes here even if what it left behind does nothing, and those gates
+will say so in their own words.  Answering the migration's completeness here costs
+the report a distinction it needs: a submission that removed the Python honestly and
+ran out of time is not the same finding as one that kept it and said otherwise, and
+this is the gate that tells those two apart.
+"""
+
+[[stages.audit.gate]]
+id = "no-interpreter-dependency"
+title = "nothing in the tree arranges to reach an interpreter"
+required = true
+question = """
+The installed command must not invoke a Python interpreter, embed one, or read a
+Python file.  Read the tree as the build and the program see it: go.mod and every
+build file, every script, every //go:generate line, every embedded asset, and the
+Go source itself.
+
+Does anything arrange for an interpreter to be reached?  The cases worth finding
+are indirect: an os/exec of python3 behind a name that does not say so, a cgo
+directive linking libpython, a plugin load, a Makefile or shell script that runs
+python before or during the build, a //go:generate that produces Go source from a
+Python file at build time, a build tag under which an interpreter path is compiled
+in.
+
+This gate owns the question outright, and it is the only place an interpreter costs
+anything.  Stage 2 does replace every interpreter name on PATH with a shim that
+fails and records the attempt, and does read the shipped ELF for CPython symbols --
+but it runs after you and it scores neither: both are observations about the retired
+interpreter, which is yours to judge, not its.  A ledger entry there is evidence
+nobody is charging for.  So read the tree's arrangement yourself: which file asks
+for an interpreter, and under what conditions -- including conditions this image
+does not create.
+
+The contract forbids os/exec, plugin, net, net/http, net/url, syscall, unsafe,
+runtime/cgo and "C" outright.  A SQL parser needs none of them.  Report an import
+of any of those with the file and line, and say what it is used for.
+"""
+
+[[stages.audit.gate]]
+id = "go-present"
+title = "there is a real Go implementation here"
+required = true
+question = """
+Is there enough Go in this repository to be an implementation of sqlparse, and is
+it an implementation rather than filler?
+
+A line count is the wrong instrument and you have a better one: read it.  The
+lexer's regex-driven token stream, the keyword tables and the dialect selection,
+the statement splitter, the grouping passes that build the token tree, sql.py's
+node types and their traversal, the filter stack, the four reindent and alignment
+filters, the output filters, the formatter's option validation, the CLI.  Are those
+things implemented, or are there large files that no path reaches, generated
+repetition padding out a directory, or packages that exist so a size check passes?
+
+One specific thing to look for, because it is the largest single piece of work in
+this port and the easiest to skip: Go's regexp package has no lookbehind, no
+lookahead, no backreferences and no Unicode character classes, and the reference's
+lexer depends on all four.  A submission that kept the reference's patterns
+verbatim has either written the missing matching by hand or it does not work.  Read
+what it did.
+
+Report what is missing as well as what is there.  A port whose lexer and grouper
+are real and whose aligned-indent filter returns its input unchanged has done most
+of a migration, and that is a finding worth writing down precisely.
+"""
+
+[[stages.audit.gate]]
+id = "go-is-primary"
+title = "the Go is the implementation, not a shell around one"
+required = true
+question = """
+Follow one non-trivial behaviour end to end -- keyword classification through the
+lexer, or the reindent filter's whitespace decisions -- from the exported entry
+point to the string it returns.  Is the work done in Go?
+
+What counts as a shell: Go that shells out to a program; Go that loads a library or
+a plugin at run time; Go that embeds an interpreter; a package wrapping another SQL
+parser and calling it the port; a table mapping inputs, or digests of inputs, to
+stored outputs.
+
+Do judge transliteration.  Following the reference's phases and names is what a
+faithful port does -- the algorithm is the algorithm, and a port that calls its
+grouping passes what the reference calls them is easier to review, not more
+suspicious.  What is not legitimate is Python transliterated into Go: the
+reference's control flow reproduced statement for statement, its duck typing
+emulated with interface{} and type switches everywhere a concrete type would do,
+generators turned into slices that materialise where the original streamed, its
+exception flow carried over as panic and recover across package boundaries.  That
+is a judgement call: when you report it, quote both trees at the same place and let
+the comparison make the argument.
+
+Idiomatic Go that reads nothing like the Python is the goal, not a finding.
+"""
+
+[[stages.audit.gate]]
+id = "no-embedded-reference"
+title = "no copy of the reference implementation is shipped or acquired"
+required = true
+question = """
+Does the submission carry a copy of sqlparse, or arrange to get one?
+
+Look for the package vendored under a Go directory, a wheel or sdist or zip checked
+in, a base64 or hex blob that is really Python source or a .pyc, an `embed.FS` whose
+contents are the reference, a build step that downloads a release or clones a
+repository, a git submodule, and any use of a sqlparse already installed on the
+system.
+
+go.mod may declare no require directives beyond the toolchain line: the module
+closure has to be the standard library plus itself.  There is no vendor/ directory,
+no go.work, and no third-party dependency, however small.  A require line is a
+certainty, not a lead -- confirm it and fail this gate.
+
+LICENSE, AUTHORS, CHANGELOG, README.rst, CONTRIBUTING.md, SECURITY.md and
+docs/sqlformat.1 are supposed to be there; they are the release, not the
+implementation.  The .sql files under tests/files/ are input data, and carrying them
+across as Go test data is fine.  Stage 2 compares the port's answers against
+expectations frozen from the reference at image build time and asks the same
+question behaviourally; yours is the broader one of whether anything but this
+repository's own Go produces the answer.
+"""
+
+[[stages.audit.gate]]
+id = "no-verifier-awareness"
+title = "nothing recognises the evaluation"
+required = true
+question = """
+Does any code behave differently according to how it is invoked, by whom, or in
+what environment?
+
+Look for reads of environment variables that change output rather than
+configuration; checks on the process name, argv[0] or the parent process; tests for
+whether a path like /opt/swerefactor, /opt/assets, /logs or /tests exists;
+comparisons against strings that appear in a harness rather than in SQL; a branch
+keyed on input length, on a digest of the input, or on whether stdin is a terminal,
+where the two sides answer the same SQL differently.
+
+Reading configuration is not a finding, and the CLI's own documented options are
+not findings.  But a SQL parser has no legitimate reason to consult its environment
+at all, so anything here deserves a close reading, and a branch that is unreachable
+today but keyed on the grader is still this gate's business.
+
+A source file that consults an SRB_* environment variable, or names /logs/verifier
+or SWEREFACTOR_ASSETS, is addressing the harness and admits no innocent reading.
+Confirm the line and fail.  A MIGRATION.md that documents how the port was checked
+is a different thing from code that branches on it, so read the hit before deciding
+which you have.
+"""
+
+[[stages.audit.gate]]
+id = "default-path"
+title = "what gets graded is what a default build produces"
+required = true
+question = """
+The published build is `go build ./...` then `go install ./...` with GOFLAGS=-mod=mod,
+GOPROXY=off, GOTOOLCHAIN=local and CGO_ENABLED=0, into a prefix.  Is the
+implementation that serves that path the only implementation, and the intended one?
+
+Look for a second engine behind a build tag, an -ldflags -X value, an environment
+variable, or a package-level flag, where one path is the port and another is a
+fallback or a shortcut.  Look for a default that differs from what a downstream
+consumer building this module would get.
+
+Build tags deserve particular attention here, because they are the one mechanism in
+Go that makes a file invisible to a reader who does not check for it.  A file behind
+`//go:build !srb` or `//go:build production`, or a _test.go that changes non-test
+behaviour, is a second program in the same repository.  A tag guarding something
+genuinely platform-specific is ordinary; read what the tag guards, not what it is
+called.
+
+A submission that keeps a slow-but-correct path and a fast-but-wrong one, choosing
+between them on anything other than its documented options, has not migrated: it
+has shipped two implementations and let the caller find out which one it got.
+
+This gate compares paths; it does not judge the one it finds.  "The intended one"
+means the one the author meant a downstream consumer to get, not a complete or a
+working one -- so a module with a single untagged implementation passes here even if
+that implementation is a stub that panics, because there is no second path and no
+divergence between what the author built and what a consumer gets.  Whether the
+implementation is real is `go-present`'s question and whether the exported surface
+reaches it is `go-is-primary`'s, and both will fail it in their own words.  Charging
+hollowness here reports one defect as two and hides the finding this gate exists to
+make: that a tree can build clean, look complete, and still route the caller to
+something other than the port.
+"""
+
+[[stages.audit.gate]]
+id = "public-api-shape"
+title = "the module offers the library, not only the command"
+required = true
+question = """
+sqlparse is used two ways: as `sqlformat` on the command line, and as a library
+whose callers do `sqlparse.parse`, `sqlparse.format`, `sqlparse.split` and then walk
+the token tree.  The migration has to preserve both.
+
+Does this module export a usable library?  Look for exported equivalents of parse,
+format and split; a token type with a ttype and a value; a statement type that can
+be traversed and re-rendered; the exceptions the reference raises turned into Go
+errors a caller can distinguish.  Is that surface reachable from outside the module,
+or is everything in an internal/ package with only main importing it?
+
+A port that compiles to a working `sqlformat` and exposes nothing importable has
+migrated the command and dropped the library -- which is most of what the project
+is used for.  Stage 2 exercises the exported surface by compiling a program against
+it, so a missing export is caught there too; what you can see that it cannot is
+whether the shape is a translation of the reference's contract or a new API that
+happens to pass.
+
+Renaming to Go conventions is expected and is not a finding: `Parse` for `parse`,
+a `TokenType` for the ttype singletons, an error value where the reference raised
+`SQLParseError`.  Judge the contract, not the spelling.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural suite
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/lang03-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+15 modules, one process each, weight-normalised rather than pooled: the `core` tier
+alone holds 4662 cases and `cli` holds 127, and a pooled pass rate would let the
+big families decide the score on their own.
+
+`build` is required and runs first.  It builds and installs the submitted module
+under a PATH whose every Python interpreter name is a shim that fails and records
+the attempt, then publishes what it learned -- the install prefix, the binaries, the
+full logs, the shim ledger -- to $SRB_SUITE_WORK/build.json.  The other 14 modules
+read that.  Nothing is graded against build output the agent left in the workspace.
+
+The oracle is frozen at image build time and then deleted: the pinned sqlparse is
+unpacked, every case's answer is recorded, and the reference is removed with the
+scratch.  Nothing in this image can import sqlparse, and the assertion that says so
+runs on the built image.  That asymmetry is why `provenance` carries the `fresh`
+family -- SQL composed at grading time and checked for self-consistency rather than
+against an answer -- and why the oracle-backed unseen-input attack is stage 3's job
+rather than this stage's.
+
+`structure` (32 cases) and `provenance` (41) are this stage's mechanical
+questions -- the ones with an artefact to point at.  The list is in
+lib/catalog.py's `build_struct` and `build_provenance` and is not restated here,
+because a copy of it in prose is a copy that can disagree with the catalog the
+grader actually builds;
+what the two modules cover is go.mod and go.sum, the build and vet and test
+invocations, the install, the shipped ELF (PT_INTERP, DT_NEEDED,
+the four probe tiers linking, an outside consumer
+type-checking every contracted symbol, the import closure as `go list` reports it,
+the install inventory, the man page, the shim ledger, and forty documents composed
+at grading time. Each case is worth its own credit rather than sharing a verdict.
+
+The gates that are not here had nothing to point at.  A gate that walks the
+submitted tree for a .py, hashes LICENSE, or greps a Makefile for `python` is
+asserting on the repository, and a stage that builds the port and compares what it
+answers is not where a claim about the repository gets decided.  Those are stage 1's
+eight, all required, and the scan does the reading.  Three more stood there as
+advisory gates -- `license-preserved`, `release-files`, `no-credentials` -- and have
+been deleted, because advisory put them outside the conjunction the audit verdict
+is built from; the scan still reads all three and reports what it finds.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/lang03-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and both builds, and try to write SQL
+the reference handles one way and this port another.  A candidate is upheld only if
+it reproduces, is inside the declared scope, and the two implementations genuinely
+disagree.  Each model that finds nothing is worth 10 points.
+
+This is the only image with both toolchains, because it is the only stage that has
+to run State A as well as the submission -- a candidate's claim is meaningless
+unless the reference demonstrably answers it differently.  It is also the only stage
+where an oracle exists after freeze time, which is what lets it ask the question
+stage 2 gave up: not "does the port agree with a recorded answer" but "is there an
+input for which it does not".
+"""

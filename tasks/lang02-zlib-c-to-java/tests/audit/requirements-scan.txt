@@ -1,0 +1,29 @@
+# The scan's runner, and nothing else.
+#
+# Four packages, hash-pinned, --no-deps: this is a test runner for a set of checks
+# that open files, hash them, and read their first four bytes.  Nothing here can
+# import, configure or build the submission, and that is the point of keeping the
+# list this short -- the moment an HTTP client or a framework appears in this
+# image, a scan module could start a service, and stage 1's whole claim is that it
+# cannot.  For this task the same argument runs through the toolchain: there is no
+# JDK and no CMake in the image, so a module that tried to build the submission
+# would fail on the missing program rather than quietly grading a build.
+#
+# The versions and hashes are the ones every stage-1 image in this benchmark pins,
+# so `swerefactor.pytest_module` -- the plugin that turns a pytest run into the check
+# records the harness reads -- runs against the pytest it was written for.  Stage 2
+# of this task pins nothing here because it needs no pytest at all: its driver is
+# plain Python on the image's own interpreter, which is why the two stages'
+# dependency lists have nothing to reconcile.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6 \
+    --hash=sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761
+iniconfig==2.0.0 \
+    --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==23.2 \
+    --hash=sha256:048fb0e9405036518eaaf48a55953c750c11e1a1b68e0dd1a9d62ed0c092cfc5 \
+    --hash=sha256:8c491190033a9af7e1d931d0b5dacc2ef47509b34dd0de67ed209b5203fc88c7
+pluggy==1.5.0 \
+    --hash=sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669

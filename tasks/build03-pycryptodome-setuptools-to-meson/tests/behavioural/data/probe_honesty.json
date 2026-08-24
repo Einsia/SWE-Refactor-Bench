@@ -1,0 +1,32 @@
+{
+  "crippled_compiler": {
+    "absent": [
+      "_raw_aesni.abi3.so",
+      "_ghash_clmul.abi3.so"
+    ],
+    "n_members": 334,
+    "n_so": 39,
+    "rejects_flags": [
+      "-maes",
+      "-mpclmul",
+      "-mssse3"
+    ],
+    "still_present": [
+      "_raw_aes.abi3.so",
+      "_ghash_portable.abi3.so"
+    ]
+  },
+  "description": "Artifact-set response to compiler ISA capability, measured on both states.",
+  "full_compiler": {
+    "n_members": 336,
+    "n_so": 41,
+    "present": [
+      "_raw_aesni.abi3.so",
+      "_ghash_clmul.abi3.so"
+    ]
+  },
+  "measured_on": {
+    "state_a": "setup.py+compiler_opt.py",
+    "state_b": "meson reference solution"
+  }
+}

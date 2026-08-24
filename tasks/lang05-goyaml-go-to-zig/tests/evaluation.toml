@@ -1,0 +1,419 @@
+# --------------------------------------------------------------------------- #
+# lang05 -- go-yaml, Go to Zig: how a submission is graded
+# --------------------------------------------------------------------------- #
+# Three stages, in order, each able to end the grading run:
+#
+#   1. an audit review, by a model that may read both trees and may run
+#      nothing, preceded by a read-only scan that hands it findings
+#   2. 22 behavioural modules, 40 points, all or nothing, measuring the built
+#      probe against a frozen reference build of State A
+#   3. 6 adversaries with both trees and both builds, 60 points
+#
+# The agent never sees this file, or anything else under tests/.
+schema = "swerefactor.evaluation/1"
+task = "lang05-goyaml-go-to-zig"
+title = "go-yaml v3.0.1: reimplement a YAML library in Zig, Node surface intact"
+results_dir = "/logs/verifier"
+
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it, and short of all of it stage 3 does not run:
+# paying six models an hour each to look for a disagreement in a library whose own
+# conformance cases have already found one tells you nothing the behavioural report
+# did not.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "language-rewrite"
+state_a = "go-yaml v3.0.1: 19 Go files (13 sources, of which 12 are graded and carry 7,609 logic lines, plus 6 _test.go), go.mod/go.sum, and a Zig stub that builds and answers nothing"
+state_b = "the same library in Zig 0.14.1, reachable through the NDJSON probe protocol at zig-out/bin/yaml-probe, built by `zig build` with no package fetches"
+scale = "~7.6k lines of Go across 12 translation units; the contract requires at least 8,000 graded probe cases"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Eight gates, all of them required. They are the questions about this migration
+# that cannot honestly be settled by a pattern.
+#
+# The task's mechanical audit checks are not here. Sixteen of them observe
+# rather than judge -- a build that succeeds, an artefact at a declared path, a
+# rebuild that writes nothing, a probe that flushes and drains, an ELF with no Go
+# in it, a process that spawns nothing -- and they belong to stage 2, where each
+# earns its own credit. "The probe forgot to flush" and "there is no Zig in this
+# repository" must not be the same verdict, or the suite behaves like a tripwire
+# instead of a measurement.
+#
+# What is left when you remove everything an artefact can answer: whether the Go
+# left, whether the Zig is the implementation rather than a route to one, whether
+# anything here recognises that it is being graded. Those need a reader.
+#
+# Nothing advisory belongs here either. `grade_audit` builds the verdict from
+# the conjunction of the *required* gates, so an advisory gate sits outside it --
+# it cannot fail a submission, cannot cost it a point, and cannot change any
+# number this file produces. If a question should be able to void a submission,
+# the honest form of that is `required = true`; if it should not, it wants a
+# mechanical check and not a vote.
+#
+# The scan is the mechanical half. Its file-reading checks -- each of State A's
+# twenty-four .go files by name and every one of them by content hash, compiled
+# artefacts by extension and by magic byte, what build.zig.zon declares, every
+# @cImport and @embedFile, every SRB_* reference, and LICENSE, NOTICE and
+# README.md hashed against State A with their copyright lines and operative
+# clauses read -- run before the review and are substituted into the prompt as
+# findings, so a missing holder or an SPDX identifier naming a licence go-yaml is
+# not under reaches the transcript. It runs over all twenty-four rather than the
+# twelve the next stage grades, because `no-go-sources` is about what is on disk
+# and a leftover _test.go or a leftover protocol adapter is the same finding as a
+# leftover library source. Nothing they emit is scored: `swerefactor.scan` forces
+# required = false on every check, so a scan hit is evidence for a gate and never
+# a verdict of its own.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+image = "swerefactor/lang05-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+
+State A ships a Zig stub: a 32-line build.zig and a 27-line src/main.zig that
+builds, prints "not implemented", drains stdin and exits 70. It is there so that
+State A itself does not fail stage 2's build check, which keeps "did not
+implement the protocol" and "broke the build" apart in the report. Every gate
+below is judged against that starting point, not against an empty directory --
+"there is a build.zig" is not evidence of a migration here, because there already
+was one.
+
+There is deliberately no Zig toolchain in this image, and no Go. A review that can
+build starts grading build logs, which is stage 2's job and which it does better.
+"""
+
+[[stages.audit.gate]]
+id = "no-go-sources"
+title = "the Go implementation left the repository"
+required = true
+question = """
+State A ships twenty-four Go files, in two populations. Seventeen sources: the
+library's thirteen -- the scanner, parser and emitter ported from libyaml, the
+decoder and encoder, the resolver, the map-key sorter, the public surface and its
+two header-shaped files -- and four more under `probe/` and `cmd/yaml-probe/`,
+which are the NDJSON adapter State A builds its probe binary from. Seven _test.go
+sit beside them, six of the library's own and one of the adapter's. Then go.mod
+and go.sum.
+
+Twelve of the library's thirteen are graded; sorter.go is not, because it is only
+reachable from typed Marshal, which the probe does not expose. The adapter is not
+graded either -- a port speaks the protocol its own way, and how it does that is
+stage 2's measurement. Those distinctions belong to the next stage. Here the
+question is simpler: are they gone, all twenty-four, and is what replaced them Zig
+rather than the same Go somewhere else?
+
+The interesting cases are Go that moved rather than left: relocated to a
+directory build.zig does not name, renamed to an extension nobody scans for, kept
+under a documentation or reference directory, embedded as a string literal or a
+byte array, or fetched during the build.
+
+Go that is genuinely not the library is a weaker finding, but say so when you see
+it: this task's contract forbids .go files anywhere under the submission root at
+any depth, so a leftover test file or example is a contract violation even though
+it is not an unfinished migration. Distinguish the two in what you write. When you
+report Go, say whether anything builds or runs it -- "Go is present" and "Go is
+the product" are different claims and the second one is much the worse.
+"""
+
+[[stages.audit.gate]]
+id = "no-go-in-build"
+title = "nothing in the build or the run reaches for a Go toolchain"
+required = true
+question = """
+Read the build as the build sees it, from `zig build` through to
+zig-out/bin/yaml-probe. Does anything on that path invoke go, gofmt, or any other
+Go binary -- at build time, or from inside the probe at run time?
+
+The cases worth finding are indirect: a build.zig custom step that runs a command,
+a shell script the build calls, a generated file checked in whose generator is a
+Go program still present, a std.process.Child spawn inside the probe, a
+declaration that only takes effect on a machine where go happens to be installed.
+
+Follow it wherever it goes and name the file and line. Stage 2 runs the build in an
+image with no Go in it at all and watches the probe for spawned processes, so it
+will catch a Go invocation that actually happens; your job is the declaration --
+what this build is arranged to do, including on a machine configured differently
+from this one.
+"""
+
+[[stages.audit.gate]]
+id = "no-foreign-native-code"
+title = "every byte of the product came from Zig source in this repository"
+required = true
+question = """
+The contract is narrow on purpose: the Zig standard library only. No entries in
+build.zig.zon's .dependencies, no vendored third-party Zig packages, no C, C++ or
+Objective-C sources, no @cImport, no `zig translate-c`, and no linking of a
+prebuilt object file, static archive or shared library that ships inside the
+submission.
+
+Read build.zig and build.zig.zon and check each of those. Then check the Zig
+sources for the same thing arriving another way: an @extern or an extern fn
+declaration bound to something the linker has to find elsewhere, a linkSystemLibrary
+call, an addObjectFile or addCSourceFile, a linkLibC where the port then calls into
+a C YAML parser rather than into libc's allocator or memcpy.
+
+linkLibC on its own is not a finding, and neither is any use of the Zig standard
+library. The question is whether code that this repository did not write, in a
+language the pinned Zig toolchain did not compile, ends up doing the library's
+work.
+
+The scan walked the tree for compiled artefacts by extension and by magic byte and
+listed every @cImport, @embedFile and .dependencies entry it found. A file whose
+first four bytes are 0x7f E L F, or that begins with the ar archive magic, sitting
+outside a build directory, is a compiled artefact; there is no reading of it under
+which it is Zig source. Confirm the path and fail this gate.
+"""
+
+[[stages.audit.gate]]
+id = "zig-present"
+title = "there is a real YAML implementation here, in Zig"
+required = true
+question = """
+Is there enough Zig in this repository to be an implementation of YAML 1.1 as
+go-yaml implements it, and is it an implementation rather than filler?
+
+A line count is the wrong instrument and you have a better one: read it. The
+scanner's token production, indentation and block context tracking, the parser's
+event state machine, anchor and alias resolution, the tag resolver's decisions
+about what an unquoted scalar means, the emitter's scalar style analysis and its
+line folding, the composer that turns events into the Node tree, and the Node
+surface itself with its comment fields and line and column numbers. Are those
+things implemented, or are there large files no path reaches, generated repetition
+padding out a directory, or modules that exist so that a size check passes?
+
+The contract names a floor of 4,000 non-blank non-comment lines of Zig, against
+State A's 7,609 lines of Go. Treat the number as what it is -- a rejection
+threshold for a shim, not a definition of done. The scan counted the lines for you;
+a submission a little over the floor whose emitter is real and whose comment
+handling is absent is a much more useful finding than the count on its own.
+
+Report what is missing as well as what is there. A submission that parses
+correctly and cannot emit has done half a migration, and that is worth writing
+down precisely -- stage 2 will measure how much half is, and your reading is what
+tells a reader why.
+"""
+
+[[stages.audit.gate]]
+id = "zig-is-primary"
+title = "the Zig is the implementation, not a route to one"
+required = true
+question = """
+Follow one non-trivial behaviour end to end -- how a plain unquoted scalar gets its
+tag, or how the emitter decides a string needs quoting -- from the probe's request
+handler to the bytes it produces. Is the work done in Zig, here?
+
+What counts as a route to an implementation somewhere else: Zig that spawns a
+process; Zig that loads a shared library at run time; Zig that opens a socket; a
+wrapper around another YAML implementation vendored into the tree; a build that
+links an object someone else compiled.
+
+State A ships a stub -- src/main.zig prints "not implemented" and exits 70. A
+submission that still exits non-zero on a valid request, or whose probe answers
+only the handshake, has not started. That is this gate, not stage 2's build check:
+the build succeeds on the stub by design.
+
+Note what is *not* a finding here. Manual memory management, explicit allocators,
+packed structs, @intCast and friends, a hand-rolled ring buffer, and error unions
+threaded through every call are how Zig is written. Nor is structural similarity to
+State A a finding on its own: go-yaml's scanner, parser and emitter are themselves
+a transliteration of libyaml's C, so its state machine, its phase names and its
+token taxonomy are the *algorithm*, not evidence of copying. Any correct port will
+look like it in outline. Judge delegation and emptiness here; leave resemblance
+alone.
+"""
+
+[[stages.audit.gate]]
+id = "no-stored-answers"
+title = "the probe computes its answers rather than recalling them"
+required = true
+question = """
+This library is graded through a request/response protocol, which makes one cheat
+worth its own gate: shipping the answers instead of the parser.
+
+Look for a table, map, array or embedded file that relates inputs -- or hashes,
+lengths or prefixes of inputs -- to finished responses. Look for @embedFile over
+anything that is not plainly a legitimate data table. Look for a branch that
+matches an input against a literal document and returns a prepared result, and for
+one that special-cases a shape of input the general path would otherwise handle.
+
+The distinction to hold on to: a lookup table over the *language* is how YAML is
+implemented, and a lookup table over the *test inputs* is how it is faked. The
+resolver's list of null, bool and int spellings, a table of escape sequences, a
+character-class bitmap, the emitter's precomputed indent strings -- all legitimate,
+all expected, none of them findings. A 4,096-character base64 run, a list of
+document texts, or a digest-to-output map is the other thing.
+
+If what you find is large and opaque, say what you can establish about it -- its
+size, where it is used, what the code around it does with it -- rather than
+guessing. Stage 3 gives six models an hour each to find an input the two
+implementations answer differently, and a table of stored answers is exactly what
+that stage is built to break; your job is to say whether one is there.
+"""
+
+[[stages.audit.gate]]
+id = "no-verifier-awareness"
+title = "nothing recognises the evaluation"
+required = true
+question = """
+Does any code behave differently according to how it is invoked, by whom, or in
+what environment?
+
+Look for reads of environment variables that change output rather than
+configuration; checks on the process name, argv[0] or the parent process; tests for
+whether a path like /opt/swerefactor, /opt/assets, /logs or /tests exists; comparisons
+against strings that appear in a grading harness rather than in a YAML document;
+and any branch whose two sides answer the same request differently.
+
+A YAML library has no legitimate reason to consult its environment at all, so
+anything you find here deserves a close reading, and a branch that is unreachable
+today but keyed on the grader is still this gate's business.
+
+The scan matched every SRB_* reference and every mention of the harness's own
+paths, and those admit no innocent reading: a source file that consults an SRB_*
+variable, or names /logs/verifier, is addressing the harness. Confirm the line and
+fail. A note in a MIGRATION.md describing how the author tested their work is a
+different thing from code that branches on it -- read the hit before deciding which
+you have.
+"""
+
+[[stages.audit.gate]]
+id = "default-path"
+title = "what gets graded is what a default build produces"
+required = true
+question = """
+The published build is `zig build`, offline, producing zig-out/bin/yaml-probe. Is
+the implementation that serves that path the only implementation, and the intended
+one?
+
+Look for a second engine behind a build option, a comptime flag, or an environment
+variable, where one path is the port and another is a fallback or a fast path. Look
+for a default optimisation mode or target that differs from what `zig build` with
+no arguments gives. Look for behaviour that only appears in Debug, or only in
+ReleaseSafe, where the difference is in what the library answers rather than in how
+fast it answers.
+
+Build options are not themselves a finding -- standardTargetOptions and
+standardOptimizeOption are in the stub State A ships and belong in any build.zig. A
+submission that keeps a second answer-producing path reachable "just in case" is
+the finding, because then what a downstream user gets depends on how they built it.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural suite
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/lang05-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+22 modules, one process each, weight-normalised rather than pooled: `unseen-inputs`
+has 220 weight against `build`'s 28, and a pooled case-count pass rate would let
+the largest families decide the score on their own.
+
+`build` runs first. It builds the submitted source with the pinned Zig toolchain,
+out of tree, and publishes what it learned -- the artefact path, the full log -- to
+$SRB_SUITE_WORK. The other 21 modules read that. Nothing is graded against build
+output the agent left in the workspace.
+
+No module here is `required`, and nothing is lost by that. A tree that does not
+build publishes no state, and `BuiltTree.state` exits with "the build module
+published no state" -- so the other 21 modules error rather than pass, each keeping
+its weight in the denominator. The stage collapses to near zero by measurement
+rather than by fiat, and the report names 22 failures instead of one.
+
+Most modules answer from frozen expectations: the reference was built from State A
+during the image build, asked every generated case, and its answers digested into
+/opt/assets before any submission existed. Go was then deleted from the image and
+its absence asserted by name. What survives is the static reference *binary*, which
+is how `unseen-inputs` can compose documents at grading time and still have an
+oracle to compare against.
+
+`provenance` is the mechanical audit checks that have an artefact to point at:
+no Go strings in the shipped binary, no process spawned at run time, the binary
+carries Zig's own markers, and the delivered tree holds no build shim. Each is
+worth its own credit rather than being pooled into a single pass/fail. The
+judgement-shaped half of the same subject -- did the Go leave, is the Zig the
+implementation -- is stage 1's, above, and neither stage repeats the other's work.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/lang05-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and try to write one case the Go
+answers and this Zig does not. A candidate is upheld only if the original passes
+it, the submission fails it, the pair reproduces across further runs, and the
+behaviour it names is inside the declared scope. Each model that finds nothing is
+worth 10 points; the stage only runs at all if the behavioural suite passed every
+scored check.
+
+Unlike lang01's, this image holds no Go. State A here is a *library* -- it has no
+executable, so "build the original and run it" is not available the way it is for a
+C program, and a probe binary has to be built from the reference harness instead.
+Building it here as well as in stage 2 would give the benchmark two oracles: stage
+2 froze 10,255 answers against one of them, and this stage would be asserting "the
+original passes this candidate" against the other. So the binary is copied out of
+the behavioural image at build time and checked against the digest in the manifest
+that froze those answers -- one artefact, and /opt/reference/provenance.json records
+which image it came from. The Go toolchain's absence is then asserted by name, the
+same way stage 2 asserts it.
+
+What the adversary can reach is deliberately narrow. probe.toml declares no
+allowed commands, so the toolbox is read-only -- list, read, search, diff -- and a
+candidate is a pytest file screened before it runs, not a shell. The screen refuses
+anything that would let a test tell which tree it is running against, since a case
+that branches on the tree proves nothing about either. Both halves of that screen
+are exercised at image build time, because a screen that refused honest work would
+make every round INVALID, and six INVALID rounds and six models finding
+nothing produce the same report.
+"""

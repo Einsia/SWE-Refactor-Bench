@@ -1,0 +1,248 @@
+schema = "swerefactor.verification-probe/1"
+task = "lang03-sqlparse-python-to-go"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file run against a tree this script prepares.  The
+# original needs no build and is reached through an interpreter; the submission is
+# compiled into a sqlformat and four probe tiers.  Both are then published behind
+# the same argv table and the same fixed paths, so a candidate sees one library
+# answering questions and cannot tell which tree it is testing except by the
+# answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two
+# implementations of a hand-written SQL lexer differ somewhere.  The allow list is
+# sqlparse's own published contract -- what 0.5.3 does, as its own test suite and
+# its documented API describe it.  The deny list is what instruction.md told the
+# agent is explicitly not compared.  They have to agree: a scope that forbids what
+# the instruction promised would make the task unwinnable, and a scope that permits
+# what the instruction excluded would make it unlosable.
+[scope]
+allow = [
+  "sqlparse.format output byte for byte, under every documented option and every combination of them: keyword_case, identifier_case, strip_comments, strip_whitespace, truncate_strings, use_space_around_operators, reindent, reindent_aligned, indent_width, indent_tabs, indent_after_first, indent_columns, wrap_after, comma_first, compact, right_margin, output_format",
+  "sqlparse.split and its statement boundaries: semicolons inside strings, comments, identifiers and dollar-quoted bodies, statements with no trailing semicolon, empty statements, and strip_semicolon",
+  "sqlparse.parse and the grouped tree: which nodes exist, how they nest, what token types the leaves carry, and the text each node covers",
+  "the lexer's raw output before grouping: every token type the regex engine can emit, in order, for any input",
+  "the token-type lattice: the identity and the rendered name of every ttype, and the parent-child relation between them",
+  "the node read surface as the library documents it: get_real_name, get_alias, get_name, get_parent_name, get_typecast, get_ordering, is_wildcard, has_alias, normalized, value, ttype, and the None each returns where it does not apply",
+  "the keyword tables and their resolution: which words are keywords in which dialect, the regular expressions that classify names, and the effect of add_keywords on subsequent lexing",
+  "the filter stack: each documented filter alone and the documented stacks whole, at the stage the library installs it",
+  "validate_options: which option values are accepted and the exact exception message for those that are not",
+  "encoding handling: parse and format over bytes with and without a declared encoding, a BOM, an encoding the library does not know, and text whose bytes do not decode under the encoding it was given",
+  "round-trip losslessness: str() over a parsed statement must reproduce the input exactly, for any input, which is the library's own central invariant",
+  "the command-line interface: every flag sqlformat(1) documents, --help and --version output, exit statuses, reading from stdin and from named files, and its behaviour on a file that does not exist or cannot be decoded",
+  "resource behaviour on verification input: deeply nested parentheses and case expressions, very long statements, pathological comment and string patterns, and unterminated constructs must not crash, hang past a generous timeout, or exhaust memory where 0.5.3 does not",
+]
+deny = [
+  "wall-clock performance: a submission may be slower than the Python, and any assertion of the form 'this must complete in N milliseconds' is out of scope. A hang that outlives the run timeout is in scope, as above; a constant factor is not.",
+  "peak memory as a number, allocation counts, and the identity or address of any object -- Python's repr of an object carries its id, and nothing about a port can reproduce it",
+  "the internal structure of the submission: package layout, file names, type names, function names, method sets, and whether any given piece of the port lives where the Python did",
+  "the concrete type of anything the library returns, beyond the node kind and token type the probe renders: a Go port has no Python classes and cannot be asked for one",
+  "the contents of any build directory, the names of intermediate artifacts, compiler diagnostics, and anything in a build log",
+  "text written to stderr on a successful run, and the exact wording of any diagnostic the CLI prints on failure -- exit status is in scope, prose is not",
+  "the presence, absence or content of Python source, which stage 1 already judges",
+  "anything requiring an interpreter, or the Python implementation, to be present in the submission",
+  "the wording of a probe defect: a request the probe refuses as malformed or unanswerable is answered identically by both halves on purpose, and a test that asserts on one has found nothing",
+  "behaviour on input the original also gets wrong -- a candidate must pass on the original, which is what makes it a migration defect rather than an upstream bug",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Almost nothing here is timing
+# adjacent, but a flake that costs a submission ten points is a bug in the
+# benchmark, not a finding -- and the pathological-input cases are exactly where a
+# borderline timeout could produce one.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Build + pytest, for one candidate, on one tree.  The build happens once per tree
+# and is cached, so only the first candidate pays for it; 1200s is the ceiling for
+# that first one, on a cold Go build of a module this size plus four probe tiers.
+candidate_timeout_sec = 1200.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one document, one library call
+or one command line that the Python answers correctly and the Go does not.  A
+round that finds nothing pays the submission 10 points; a round that errors pays
+nothing and is reported as an error rather than as either verdict.
+
+A candidate reaches the library two ways: sqlformat(1), and the probe protocol
+through srbsqlparse.ask().  The second is how the lexer, the token model, the
+parse tree, the keyword tables, the filter stack and option validation get
+attacked, because none of them is reachable from a command line.
+
+The frozen corpus stage 2 grades against is deliberately absent from this image.
+A candidate composes its own documents.  Nothing in that corpus fails on a
+submission that reaches this stage -- stage 2 pays nothing short of every scored
+check, so a tree with a case still failing never gets here.  The corpus stays out
+anyway: it is the map of what stage 2 already asked, and this stage is paid to find
+what stage 2 did not reach.  An adversary handed it could re-find a defect stage 2
+was built to catch, and win a round without reading any code.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds
+# converge on the same three obvious statements; six pointed ones cover the
+# library.  It is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-lexer-and-grouping"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the lexer before grouping, through the `lex` op: SQL_REGEX is an ordered list
+of patterns and the order is the semantics, so look for input where a later
+pattern should have won -- a keyword that is also a function name, a number
+immediately followed by an identifier character, an operator that is a prefix
+of another, a dollar-quoted body containing what looks like a comment, an
+unterminated string or comment at end of input, and the `unicode-escape`
+fallback path.
+
+Then the grouping stage, through `tree` and `tok`: engine/grouping.py runs a
+fixed sequence of passes and each rewrites the token list in place, so the
+interesting inputs are the ones where a pass changes what a later pass sees --
+nested parentheses and CASE, an alias on a function call on a subquery,
+comments between an identifier and its alias, an operator at a boundary the
+pass did not expect, and constructs left unterminated.
+"""
+
+[[adversary]]
+id = "a02-node-api-and-keywords"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the node read surface, through `api`: get_real_name, get_alias, get_name,
+get_parent_name, get_typecast, get_ordering, is_wildcard, has_alias and
+normalized, applied to nodes where the answer is not obvious -- a quoted
+identifier with a schema, an alias that is a keyword, a function whose name is
+a keyword, a cast inside an alias, an ORDER BY on an expression, a wildcard
+inside a function -- and every accessor asked where it does not apply, which
+must be None on both halves.
+
+Then keyword resolution, through `keyword`, `kwtable`, `kwnames` and `kwlex`:
+the tables are consulted in a fixed installation order and the first hit wins,
+so look for words in more than one table, words that are keywords in one
+dialect only, the case-folding the lookup does, words that match one of the
+classifying regexes as well as a table, and the effect of add_keywords on
+lexing afterwards.
+"""
+
+[[adversary]]
+id = "a03-reindent-and-format-options"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the reindenting filters, through `fmt` with your own presets: reindent and
+reindent_aligned are the most stateful code in the library -- they track
+depth, column offsets and pending newlines across a token stream -- so look
+for statements where the offset is computed from something a port would
+compute differently: nested subqueries, a JOIN chain, a CASE inside a select
+list, comments in positions that carry indentation, indent_columns with
+indent_tabs, and wrap_after at exactly the margin.
+
+Then the rest of format(), through `fmt` with your own presets: keyword_case
+and identifier_case against quoted and non-ASCII identifiers, strip_comments
+where a comment is the only thing separating two tokens, strip_whitespace
+inside strings, truncate_strings at a boundary, use_space_around_operators on
+operators that are also prefixes, comma_first, compact, right_margin, and
+every output_format -- plus combinations, which is where filters installed at
+different stages interact.
+"""
+
+[[adversary]]
+id = "a04-split-and-encoding"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+statement boundaries, through `split`, `split-strip` and `parsestream`: a
+semicolon inside a string, a comment, a quoted identifier, a dollar-quoted
+body or a BEGIN...END block is not a boundary, and one after the last
+statement may or may not produce an empty one -- also CRLF and lone CR line
+endings, a document that is only whitespace or only a semicolon, and
+strip_semicolon over each of these.
+
+Then bytes and encodings, through `rt-raw`, `rt-enc`, `err-encoding` and
+sql_bytes(): a BOM under utf-8, utf-8-sig and utf-16, bytes that do not decode
+under the encoding they were given, an encoding name the library does not
+know, a name that is an alias of one it does, mixed line endings inside a
+multi-byte character, a lone surrogate, and the difference between a document
+with a declared encoding and one without.
+"""
+
+[[adversary]]
+id = "a05-roundtrip-and-validate"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+losslessness, through `rt` and `tostr`: str() over a parsed statement must
+reproduce the input exactly, which is the library's central invariant and the
+one property a port cannot fake -- so hunt for input where the port drops,
+reorders or rewrites a byte. Whitespace runs, comments at the very start or
+end, an unterminated construct, a NUL or control character inside a string,
+and anything the lexer classifies with a fallback pattern.
+
+Then option validation and the error surface, through `validate` with your own
+cases: which values validate_options accepts, which it rejects and with
+exactly what message -- a wrong type, a negative width, a value out of range,
+an unknown option name, mutually exclusive options together, and the boolean-
+adjacent values a dynamically typed original would coerce where a static port
+would not.
+"""
+
+[[adversary]]
+id = "a06-pathological-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+verification input: the library's grouping passes recurse and its regexes
+backtrack, so deeply nested parentheses and CASE expressions, thousands of
+unclosed constructs, a very long single line, an enormous comment, and a
+statement built to make one regex backtrack are all places a port with
+different recursion or a different regex engine may fail where 0.5.3 does not.
+A crash, a hang or a wrong answer is the finding, not the time taken.
+
+Then, with whatever budget remains, nothing in particular -- read the Python
+and follow what looks weakest. The other five rounds were told where to look,
+so this tail is where anything they were not told about has to be found.
+"""

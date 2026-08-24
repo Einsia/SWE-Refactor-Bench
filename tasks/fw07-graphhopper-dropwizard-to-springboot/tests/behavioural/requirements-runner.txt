@@ -1,0 +1,52 @@
+# The stage's own Python stack, hash-pinned.
+#
+# Deliberately tiny.  The suite drives both servers over real HTTP using raw
+# sockets from the standard library -- `harness/wire.py` assembles the request line
+# byte for byte -- so nothing on this list can drift into the behaviour being
+# graded.  No httpx, no requests, not even http.client: every convenience client
+# normalises a target, and several of the most informative cases in this corpus are
+# destroyed by any client that rewrites what it was given.  `err-encoded-slash`
+# sends `/route%2Fnonsense`, `err-double-slash-mid` sends a doubled separator mid
+# path, and `err-trailing-slash` differs from its sibling by one byte; a client that
+# canonicalises paths turns all three into a different request than the one the case
+# exists to ask.
+#
+# No PyYAML, and that is a real decision rather than minimalism.  This stage writes
+# YAML -- the profile configs in data/configs/ -- but writes it by string
+# substitution of @APP_PORT@ and friends, never by parsing and re-emitting.  The
+# service being graded is the only component whose YAML reader matters, and routing
+# the config through a second parser first would mean grading a document Python
+# produced instead of the one committed here.
+#
+# No JSON library either: the standard library's is what compares bodies, and a
+# faster one would change nothing except which parser's laxness the comparison
+# inherits.
+#
+# pytest-timeout is the one addition over the bare minimum, and it is not optional.
+# The eight pytest modules read a pre-published ledger and finish in milliseconds,
+# but pytest.ini sets `timeout_method = thread` for a reason: the build module talks
+# to two live servers over blocking socket reads, and a submission that accepts a
+# connection and never answers would otherwise hang until the suite-level timeout
+# killed the whole stage, losing the other 87 cases along with the one that hung.
+#
+# The graded program is a JVM service built by Maven and the image's JDK, so unlike
+# a Python task this file has no overlap at all with what the submission depends on.
+# The two cannot collide, which is why the versions here can be chosen for the
+# grader's convenience alone.
+#
+# tests/audit/requirements-scan.txt and tests/verification's image pin the
+# same versions of the packages they share with this list, so all three stages run
+# the same pytest and there is one runner to reason about across the task.
+#
+# Installed with --require-hashes, so a substituted artefact fails the image build
+# rather than the grading run.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6
+iniconfig==2.0.0 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759
+pluggy==1.5.0 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest-timeout==2.3.1 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e

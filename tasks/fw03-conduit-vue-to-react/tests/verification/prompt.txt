@@ -1,0 +1,121 @@
+You are looking for a place where two builds of the same web application behave
+differently.
+
+One was built from a Vue 2 codebase. The other was built from a React 18 codebase
+that is supposed to be a faithful port of it: same screens, same routes, same
+rendered markup, same API calls, same stored session. Somebody has already checked
+100 scenarios and found no difference. Your job is to find the 101st.
+
+You have both source trees and you can drive both builds. You do not know which
+build is which, and you cannot find out. That is deliberate: a test that passes on
+one and fails on the other is only interesting if the reason is the application's
+behaviour.
+
+
+WHAT YOU WRITE
+
+One pytest file, handed to `try_test`. It is run twice -- once against each build
+-- and you are not told which run is which. You succeed when your file passes
+against the Vue build and fails against the React build, which is what "these two
+behave differently" means operationally.
+
+`try_test` is how you find that out, and it is the only way: you have no shell.
+Send a candidate and you are told the outcome on each build separately, with the
+output. A test you reasoned about but never ran has established nothing -- run
+your ideas, you have budget for many.
+
+    import srbprobe
+
+    def test_tag_filter_survives_going_back():
+        obs = srbprobe.observe([
+            {"goto": "#/"},
+            {"click": ".sidebar .tag-pill"},
+            {"back": True},
+        ], probes=[".feed-toggle .nav-link.active", ".article-preview"])
+        assert obs.url == "/#/"
+        assert obs.probe(".feed-toggle .nav-link.active").text == "Global Feed"
+
+`srbprobe.observe(steps, *, token=None, probes=None, name=None)` drives one
+scenario in a real browser against a real server with real fixture data, waits
+for the page to settle, and returns what it rendered. Read
+`lib/srbprobe.py` -- it is short, and it documents the five step forms, the
+observation accessors, and the standard 35 selectors that are always observed.
+
+Your assertions must be about the observation. Assert the URL the router reached,
+the text and count a selector matched, the nodes under `#app`, the live value in a
+form field, the API requests the page made and their order, what ended up in
+localStorage, and which uncaught errors were raised. All of that is behaviour a
+user or the server can see.
+
+
+WHAT COUNTS
+
+A finding is a difference in what the application does. The clearest ones tend to
+live where two frameworks disagree about mechanism but the product is supposed to
+look the same:
+
+  - routing: hash routes, nested routes, route params that change while the
+    component stays mounted, redirects, the unknown-route case, going back
+  - data flow on navigation: which requests fire, in what order, how many times,
+    with which query string, and with or without the credential
+  - form state: what a field contains after a failed submit, after navigating
+    away and back, after the value is changed by something other than typing
+  - conditional rendering: what a screen shows before its data arrives, when the
+    API returns an error, when a list is empty, when the viewer is anonymous
+  - session: what is written to localStorage and when, what is read back on a
+    cold boot, what happens when a stored credential is stale
+  - what the app does that is not a screen: the document title, classes it puts
+    on `<body>`, the service worker and manifest it registers
+
+Read both trees before you write anything. The Vue tree tells you what the
+behaviour is supposed to be; the React tree is where a port drops a detail. A
+suspicious diff in the source is a hypothesis -- you still have to demonstrate it
+through the observation, because a difference nobody can observe is not a finding.
+
+
+WHAT DOES NOT COUNT
+
+Your test is rejected, and scores nothing, if it passes on one build and fails on
+the other for any reason other than the application's behaviour:
+
+  - Identifying which build you are on, however you learn it -- from the
+    environment, from a path, from a file on disk, from the bundle's contents,
+    from anything at all -- and then behaving differently. This is the one that
+    gets checked hardest, because it would "discriminate" between any two builds
+    and so says nothing about this migration.
+
+  - Asserting the framework rather than the product: a `data-reactroot`
+    attribute, a `data-v-` scoped-style attribute, a class only one framework
+    emits, the shape of a bundle filename, the presence of a global. The
+    observation deliberately erases these, and reaching around it to find them is
+    the same offence as identifying the tree.
+
+  - Asserting anything about the source: which files exist, what they import,
+    what a variable is called. You have both trees to form a hypothesis, not to
+    assert against.
+
+  - A race. Your test is run three times against each build and must give the
+    same answer every time. The driver settles the page after every step, so a
+    result that depends on catching an intermediate state will not survive the
+    reruns.
+
+  - Reaching outside the two builds: the network is off, and nothing you write
+    should want it.
+
+Also uninteresting, though not an offence: the port failing to build or install
+at all. That has already been measured. If your run reports that the tree does not
+build, there is nothing here for you.
+
+
+HOW TO WORK
+
+Read the Vue tree, form a specific hypothesis about a behaviour the port would
+plausibly drop, and check the React tree to see whether it did. Then write the
+smallest scenario that would show it, and confirm your test passes on one build
+and fails on the other. A file with one focused test is worth more than a file
+with twenty guesses, because a single test that misfires on both builds is worth
+nothing at all.
+
+Prefer scenarios a user could perform. `{"goto": ...}` is a cold boot at a URL and
+`{"click": ...}` is an in-app transition; a great many porting defects only appear
+on one of those two paths, so it is worth knowing which one you are testing.

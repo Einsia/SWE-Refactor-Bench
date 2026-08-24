@@ -1,0 +1,35 @@
+{
+  "_comment": "Build-time input, and still present at /opt/srb/manifest-target.json in the agent image: the warm-up step at the end of this environment's Dockerfile copies it to /opt/warm/package.json and the offline mirror is built from it, so it cannot be deleted in the layer that uses it. It is not a hint. This is the union of every package the target closure is allowed to install, used to warm the npm cache and to prove the mirror can satisfy State B -- and instruction.md prints that same closure in full, because a solver who cannot see which packages the mirror carries cannot choose between them. The submission writes its own package.json; nothing reads this one at grading time.",
+  "name": "srb-fw02-target-closure",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "fastify": "^5.10.0",
+    "@fastify/static": "^10.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/compress": "^9.1.0",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/etag": "^6.2.0",
+    "lodash": "^4.17.21",
+    "lodash-id": "^0.14.1",
+    "lowdb": "^1.0.0",
+    "nanoid": "^3.3.7",
+    "pluralize": "^8.0.0",
+    "yargs": "^17.7.2",
+    "chalk": "^4.1.2",
+    "json-parse-helpfulerror": "^1.0.3",
+    "please-upgrade-node": "^3.2.0",
+    "server-destroy": "^1.0.1"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.28.3",
+    "@babel/core": "^7.28.4",
+    "@babel/node": "^7.28.0",
+    "@babel/preset-env": "^7.28.3",
+    "cross-env": "^7.0.3",
+    "jest": "^29.7.0",
+    "server-ready": "^0.3.1",
+    "temp-write": "^4.0.0",
+    "os-tmpdir": "^2.0.0"
+  }
+}

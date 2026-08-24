@@ -1,0 +1,189 @@
+# Stage 2 -- the behavioural modules.
+#
+# Ten modules, one process each, ~2,680 checks. Every one of them grades something
+# a Gradle build produced: a jar, a class file, a manifest, a published repository,
+# a JUnit report. None of them reads the submitted repository. That is the line
+# this stage is built around, and it is not stylistic -- deciding something like
+# "Maven was thoroughly removed" by running four regexes over the build files is a
+# check any submission passes by renaming a variable. Questions about what the
+# submitted files *say* are stage 1's, answered there by a model reading them. Here
+# the same properties are asked by their consequences: not "does the build script
+# set release 7", but "is the class file version 51".
+#
+# Scoring is a weight-normalised mean of per-module pass rates, not a pass rate
+# over the pooled checks (swerefactor.scoring.grade_behavioural). It has to be: the
+# `tests` module is 1,468 checks and `derive` is 30, and pooling would let the JUnit
+# report decide the score by itself while the module descriptor, the OSGi manifest
+# and the published POM together moved it by two percent.
+#
+# The weights below are relative importance and are normalised by the runner, so
+# they do not have to sum to anything in particular. They sum to 1.00 anyway,
+# because a reader should be able to see a module's share without doing division.
+schema = "swerefactor.behavioural-suite/1"
+task = "build02-gson-maven-to-gradle"
+
+# `lib/` goes on PYTHONPATH, which is what lets each module `import builder` and
+# `-p srbfixtures` resolve without a conftest.py per directory.
+lib_dir = "lib"
+
+# Ten minutes for a module that reads a build tree the `build` module already
+# produced. Overridden per module below wherever the work is not just reading.
+default_timeout_sec = 600
+
+[metadata]
+about = """
+`build` is first, and the other nine depend on it: it runs the whole
+eight-configuration matrix once into $SRB_SUITE_WORK and writes builds.json, and
+the other nine restore that ledger rather than building anything themselves.
+Seventy-two Gradle invocations instead of eight would not only cost an hour, it
+would let two modules disagree about what the build did.
+Ordering, not a dependency check. A submission whose `assemble` never reached four
+jars scores zero in `build` and fails the checks of every module that wanted those
+jars, because each of them has nothing to read. No module's failure cancels
+another's result, and none needs to: every weighted module has to pass every scored
+check for the stage to pay at all.
+"""
+
+# --------------------------------------------------------------------------- #
+# The matrix, and the four things only it can observe
+# --------------------------------------------------------------------------- #
+# Eight Gradle invocations, each against its own pristine copy of the delivered
+# sources: as delivered, with the test task, publishing, under -Pversion, twice in
+# a row, from a deeper directory, and with one source and one test file added.
+#
+# First to run, and worth very little. Those are not in tension: running first is
+# what lets the other nine read one ledger, `weight` says how much of the score its
+# own four checks are worth. A build that failed is charged by every check that
+# wanted its artefacts, each naming the configuration it could not read; charging it
+# again here would make one broken build look like two.
+#
+# Two hours: the `full` configuration alone runs 1,328 test cases across three
+# projects, and `version` runs the whole build again. The realistic total is ~35
+# minutes, so this is a hang ceiling, and it is set below the stage's 10,800s so a
+# build that wedges still leaves the other nine modules time to report what they
+# could not read.
+[[module]]
+id = "build"
+title = "the build runs, offline, with no engine the tree does not declare"
+weight = 0.04
+command = ["python3", "run.py"]
+timeout_sec = 7200
+about = """
+Prepares the sources (build output removed, tree snapshotted), shadows every engine
+the delivered tree does not declare with stubs that fail and record their argv, runs
+the eight configurations through the dialect the tree does declare, and publishes
+builds.json. Its own four checks are the ones nothing downstream can make: the
+snapshot exists, the engines that were shadowed are off PATH, `assemble` produced
+the four jars, and nothing shelled out to one of them on the way.
+
+The engine list is derived rather than fixed, because this module has to be able to
+build State A -- every expectation the other nine compare against was recorded from
+it, so a stage that cannot build its own oracle cannot show its expectations are
+satisfiable, and State A scores full marks here as it should. Whether the migration
+happened is stage 1's question, gated there by `maven_retired` and
+`gradle_is_the_build`; a gate failure there means nothing this stage measures can be
+credited, whether or not it ran.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour
+# --------------------------------------------------------------------------- #
+# The heaviest module and the heaviest weight, because this is the only one that
+# asks whether the code still works. 1,328 upstream cases, case by case from the
+# JUnit XML, including the one that asserts a ProGuard pass happened -- a test that
+# fails if the migration dropped the obfuscation step and passes if it did not,
+# which no jar inspection can tell you.
+#
+# Ninety minutes: this module does not run the tests (the `full` configuration
+# already did) but it does parse three projects' reports and reconcile them against
+# the frozen 1,328-case inventory.
+[[module]]
+id = "tests"
+title = "the upstream test suite still passes, case by case"
+weight = 0.16
+timeout_sec = 900
+
+# What is in the four jars, entry by entry: 282 names, their per-artifact placement,
+# their compression, and the ones that must NOT be there. This is where a jar that
+# has every class but puts module-info.class at the root is charged, and where a
+# sources jar attached to the wrong project is caught.
+[[module]]
+id = "entries"
+title = "the four jars contain what State A's contained"
+weight = 0.13
+timeout_sec = 900
+
+# The three artefacts a migration is most likely to hand-write instead of derive:
+# the OSGi manifest bnd computes from instructions, the JPMS descriptor compiled at
+# a different release level into a directory that is not the jar root, and the
+# generated GsonBuildConfig. Small in checks, large in weight -- these are the
+# behaviours that make this task a build-system migration rather than a compile.
+[[module]]
+id = "derive"
+title = "the generated artefacts are generated"
+weight = 0.13
+
+# The jars, on a JVM. Loads gson from the built artefact and exercises it,
+# resolves the module graph with --module-path, and reads the versioned descriptor
+# the way the runtime does. A declaration and a resolution are different claims:
+# `jpms` reads what the descriptor says, this module checks the JVM agrees.
+[[module]]
+id = "runtime"
+title = "the jars work on a JVM, and the module resolves"
+weight = 0.11
+timeout_sec = 1200
+
+# Twenty-one manifest headers, main jar and siblings. Separate from `derive`
+# because "the manifest is generated" and "the manifest is correct" are different
+# failures and the report should name which one happened: a bnd configuration
+# that produces twenty of twenty-one headers is a different submission from one
+# that pasted all twenty-one.
+[[module]]
+id = "manifest"
+title = "the OSGi bundle headers are the ones bnd produced"
+weight = 0.10
+
+# The version is an input. This module reads the `version` configuration -- the
+# whole build again under -Pversion=7.11.3 -- and checks that all five places
+# follow: the generated source, the four jar names, Bundle-Version, the four
+# versioned Export-Package clauses, the module descriptor's version and the
+# published POM. A submission that pasted 2.10.1 into each of them passes every
+# other module in this suite and fails here.
+[[module]]
+id = "version"
+title = "the version reaches all five places from one input"
+weight = 0.10
+timeout_sec = 900
+
+# 271 class files, byte for byte, against ground truth captured from a State A
+# build -- plus the same comparison against a second build in the same tree
+# (idempotence) and against a build from a deeper directory (relocation). The
+# largest module by check count and deliberately not the largest by weight: it is
+# 570 restatements of one property, and a submission that got the compile settings
+# wrong should not lose the stage twice for it.
+[[module]]
+id = "bytecode"
+title = "the class bytes are identical, at both release levels"
+weight = 0.09
+timeout_sec = 900
+
+# What a consumer resolves. The published POM must carry no runtime dependencies at
+# all, which is the opposite of what Gradle's `implementation` and `api`
+# configurations produce by default, so the correct answer here is a configuration
+# the Maven POMs never mention -- and the failure is invisible until someone
+# downloads the result.
+[[module]]
+id = "publication"
+title = "the published artifact set is the one State A released"
+weight = 0.09
+
+# What the module descriptor says: name, version, exports and their targets,
+# requires and their static/transitive modifiers, and the three lists that stay
+# empty. Read for meaning rather than compared byte for byte, because State A's
+# descriptor is synthesised by moditect with ASM and a correct javac-compiled one
+# differs by 40 bytes -- both resolve identically, and a byte comparison would
+# reject the correct one.
+[[module]]
+id = "jpms"
+title = "the module descriptor declares what State A's declared"
+weight = 0.05

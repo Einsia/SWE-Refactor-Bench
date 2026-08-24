@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# Start the frozen State A reference service.
+#
+#   json-server-oracle [--port N] [-- <extra json-server args>]
+#
+# This is json-server 0.17.4 on Express 4, installed read-only at /opt/oracle
+# with its own node_modules. It keeps answering exactly as it did on day one no
+# matter how /workspace/repo is rewritten, so it is the behavioural ground truth:
+# when the contract in instruction.md is not specific enough, ask the oracle.
+#
+# Defaults to 127.0.0.1:8899 (also in $JSON_SERVER_ORACLE_URL). Each boot copies
+# the seed database to a private temporary file, so a run that mutates data does
+# not affect the next one -- and never touches /workspace/repo.
+#
+# To stop it, use the pidfile this script writes:
+#
+#   kill "$(cat /tmp/json-server-oracle-8899.pid)"
+#
+# Prefer that over `pkill -f json-server-oracle`: the pattern also matches the
+# shell the caller typed it on, because the string is in that command line, so it
+# can take the caller's own session down along with the server. The pidfile is
+# per-port, so several oracles on different ports stop independently.
+
+set -euo pipefail
+
+port="${JSON_SERVER_ORACLE_PORT:-8899}"
+host="${JSON_SERVER_ORACLE_HOST:-127.0.0.1}"
+extra=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --port|-p) port="$2"; shift 2 ;;
+        --host|-H) host="$2"; shift 2 ;;
+        --) shift; extra=("$@"); break ;;
+        *) extra+=("$1"); shift ;;
+    esac
+done
+
+if [ ! -d /opt/oracle ]; then
+    echo "json-server-oracle: /opt/oracle is missing from this image" >&2
+    exit 1
+fi
+
+db="$(mktemp -t oracle-db-XXXXXX.json)"
+pidfile="/tmp/json-server-oracle-${port}.pid"
+
+# node runs as a child, not via exec.  exec would replace this shell, and with it
+# both the EXIT trap below -- leaking one seed copy per boot -- and the only
+# occurrence of this script's name in the process table, leaving `pkill -f
+# json-server-oracle` to match the caller's own shell instead of the server.
+cleanup() {
+    trap - EXIT INT TERM
+    if [ -n "${child:-}" ]; then
+        kill "$child" 2>/dev/null || true
+        wait "$child" 2>/dev/null || true
+    fi
+    rm -f "$db" "$pidfile"
+}
+trap cleanup EXIT INT TERM
+
+cp /opt/oracle/db.seed.json "$db"
+chmod u+w "$db"
+
+cd /opt/oracle
+node ./lib/cli/bin.js "$db" \
+    --host "$host" \
+    --port "$port" \
+    --routes /opt/oracle/routes.json \
+    "${extra[@]}" &
+child=$!
+
+# The pidfile names the node process, so `kill "$(cat <pidfile>)"` stops the
+# server and this wrapper exits with it, running the cleanup above.
+printf '%s\n' "$child" > "$pidfile"
+
+wait "$child"

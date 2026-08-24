@@ -1,0 +1,299 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "fw06-uploadserver-gorillamux-to-nethttp"
+
+# This stage measures ONE thing: whether the rewritten repository still answers
+# what the original answered.  Nothing here asks whether the rewrite happened.
+#
+# That division is not a style choice, and the reason is visible from a single
+# test: feed State A in unchanged and see what it scores.  It has to score full
+# marks.  Every expectation in data/golden-statea.json was recorded from State A,
+# so a suite State A fails is a suite disagreeing with its own transcript.
+#
+# A module here asserting the retired router was gone would do exactly that, and
+# there is nowhere in this stage to put one that does not: State A imports that
+# router, so the assertion fails the oracle whatever weight it carries, and the
+# number it produces would read as a migration-quality score while measuring two
+# welded axes.
+#
+# So the axes are separated, and each is measured where it can be measured well:
+#
+#   whether the rewrite happened   stage 1, over BOTH trees' source: the import
+#                                  graph, go.mod, go.sum, vendor/, replace
+#                                  directives, the 27 alternative routers, and the
+#                                  shape of a router copied under new names.  Its
+#                                  gates are required, and a failure scores the
+#                                  whole submission zero before this stage runs.
+#   whether behaviour survived     here.
+#   whether anything else broke    stage 3, where six adversaries construct
+#                                  inputs this corpus does not contain.
+#
+# A submission that renames some identifiers and changes nothing therefore passes
+# this stage completely, and that is the correct outcome for a stage that only asks
+# about behaviour.  It is also a submission stage 1 rejects on sight, and one the
+# agent could not have built anyway: the agent's own mirror carries no archive for
+# the retired router, so a tree that still imports it does not compile while the
+# work is being done.  That is a harder constraint than any grader check.
+#
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the ported BEHAVIOUR would be missing?
+#
+# `routing` carries the most, and on this task that is not a judgement call.  The
+# retired router matched `PathPrefix("/files")` as a STRING prefix, which ServeMux
+# has no pattern for, and reproducing it is the one part of this migration that
+# cannot be done by translating a registration line into a pattern.  Six
+# observable behaviours turn on it -- `/filesabc` reaching the files handler,
+# `/file` not reaching it, the two different 404 bodies, the 405, the 401 under
+# auth -- and a submission can answer every other module correctly while getting
+# all six wrong.
+#
+# `auth` is priced above its case count for a reason that is invisible in the
+# corpus's shape.  The retired router ran middleware AFTER matching, so
+# `/filesabc` answers 401 while `/nope` answers 404.  A port that authenticates
+# before dispatch inverts exactly that pair and nothing else; it is a two-response
+# difference that means the middleware contract was not understood.
+#
+# `body`, `headers` and `upload` are three modules rather than one corpus replay
+# because a single replay module prices every regression by how many recorded
+# cases happen to touch it.  A whole retired behaviour with two cases over it
+# costs two assertions however badly it breaks.  Splitting by domain prices the
+# behaviour instead of its frequency.
+#
+# `build` is first, and it is the one module here that is not itself a behaviour:
+# it is the precondition for observing any.  A tree that does not compile publishes
+# no binary, so the eight modules after it have nothing to send a request to and
+# each fails its own checks on its own evidence.  It runs first for that reason
+# alone, not as a dependency check: it cannot zero another module's result, and it
+# does not need to, since the stage pays only for a submission that passed every
+# scored check in every weighted module.  It compiles against the COMPLETE mirror,
+# which is why State A compiles here.
+#
+# `honesty` carries more than its case count for the same reason `auth` does: it is
+# the only module that can see a submission whose answers were written down for
+# exactly the inputs the corpus uses.  Everything else here is a replay, and a
+# replay cannot distinguish a computed answer from a stored one.
+#
+# Every module here builds the submission and then observes it: an HTTP response
+# on a real socket, the tree the server left on disk, the repository's own tests
+# executing.  None of them opens a file in the submitted tree -- there is no `repo`
+# fixture to hand them one.  The checks that read source are in
+# `tests/audit/`, which reads both trees and executes neither.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+SRB_GOPROXY_ROOT = "/opt/goproxy"
+SRB_FIXTURE_ROOT = "/opt/fixtures/docroot"
+
+[metadata]
+runtime = "go1.25.12"
+target_stack = "net/http.ServeMux (Go 1.22 method patterns)"
+retired_stack = "github.com/gorilla/mux 1.8.1"
+about = """
+Nine modules, one process each, all measuring behaviour.  87 recorded cases across
+four flag profiles back the six replay modules; the corpus defines requests only
+and every expectation comes from the State A recording, so nothing here hand-writes
+a status code.  Volatile fields are masked rather than dropped -- a masked field
+keeps its name, so a submission that stops emitting the header entirely still
+fails.
+
+State A scores 1.000 on this suite by construction, and that is the property to
+re-check whenever a module is added: the baseline of a behaviour-preservation
+harness has to pass it.  Whether the retired dependency is actually gone is stage
+1's question and is not scored here.
+"""
+
+# --------------------------------------------------------------------------- #
+# The build everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "offline resolve and build from submitted source"
+weight = 0.10
+timeout_sec = 5400
+command = ["python3", "run.py"]
+about = """
+Resolves the module graph and compiles the submission into
+$SRB_SUITE_WORK/upload-server, offline, against $SRB_GOPROXY_ROOT -- the complete
+mirror, which serves every archive State A's own go.sum verified.  State A
+therefore builds here, which is what makes the eight behavioural modules after it
+satisfiable by the tree they were recorded from.  A committed vendor/ or bin/ is
+removed from a copy first, so neither a smuggled dependency nor a stale artefact
+can make a broken tree look buildable.  Publishes the binary and the resolved
+build list.
+
+First because it is a precondition, not a verdict: without a binary there is
+nothing for the other modules to send a request to.  It does not check the
+dependency graph.  It does record two unscored observations about it -- the
+linker's own list of what went into the binary, and whether the tree still needs
+an archive the agent's own mirror would have refused, resolved in a cold module
+cache -- because those are mechanical facts worth having in the run's artefacts
+next to a reviewer's reading of the same question.  Neither costs a point.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: State A's answers have to survive
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "routing"
+title = "which handler a path reaches, including the string-prefix rule"
+weight = 0.22
+timeout_sec = 3600
+command = ["bash", "run.sh"]
+about = """
+The 23 cases that decide whether dispatch was ported or re-invented.  The
+string-prefix consequences (`/filesabc` reaching the files handler and getting
+its file-missing 404, `/file` getting the router's not-found 404 with a different
+body and no CORS header, `PUT /filesabc` getting a 405, `PUT /files` naming the
+route template); the decoded-path cases (`/files/sub%2Fb.txt` answering 200,
+because the retired router matched on the decoded path where ServeMux matches on
+the escaped one); the cleanup redirects (`/files/../a.txt`, `/files//a.txt`) whose
+301 and Location are part of the contract.
+
+Every request in this module is written to the socket byte for byte.  Any client
+that normalises a target -- urllib, requests, curl -- destroys these cases before
+the server sees them, which is why `harness.wire` exists.
+"""
+
+[[module]]
+id = "auth"
+title = "authentication as middleware that runs after matching"
+weight = 0.14
+timeout_sec = 3600
+command = ["bash", "run.sh"]
+about = """
+15 cases under `-enable_auth`.  The pair that carries the module is `/filesabc`
+answering 401 against `/nope` answering 404: the retired router ran middleware
+after route matching, so a path that matched and was refused is distinguishable
+from a path that never matched.  A port that wraps the whole mux in an
+authenticating handler collapses that pair -- both answer 401, because the
+wrapper refuses before the mux can report that nothing matched.
+
+Two cases see it, and only two: `auth-unmatched-404` and `auth-405-not-401`,
+because method rejection precedes auth for the same reason path non-matching
+does.  Measured against a deliberately authenticate-first port built from a
+passing submission: 68 of 76 checks, the other 13 cases unaffected.  It does NOT
+break `auth-options-open`, since the middleware exempts OPTIONS itself and a port
+that keeps that exemption keeps the 204; nor `auth-clean-precedes`, since the
+path-cleaning redirect sits above the mux in State A too.  So the whole cost of
+getting middleware order wrong is 8 checks -- about 1% of the rate this stage
+publishes, and every one of them scored, so the submission stops here.  8 checks
+and 1 check stop a submission alike, which is why weighing this more heavily is
+not a decision this module has to make; what it does is make the failure legible.
+
+Also the read-only versus read-write token split across GET, POST and PUT, and
+the header the server reads to decide -- `Authorization`, and only that one.
+"""
+
+[[module]]
+id = "headers"
+title = "CORS, OPTIONS, Allow, and the conditional-request headers"
+weight = 0.11
+timeout_sec = 3600
+command = ["bash", "run.sh"]
+about = """
+13 cases over the header surface, including the one asymmetry that catches a port
+which tidied CORS into a single middleware: `-enable_cors=false` removes
+`Access-Control-Allow-Origin` and does NOT remove
+`Access-Control-Allow-Methods`, because the OPTIONS handler writes that one
+unconditionally.  Gating all of CORS on the flag breaks OPTIONS and only the
+`nocors` profile sees it.
+
+Header ORDER is recorded and compared as a name sequence, not only as a set: the
+order net/http emits is a function of what wrote each header and when, so a
+reordering is evidence that the writing moved.
+"""
+
+[[module]]
+id = "body"
+title = "bodies byte for byte, and the types that were sniffed rather than tabled"
+weight = 0.09
+timeout_sec = 3600
+command = ["bash", "run.sh"]
+about = """
+10 cases over the fixture set: byte-exact bodies, Content-Length against the
+actual body length, and the Content-Type for each fixture.  The extensionless
+`README` is the interesting one -- its type comes from `http.ServeContent`
+sniffing the first 512 bytes, so a submission with its own extension-to-type table
+gets it wrong while getting every other fixture right.  `big.bin` and `tiny.png`
+travel as base64 for the same reason bodies are not compared as text.
+"""
+
+[[module]]
+id = "upload"
+title = "POST and PUT semantics, and what a refused upload leaves on disk"
+weight = 0.11
+timeout_sec = 3600
+command = ["bash", "run.sh"]
+about = """
+13 cases.  POST's generated name against PUT's caller-chosen path, the 409 on an
+existing file, the multipart field the server reads, and the size limit: under
+`-max_upload_size 16` the reader fires DURING the copy into an already-created
+file, so the 413 leaves a truncated file behind and a retry answers 409.  A
+submission that checks the length before opening the file answers the 413
+correctly and leaves nothing on disk, which the follow-up case sees.
+
+Cases that change the tree get a freshly seeded docroot first, except the
+continuations, whose whole purpose is to observe what the previous step left.
+"""
+
+[[module]]
+id = "flows"
+title = "multi-step sequences against one running server"
+weight = 0.09
+timeout_sec = 3600
+command = ["bash", "run.sh"]
+about = """
+13 cases that only mean something in order: upload then fetch what was uploaded,
+PUT then PUT again, refuse then retry.  Each runs against a server that stayed up
+across the sequence, so this is the module that sees a submission which is correct
+per request and wrong about state -- a handler that reopens the document root per
+call, or a cached directory listing that a write does not invalidate.
+"""
+
+# --------------------------------------------------------------------------- #
+# Whether the answers are computed at all
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "honesty"
+title = "requests the recording does not contain"
+weight = 0.10
+timeout_sec = 3600
+command = ["bash", "run.sh"]
+about = """
+Generated traffic rather than recorded traffic, aimed at the one thing a replay
+cannot see: a submission whose answers are stored for exactly the inputs the
+corpus uses.  Three probes, each naming its resources after a per-run nonce so
+that no answer can have been written down in advance -- a file created at run time
+under a name the corpus never mentions and then fetched; the same path written,
+read, rewritten and read again under one server; and a server started on an EMPTY
+document root, where `/files/a.txt` must 404 although it is the corpus's most
+frequently requested path.
+
+The nonce is why these run in-process rather than being replayed from another
+module's output: the assertions compare against the live value.
+"""
+
+[[module]]
+id = "own_tests"
+title = "the repository's own suite, executing"
+weight = 0.04
+timeout_sec = 3600
+command = ["python3", "run.py"]
+about = """
+`go test ./...` in the submitted tree, offline against the complete mirror -- the
+same one `build` uses, and for the same reason: State A's own tests exercise the
+package that imports the retired router, so a pruned mirror here would fail the
+oracle's suite on a resolve error.  State A ships 1858 lines across three files --
+a table-driven unit suite over the handlers, an end-to-end suite that starts a
+real server, and a small suite over the entry point -- and none of them imports
+the retired router directly, so the port does not require rewriting them.
+Weighted lowest of the nine because it is the easiest
+to satisfy dishonestly (a suite can be emptied and still pass) and because the
+question of whether it was hollowed out is stage 1's, where both trees can be
+compared.  What this module adds is that whatever is there now runs and passes.
+"""

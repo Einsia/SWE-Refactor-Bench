@@ -1,0 +1,101 @@
+{
+ "forbidden_files": [
+  "pom.xml",
+  "gson/pom.xml",
+  "extras/pom.xml",
+  "metrics/pom.xml",
+  "proto/pom.xml",
+  "mvnw",
+  "mvnw.cmd",
+  ".mvn/wrapper/maven-wrapper.properties"
+ ],
+ "forbidden_globs": [
+  "**/pom.xml",
+  "**/*.pom.xml",
+  ".mvn/**"
+ ],
+ "gradle_version": "8.10.2",
+ "group": "com.google.code.gson",
+ "projects": {
+  ":extras": {
+   "artifact": "gson-extras",
+   "jar": "gson-extras-2.10.1.jar"
+  },
+  ":gson": {
+   "artifact": "gson",
+   "jar": "gson-2.10.1.jar"
+  },
+  ":metrics": {
+   "artifact": "gson-metrics",
+   "jar": "gson-metrics-2.10.1.jar"
+  },
+  ":proto": {
+   "artifact": "gson-proto",
+   "jar": "gson-proto.jar"
+  }
+ },
+ "publish_property": "srbPublishDir",
+ "published_projects": [
+  ":gson"
+ ],
+ "release": {
+  ":extras": {
+   "main": 7,
+   "test": 7
+  },
+  ":gson": {
+   "main": 7,
+   "test": 17
+  },
+  ":metrics": {
+   "main": 7,
+   "test": 7
+  },
+  ":proto": {
+   "main": 7,
+   "test": 7
+  }
+ },
+ "required_files": [
+  "settings.gradle",
+  "build.gradle",
+  "gson/build.gradle",
+  "extras/build.gradle",
+  "metrics/build.gradle",
+  "proto/build.gradle"
+ ],
+ "required_files_any_of": [
+  [
+   "settings.gradle",
+   "settings.gradle.kts"
+  ],
+  [
+   "build.gradle",
+   "build.gradle.kts"
+  ],
+  [
+   "gson/build.gradle",
+   "gson/build.gradle.kts"
+  ],
+  [
+   "extras/build.gradle",
+   "extras/build.gradle.kts"
+  ],
+  [
+   "metrics/build.gradle",
+   "metrics/build.gradle.kts"
+  ],
+  [
+   "proto/build.gradle",
+   "proto/build.gradle.kts"
+  ]
+ ],
+ "root_project_name": "gson-parent",
+ "toolchain_java": 17,
+ "unpublished_projects": [
+  ":extras",
+  ":metrics",
+  ":proto"
+ ],
+ "version": "2.10.1"
+}

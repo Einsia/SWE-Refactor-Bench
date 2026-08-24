@@ -1,0 +1,260 @@
+schema = "swerefactor.verification-probe/1"
+task = "lang02-zlib-c-to-java"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file, run against a tree that run-candidate.sh
+# configures, builds and installs with the published CMake argv.  Both trees go
+# into a prefix of their own and both are reached through a single launcher at a
+# path named by a per-run hash, so a candidate sees one program that takes a
+# corpus directory and a scratch directory and cannot tell which tree it is
+# testing except by the answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: a C library and
+# a JVM library differ somewhere by construction -- in a stack trace, in a startup
+# cost, in the wording of an out-of-memory failure.  The allow list is zlib's own
+# published contract: what zlib.h promises, what the source contract's
+# behavioral_contract names as a graded surface, and what 1.3.1 actually does
+# where the documentation is silent.  The deny list is the behavioral_contract's
+# own not_graded list, plus what instruction.md tells the agent is not compared.
+# They have to agree: a scope that forbids what the instruction promised would make
+# the task unwinnable, and a scope that permits what the instruction excluded would
+# make it unlosable.
+[scope]
+allow = [
+  "the compressed bytes themselves: every deflate stream must match the reference bit for bit, across every level 0-9, every strategy, every windowBits including the raw and gzip forms, and every memLevel. 'It decompresses back to the input' is not the standard here; 'it is the stream the reference produced' is.",
+  "inflate on well-formed input: every wrapper, every windowBits, a window smaller than the one the stream was compressed with, streams the reference produced at any level, and a stream fed in pieces",
+  "inflate on malformed input: truncated streams, corrupted headers, a bad checksum, invalid distance and length codes, an incomplete Huffman table, a stored block whose length complement is wrong -- including which return code comes back and at what point in the input the failure is detected",
+  "the error surface a consumer reads: the return code from every entry point, the msg string the implementation sets on the stream, and errorString's text for each code",
+  "flush modes and streaming: Z_NO_FLUSH, Z_PARTIAL_FLUSH, Z_SYNC_FLUSH, Z_FULL_FLUSH, Z_BLOCK, Z_TREES and Z_FINISH, at adversarial buffer boundaries -- a stream driven a byte at a time must produce the same bytes as one driven whole",
+  "dictionaries: setDictionary and getDictionary on both halves, a dictionary longer than the window, a dictionary set after data has been written, and the effect on the stream's ADLER32",
+  "the state-manipulating entry points: copy, reset, resetKeep, params, prime, tune, pending, bound and compressBound on the deflate side; reset2, mark, sync, syncPoint, codesUsed, validate and undermine on the inflate side",
+  "the gzip wrapper: setHeader and getHeader with every field populated, name and comment truncation against nameMax and commMax, the extra field, the header CRC, MTIME, the OS byte, and a header split across calls",
+  "the gz* file API: open, dopen, buffer, setParams, read, fread, write, fwrite, printf, puts, gets, putc, getc, ungetc, flush, seek, tell, offset, rewind, eof, direct, close, closeRead, closeWrite, error and clearerr -- including transparent read of a file that is not gzip, concatenated members, a seek backwards, and a write after a read",
+  "the one-shot helpers: compress, compress2, uncompress and uncompress2, including the in-out length semantics and what is left in the length when the destination was too small",
+  "checksums: crc32, adler32, both combine forms, crc32_combine_gen and its _op, the crc table, and the boundary arguments -- a zero length, a null buffer, and a length large enough to matter",
+  "InflateBack: the callback interface, a window supplied by the caller, what is left unused when the stream ends, and a callback that returns nothing or fails",
+  "the pinned constants and the version surface: ZLIB_VERSION, ZLIB_VERNUM, the value zlibCompileFlags reports, and the numeric value of every Z_* and MAX_* constant a consumer can read",
+  "the public shape, read back by reflection from inside the graded JVM: class, field and method names, signatures and modifiers, the module's exports, and that no public member exists beyond the contract's",
+  "the two test drivers the graded build leaves in the build directory, example and minigzip: their stdout byte for byte, their exit status, and minigzip as a filter on stdin and stdout as well as on named files",
+  "resource behaviour on verification input: data that makes the reference allocate its largest window, deeply repetitive data, incompressible data, a single very long member, and pathologically redundant input must not crash, hang past a generous timeout, or exhaust the heap where the reference does not",
+]
+deny = [
+  "wall-clock performance: a JVM may be slower than the C, and an assertion of the form 'this must complete within N milliseconds' is out of scope. A hang that outlives the run timeout is in scope, as above; a constant factor is not.",
+  "heap footprint as a number, and allocation counts, sizes or ordering. memLevel must still be accepted and must still change the compressed output, because it changes which matches are found -- how many bytes the JVM reserves to do it is not compared.",
+  "thread safety beyond what the reference offers. C zlib is safe for distinct streams in distinct threads and promises nothing for a shared one, so a candidate driving a single object from two threads is asserting on something neither implementation promised.",
+  "the text of an errno-derived message. Z_ERRNO as a return code is in scope, and so is the fact that a failure was reported at all, but the JVM's exception wording where C would have called strerror is not -- including what minigzip prints about a file it cannot open.",
+  "the two array-bounds rejections a Java surface needs and C has no counterpart for. That an out-of-array request is rejected, and the code it is rejected with, are in scope; the message is not.",
+  "the internal structure of the submission: package layout beyond the exported package, class and method names that are not in the public contract, file names, and whether any given piece of the port lives where the C did",
+  "the contents of the build directory beyond the two driver executables, the names of intermediate artifacts, javac's or CMake's diagnostics, and anything in a build log",
+  "how the port was compiled rather than what it does: class-file version, the constant pool, whether a method is final or synchronized, stack map frames, the order of entries in the jar. Stage 1 and stage 2 both grade the class-file and jar contracts, against requirements the instruction states.",
+  "the presence, absence or content of C source, which stage 1 and the provenance module already judge",
+  "anything that requires java.util.zip, a JNI stub or a surviving C implementation to be present in the submission -- what the port may not use is stage 1's question, asked against a stated rule",
+  "behaviour on input the original also gets wrong. A candidate has to pass on the original, which is what makes an upheld one a migration defect rather than an upstream bug.",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the launcher's own contents, the presence of a file only one tree can have, the language the probe process happens to be written in, the shape of a stack trace, or anything else that answers 'am I on the original?' without asking the artifact a question. The two trees here are a C library and a JVM library, so that difference is real and a candidate reporting it is reporting the task rather than a defect: it meets every mechanical condition for a break -- passes on the original, fails on the submission, reproduces exactly -- while establishing nothing, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Almost nothing here is timing
+# adjacent -- deflate output is a deterministic function of its input -- but a
+# flake that costs a submission ten points is a bug in the benchmark, not a
+# finding, and the pathological-input cases are exactly where a borderline timeout
+# could produce one.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Configure + build + install + compile the probe + pytest, for one candidate on
+# one tree.  The install and the probe are built once per tree and cached, so only
+# the first candidate pays for them; 1800s is the ceiling for that first one,
+# which on the JVM side is a cmake run that drives javac over the whole port and
+# then a second javac for the probe.
+candidate_timeout_sec = 1800.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one input, one API call or one
+command line that the C answers correctly and the Java does not. A round that
+finds nothing pays the submission 10 points; a round that errors pays nothing and
+is reported as an error rather than as either verdict.
+
+A candidate is a pure-Python test that imports srbzlib. It registers whatever
+bytes it wants as corpus blobs and drives the differential probe -- the same
+probe.c / Probe.java pair the behavioural suite runs, through the same runner -- or
+it runs the two build-directory drivers, example and minigzip. It never sees a
+compiler and never names a language: on one tree the probe is a C binary and on
+the other a JVM launch, and both are reached through one path.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds all
+# go at deflate level 6 on English text; six pointed ones cover the library.  It
+# is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-deflate-bits-and-block-splitting"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+deflate's exact output away from the defaults: levels 1, 2 and 3 (which use a
+different code path from 4-9 in the reference), level 0's stored blocks,
+Z_FILTERED, Z_HUFFMAN_ONLY, Z_RLE and Z_FIXED, and every memLevel from 1 to 9.
+Input that sits on the reference's own decision boundaries -- a match at
+exactly the minimum and maximum length, a distance at the window edge, data
+that makes lazy matching defer and then abandon a match -- is where a rewrite
+that reimplemented the heuristics rather than transcribing them will diverge.
+
+Then where the reference ends a block and which block type it picks: input
+long enough to force several blocks, input whose statistics change abruptly
+partway through, data that makes a stored block cheaper than a compressed one,
+and the boundary where a static tree beats a dynamic one. Also Z_BLOCK and
+Z_TREES on the inflate side, which expose block boundaries to the caller and
+are the least exercised flush modes in any port.
+"""
+
+[[adversary]]
+id = "a02-flush-streaming-and-inflate-malformed"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+buffer boundaries and flush modes: the same input driven one byte at a time,
+in odd-sized chunks, and whole, must give identical bytes. Z_PARTIAL_FLUSH,
+Z_SYNC_FLUSH and Z_FULL_FLUSH mid-stream, an empty flush, two flushes in a
+row, a flush as the first call, and Z_FINISH with an output buffer one byte
+short of what it needs -- then continued. avail_out exhausted at every
+position inside a header or a checksum is the classic place a port loses
+state.
+
+Then inflate against input designed to be wrong: every byte of a valid stream
+flipped in turn, truncation at every offset, an incomplete or over-subscribed
+Huffman table, a distance pointing before the start of the window, a stored
+block with a bad length complement, a bad ADLER32, a gzip header with a wrong
+CRC. What matters is the return code AND how much input and output the
+reference had consumed when it decided -- a port that detects the same error
+one byte later is a divergence.
+"""
+
+[[adversary]]
+id = "a03-gzfile-and-gzheader"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the gz* file layer, which is a whole second implementation of the buffering:
+transparent read of a file that is not gzip at all, concatenated members, a
+truncated final member, gzungetc then gzread across a buffer boundary, gzgets
+on a line longer than the buffer and on a file with no trailing newline,
+gzseek forwards and backwards and past the end, gztell and gzoffset after
+each, gzsetparams mid-write, gzprintf at the length limit, and gzdirect's
+answer before and after the first read.
+
+Then the gzip header in both directions: setHeader with an extra field, a name
+and a comment at, one under and one over the caller's nameMax and commMax;
+embedded NULs; non-ASCII bytes; the header CRC on and off; MTIME and the OS
+byte; and getHeader on a header that arrives split across several inflate
+calls, including a split inside a name and inside the extra field. The done
+flag's timing is part of this.
+"""
+
+[[adversary]]
+id = "a04-dict-state-and-checksums"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+dictionaries and the state-manipulating calls: a dictionary longer than the
+window, a dictionary of exactly the window size, setDictionary in raw mode
+versus zlib mode, getDictionary before and after data has been written,
+deflateCopy at several points in a stream and then continuing both halves,
+deflateReset versus deflateResetKeep, deflateParams changing level and
+strategy mid-stream (both when it can and when it must flush first),
+deflatePrime with a partial byte, and deflateTune.
+
+Then crc32 and adler32 at their edges: a zero length, a null buffer (which the
+reference documents as returning the initial value), lengths that cross the
+reference's internal unrolling and NMAX boundaries, a buffer of exactly 2^16
+and 2^32-1 bytes' worth of accumulated length where feasible, both combine
+entry points against a length of zero and a length that overflows 32 bits,
+crc32_combine_gen and its _op, and the values in the crc table.
+"""
+
+[[adversary]]
+id = "a05-inflateback-bound-and-drivers"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the two least-ported corners. InflateBack: a caller-supplied window of each
+legal size, an input callback that returns zero bytes, one that returns a
+short buffer repeatedly, an output callback that reports failure partway, and
+what is left in the stream's next_in and avail_in when the stream ends. And
+the bounds: deflateBound and compressBound at length 0, 1, and sizes where the
+reference's overhead formula changes, plus whether a stream that actually
+needs the bound fits inside it -- with a header, with a dictionary, and at
+level 0.
+
+Then the two build-directory drivers, which are ordinary programs and get far
+less attention than the library. example: its full transcript and exit status.
+minigzip: as a filter on stdin/stdout and on named files, -d, -f, -h, -r, an
+unknown flag, a file that does not exist, a directory, an empty file, a file
+that is already gzip, a file whose name has no .gz suffix on decompress, stdin
+that closes early, and binary data containing every byte value. The exit
+status is in scope; the wording of an errno message is not.
+"""
+
+[[adversary]]
+id = "a06-pathological-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+input that stresses rather than tricks: the largest window and the smallest, a
+single member of many megabytes, data that is one byte repeated, data that is
+uniformly random, text with a period just under and just over the window size,
+a match chain long enough to hit the reference's own insert and lazy limits,
+and a stream of nothing but empty flushes. The reference survives all of
+these. A rewrite with different recursion, a different buffer growth policy or
+an int where the C had a uLong may not -- and a crash or a hang is the
+finding, not the time taken.
+
+Then, with whatever budget remains, nothing in particular -- read the C, read
+the port, and follow what looks weakest. The other five rounds were told where
+to look, and the reference is 1.3.1 with all of its own quirks intact: the
+places where zlib.h's prose and the code disagree are worth more than the
+places they agree.
+"""

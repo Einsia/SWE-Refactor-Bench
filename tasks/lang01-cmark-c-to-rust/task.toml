@@ -1,0 +1,265 @@
+# =============================================================================
+# SWERefactorBench -- language rewrite
+#
+#   State A : cmark 0.31.1, ~20k lines of C11 across src/, built by CMake 3.25
+#             into libcmark.so.0.31.1, libcmark.a and cmark(1), with the public
+#             surface declared by src/cmark.h and installed alongside a
+#             libcmark.pc and a cmakeConfig package.
+#   State B : the same three artifacts, the same cmark.h and the same installed
+#             layout, implemented in Rust 1.90 with no external crates, and
+#             still callable from C at the original ABI.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as
+# an artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs a library
+# builds one from the submitted source with the published argv.  That is what
+# makes "cmake found no C to compile" a fact about the repository rather than a
+# claim about a directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission: eight gates, all of them required.  Failing one is a zero and
+#      nothing after it runs.  Two more -- license-preserved and no-test-mutation
+#      -- stood here as advisory gates and have been deleted: advisory meant
+#      outside the conjunction the verdict is built from, so nothing read their
+#      answers.  The scan still hashes both sets of files into the transcript.
+#   2. fifteen behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the C library passes
+#      and this one fails.  60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has
+# neither cargo nor cmake, because a review that can build grades a build log
+# instead of an implementation, and the question here -- were 20,000 lines of C
+# reimplemented or transliterated -- is not one a build log answers.  Stage 2
+# has a Rust toolchain and a C compiler, the latter because it has C of its own
+# to compile: a consumer program linked against the installed library, and
+# CMake's own configure probes.  Repository C reaches that compiler through a
+# shim that forwards and records it rather than refusing it, so "this build still
+# needs cc" is evidence stage 2 collects rather than a build it cannot run -- the
+# charge for it is stage 1's, where three required gates read what the build
+# declares.  Stage 3 builds State A as well as the submission, because "the C
+# library passes this test" is a claim that has to be executed, and the
+# submission reaches it only through cmake and the installed prefix.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop build and install debris only.  They exist so the verifier
+# cannot be handed a prebuilt libcmark.so and be fooled into linking against
+# something the submitted *source* no longer produces -- which for this task is
+# the whole ball game, since a tree that kept its C would otherwise ship a
+# working shared object built from it.  Solutions must therefore live in tracked
+# source files, never inside these paths, a rule instruction.md states outright.
+#
+# Two patterns below were added after a graded run showed the list missing the
+# debris it is written to drop, and the cost was not hypothetical.
+#
+# `build-*` covers the out-of-tree directory names CMake work actually produces.
+# The list named `build`, `_build` and `cmake-build*`, and a submission that
+# configured two link variants into `build-shared/` and `build-static/` -- the
+# obvious names for exactly this task, which ships both a shared and a static
+# library -- had all of it collected: 574 of 644 files, 94M of objects, two ELF
+# binaries and a staged copy of its own Rust sources.  Stage 1's read-only scan
+# then reported the submission ships extensionless ELF binaries and spawns
+# subprocesses.  The first is untrue of the submitted source and existed only in
+# the build tree; the second is true but was cited three times, twice at build
+# paths.  Those findings are substituted into the reviewer's prompt, so an
+# incomplete exclusion list does not merely leave debris lying about -- it hands
+# the reviewer evidence about files the task meant to have deleted.
+#
+# `.git` covers the history.  The graded submission's worktree held no `.c` at
+# all while `git ls-tree HEAD src/` still listed all twenty of State A's
+# translation units, because the agent never committed the deletion.  Stage 1
+# cannot in fact read that -- its toolbox offers no shell, loose objects are
+# zlib-compressed, and `fetch_source` refuses `.git/index` as binary -- so this is
+# not a hole in the `no-c-sources` gate.  It is the artifact contract: a
+# submission collected as the port is not supposed to carry the C it replaced,
+# and whether some later consumer can decompress an object should not be what
+# decides that.
+#
+# Both were checked against State A before being added: it keeps all 113 files
+# either way, so the identity path cannot change.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "build",
+    "_build",
+    "build-*",
+    "cmake-build*",
+    "target",
+    "CMakeFiles",
+    "CMakeCache.txt",
+    ".git",
+    "*.o",
+    "*.a",
+    "*.so",
+    "*.so.*",
+    "*.dylib",
+    "*.rlib",
+    "*.d",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    "install",
+    "prefix",
+]
+
+[task]
+name = "swerefactor/lang01-cmark-c-to-rust"
+description = "Reimplement the complete cmark 0.31.1 CommonMark library in Rust with no external crates, preserving byte-identical output, the full C ABI, and the installed release layout."
+authors = []
+keywords = [
+    "swe-refactor",
+    "language-migration",
+    "c",
+    "rust",
+    "cmark",
+    "commonmark",
+    "abi-compatibility",
+    "offline",
+]
+
+[metadata]
+category = "language-rewrite"
+difficulty = "frontier"
+# cmark's own COPYING states three sets of terms, not one: BSD-2-Clause for the
+# library, MIT for the files inherited from Vicent Marti's houdini, GitHub's
+# buffer/chunk code and utf8proc, and CC-BY-SA-4.0 for the CommonMark
+# specification itself, which ships here as the 205 KB test/spec.txt the
+# differential suite is generated from.  The share-alike conjunct is the reason
+# this is spelled out: it is the only one in the whole vendored set, and a
+# redistributor needs to see it.  See NOTICE at the repository root.
+license = "BSD-2-Clause AND MIT AND CC-BY-SA-4.0"
+upstream = "https://github.com/commonmark/cmark"
+upstream_version = "0.31.1"
+source_repository = "https://github.com/commonmark/cmark"
+source_version = "0.31.1"
+state_a = "cmark 0.31.1 in C11 (~20k lines, 19 library translation units in src/ plus the CLI's main.c), CMake 3.25.1"
+state_b = "the same libcmark.so.0.31.1 / libcmark.a / cmark(1) and the same cmark.h, in Rust 1.90, no external crates, C ABI unchanged"
+scale = "113 files, ~20k lines of C in src/ plus the CommonMark 0.31.2 specification suite"
+tags = [
+    "whole-repository",
+    "language-rewrite",
+    "c-abi",
+    "differential-testing",
+    "offline",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 30h wall clock: 69 exported entry points, a block parser and an inline parser
+# that have to agree with the reference on 652 specification examples, five
+# renderers whose output is compared byte for byte, two lookup tables
+# (entities.inc, case_fold.inc) that have to be reproduced rather than
+# approximated, and a build that still has to emit a C ABI and an installable
+# package.  The State A sources stay in the image as the oracle, so the time
+# goes on reimplementation rather than on reverse-engineering behaviour.
+#
+# no-network with CARGO_NET_OFFLINE: there is no vendor directory and no
+# registry cache, so "no external crates" is enforced by the environment
+# instead of being audited afterwards.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 108000.0
+network_mode = "no-network"
+user = "agent"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+CARGO_NET_OFFLINE = "true"
+RUST_BACKTRACE = "1"
+CMAKE_BUILD_PARALLEL_LEVEL = "4"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes
+# the build context of the verifier image and Harbor does not upload it to the
+# agent container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.  Stage 2 alone is budgeted generously
+# because it builds the submission twice, shared and static, and a Rust tree with
+# cold codegen is slow in a way State A -- which grades in about 13 seconds -- is
+# not.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota
+# to be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+# The behavioural image builds the upstream reference and freezes ~4200
+# expectations, so its build is slower than the agent environment's.
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+CARGO_NET_OFFLINE = "true"
+RUST_BACKTRACE = "1"
+CMAKE_BUILD_PARALLEL_LEVEL = "4"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a
+# smoke test that the suite can be passed at all.
+#
+# That smoke test exists anyway, and it runs on every build rather than when
+# someone remembers to.  An identity run in the behavioural image's own build
+# grades the reference against its frozen expectations, and the layer fails
+# unless every behavioural module comes in at weight-rate 1.0.  It costs about
+# twenty seconds, it runs on every rebuild, and it cannot be skipped by a
+# submission scoring badly.
+#
+# Be precise about what that buys.  It establishes that every frozen expectation
+# is answerable through the same driver the graded modules use, so a red sweep at
+# grading time is a fact about the submission and not about the corpus.  It
+# grades State A, so it says nothing about a branch only a State B tree reaches;
+# stages 1 and 3 are what answer that, and they answer it the expensive way.

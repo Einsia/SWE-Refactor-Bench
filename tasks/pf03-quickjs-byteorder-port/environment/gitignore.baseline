@@ -1,0 +1,44 @@
+# Build outputs, so `git status` and `git diff` stay readable while you work.
+# This file is part of the baseline commit; you may extend it if your build
+# produces artifacts that are not listed here.
+
+# Object and archive files
+*.o
+*.a
+*.so
+*.d
+*.lo
+*.obj
+.obj/
+
+# Binaries the default target builds
+/qjs
+/qjsc
+/qjscalc
+/host-qjsc
+/run-test262
+/libquickjs.a
+/libquickjs.lto.a
+/examples/hello
+/examples/hello_module
+/examples/test_fib
+/tests/bjson.so
+
+# Sources the build generates from other sources
+/repl.c
+/qjscalc.c
+/libunicode-table.h.new
+
+# Test262 working state.  test262_errors.txt and test262o_errors.txt are NOT
+# listed: upstream ships both as delivered files, so ignoring them would hide a
+# real modification to the tree.
+/test262
+/test262_report.txt
+/test262o
+
+# Editor and OS debris
+*~
+*.swp
+*.orig
+*.rej
+.DS_Store

@@ -1,0 +1,70 @@
+schema = "swerefactor.scan-suite/1"
+task = "fw01-httpbin-flask-to-asgi"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Stage 2 builds both sides and compares what they answer.  A check in that stage
+# that opens a source file and looks for a token is asserting on the
+# implementation, with points attached, and two shapes show what that costs: a
+# WSGI token scan fails a submission for the string `PATH_INFO` appearing in a
+# comment, and a directory-name scan fails one for serving Swagger assets out of a
+# folder whose name contains "flasgger".  Both observations are worth having.
+# Neither is a verdict, because the same string means "the protocol was
+# reimplemented" in one file and "here is why we no longer need this" in another,
+# and only reading tells you which.
+#
+# So they run here, in the stage that may read and may not execute, and their
+# output is evidence: `swerefactor.scan` records every check with required = false,
+# and `scoring.grade_audit` gates on the required checks -- which are the five
+# prose gates and nothing else.  A scan finding costs a submission nothing on its
+# own.  What it does is tell the reviewer where to look, and the reviewer has the
+# tree open.
+#
+# Weights are recorded and unused: nothing here is scored.  They are kept so a
+# module could be scored without a rewrite, which is the same reason the module
+# contract is byte-for-byte stage 2's.
+
+default_timeout_sec = 600
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check in this suite can fail the audit gate; the gate is the
+five prose questions in evaluation.toml, answered by a model that reads both
+trees. These modules answer the sub-questions a string can answer, so that the
+reviewer spends its turns on the ones a string cannot.
+"""
+
+[[module]]
+id = "closure"
+title = "the retired stack in the tree and in what the tree declares"
+weight = 1.0
+about = """
+Imports (by AST, not by regex), dynamic imports, vendored source markers, WSGI
+protocol surface, manifests, directory names, the automation, the ported test
+suite, the pin file. Reads `SRB_REPO`; installs nothing.
+"""
+
+[[module]]
+id = "entrypoint"
+title = "what the published entry points name"
+weight = 1.0
+about = """
+httpbin.bash, the Procfile, the Dockerfile, the packaging metadata, and whether
+a second copy of the old implementation is still sitting in the tree. Stage 2
+still measures that the service boots and answers; which script does it and what
+that script names is read here.
+"""
+
+[[module]]
+id = "provenance"
+title = "code addressed to the grader"
+weight = 1.0
+about = """
+The scans that were in stage 2's `differential` module: a source file that
+consults a test environment, names the oracle, opens an outbound HTTP client
+inside the app, shells out, or carries a table of recorded answers. Stage 2 keeps
+the behavioural half of that module -- disguised replays and neighbouring inputs
+a lookup table cannot answer.
+"""

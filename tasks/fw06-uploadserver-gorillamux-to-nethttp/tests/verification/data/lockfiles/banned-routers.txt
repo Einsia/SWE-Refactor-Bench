@@ -1,0 +1,49 @@
+# fw06 -- third-party HTTP routers that must not appear in State B.
+#
+# Matched as module-path prefixes against the submission's go.mod and go.sum,
+# so `github.com/go-chi/chi` also covers `github.com/go-chi/chi/v5`.
+#
+# Why this file exists at all, when the offline proxy already stocks none of
+# them: the proxy makes them unobtainable, but "unobtainable" produces an
+# ENOTCACHED naming a module the agent chose, which reads like a broken mirror
+# rather than a stated rule.  Naming them here lets the instruction say the rule
+# out loud, and lets the gate return a diagnosable verdict -- "you replaced one
+# third-party router with another" -- instead of a resolver error.
+#
+# This is the one substantive difference between fw06 and fw04.  fw04 retires
+# Gin and expects SOME router to replace it, so its mirror stocks chi, mux and
+# httprouter and blesses none of them.  fw06 retires the router category: the
+# destination is net/http's own ServeMux, which since Go 1.22 has method
+# patterns and wildcards and therefore no longer needs a third-party router for
+# this shape of routing.  Swapping mux for chi would satisfy every gate that
+# only checks gorilla's absence, which is exactly why absence alone is not
+# enough here -- see the ServeMux dispatcher gate (G5) for the positive half of
+# the requirement.
+github.com/go-chi/chi
+github.com/gorilla/mux
+github.com/gin-gonic/gin
+github.com/labstack/echo
+github.com/julienschmidt/httprouter
+github.com/gofiber/fiber
+github.com/beego/beego
+github.com/astaxie/beego
+github.com/valyala/fasthttp
+github.com/bmizerany/pat
+github.com/dimfeld/httptreemux
+github.com/naoina/denco
+github.com/vulcand/route
+goji.io
+github.com/zenazn/goji
+github.com/gocraft/web
+github.com/ant0ine/go-json-rest
+github.com/emicklei/go-restful
+github.com/go-zoo/bone
+github.com/husobee/vestigo
+github.com/lunny/tango
+github.com/mailgun/route
+github.com/nissy/bon
+github.com/rs/xmux
+github.com/ursiform/bear
+github.com/uptrace/bunrouter
+github.com/danielgtaylor/huma
+github.com/gowww/router

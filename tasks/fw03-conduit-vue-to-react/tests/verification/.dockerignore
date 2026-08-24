@@ -1,0 +1,23 @@
+# Every stage directory is a Docker build context and every stage Dockerfile
+# copies the whole of it into the image, so anything left lying about here gets
+# baked in.  Nothing below is a file the stage needs: it is the debris that
+# accumulates from running the suite locally, plus editor backups.  The same
+# list ships in all three stage directories of this task -- a stage that
+# excluded something the others kept would produce an image nobody could
+# reproduce from the tree.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*~
+*.orig
+*.rej
+.DS_Store
+# A local run of this suite installs a dependency closure and builds a bundle.
+# Both land in the working directory the runner was invoked from, which is often
+# this one, and neither is an input.
+node_modules/
+dist/
+.vite/
+npm-debug.log*

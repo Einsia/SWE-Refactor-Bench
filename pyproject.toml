@@ -1,0 +1,21 @@
+# pytest configuration for the shared grading harness.
+#
+# Nothing in this repository needs the harness installed.  Every documented
+# invocation is `PYTHONPATH=infra python3 -m swerefactor ...`, and the sixty stage
+# images set `PYTHONPATH=/opt/swerefactor` and copy the source in rather than
+# installing it.  That is deliberate: a grader that has to be pip-installed inside
+# twenty task images is twenty more ways for a build to fail before it has
+# measured anything, and the copy is what makes a stage image's contents readable
+# from its build log.
+#
+# Python 3.10 or newer.  The only third-party import anywhere in the harness is
+# `tomli`, needed below 3.11 where there is no `tomllib`; `swerefactor.tomlcompat`
+# prefers the stdlib module wherever it exists.  `pytest` runs the suite below.
+
+[tool.pytest.ini_options]
+# `infra/tests` is the harness suite, and it is the whole of what runs from here.
+# A task's own modules run inside its stage images against a submission, not from
+# this root, so they are not collected: rootdir discovery would import twenty
+# suites that expect a built tree at /run.
+testpaths = ["infra/tests"]
+pythonpath = ["infra"]

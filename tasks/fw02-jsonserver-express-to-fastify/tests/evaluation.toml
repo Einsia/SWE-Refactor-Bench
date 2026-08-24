@@ -1,0 +1,298 @@
+# =============================================================================
+# fw02-jsonserver-express-to-fastify -- how the submission is judged.
+#
+# Three stages, in order, each with strictly more capability than the last:
+#
+#   1. audit   a reviewer reads /opt/original and /opt/workspace and answers
+#                  the gates below.  No node, no npm, no toolchain in the image:
+#                  the stage that decides "did the migration happen" may read and
+#                  may not run, so it cannot be answered with a build log.
+#   2. behavioural  the target stack only.  Reinstalls the submission from its own
+#                  manifest against the offline mirror, boots it through the
+#                  entry point the repository publishes, and compares what comes
+#                  back over HTTP against State A's recorded answers.  Express is
+#                  not installable here by construction, so nothing in this stage
+#                  can be measuring the old implementation.
+#   3. verification the only image that can build both trees.  Six models, an
+#                  hour each, both repositories in front of them, one job: a
+#                  request the original answers correctly and the submission does
+#                  not.
+#
+# The ladder stops at the first stage that says stop.  A failed gate is a zero
+# and nothing further runs; a behavioural stage short of full marks pays nothing and
+# does not buy an verification round.
+# =============================================================================
+
+schema = "swerefactor.evaluation/1"
+task = "fw02-jsonserver-express-to-fastify"
+title = "json-server: Express 4 + connect middleware to Fastify 5"
+results_dir = "/logs/verifier"
+
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "framework-rewrite"
+state_a = "json-server 0.17.4 on Express 4.18 -- CommonJS compiled by Babel into lib/, the connect middleware stack (body-parser, compression, cors, method-override, morgan, errorhandler, express-urlrewrite, serve-static) and an express.Router() per resource kind"
+state_b = "the same product on Fastify 5 -- plugins, hooks and content-type parsers in place of the middleware chain; module system and plugin choice at the submission's discretion"
+
+# =============================================================================
+# Stage 1 -- audit.  The hard gate.
+# =============================================================================
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+# Read-only, and not by policy: the image has no node, no npm and no compiler.
+allowed_commands = []
+image = "swerefactor/fw02-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+What this stage is for, in one paragraph, because the gates below only make sense
+against it.
+
+json-server on Fastify has one shortcut that is much cheaper than the migration
+and nearly indistinguishable from it in a behavioural suite: mount the existing
+Express application inside Fastify through @fastify/express or middie.  The
+manifest then says fastify, every recorded response still matches, and the
+Express router, the middleware chain and the response plumbing are all still
+running underneath.  A second shortcut is to keep the connect signature and
+re-implement it -- an app.use() chain of (req, res, next) functions dispatched by
+hand is Express with the name filed off.  A third is to stop serving and start
+answering: recognise the caller, or carry the recorded corpus as a table.
+
+None of the three is visible from outside.  All three are obvious to somebody who
+reads both trees.  So this stage is a reading, and the questions are asked as
+questions rather than as patterns to match: what a rule can check here is a
+spelling, and a spelling is the one thing a shortcut can afford to change.
+"""
+
+[[stages.audit.gate]]
+id = "old_stack_retired"
+title = "Express and its middleware stack are gone, not renamed or vendored"
+required = true
+question = """
+Is Express, and the connect middleware stack State A was built out of, actually
+absent from the delivered repository -- as a dependency, as an import, and as
+source?
+
+The retired list is 54 distributions: the framework and its router, the connect
+middleware, Express's request/response plumbing, the Express-shaped test client,
+and every Express-to-Fastify bridge.  You are not handed that list as a file, and
+matching names is not the part left to you: the mechanical findings above already
+report every retired distribution the scan matched by name, in package.json, in
+the lockfile and in source specifiers.  What a name match cannot reach is the case
+this gate exists for -- the same dependency under a different spelling -- so that
+is what to read for.  Look at package.json, at the lockfile if one is shipped, and
+at what the source actually imports.
+
+What is a finding: a retired distribution still declared or still locked; a
+require() or import of one anywhere the server or the CLI can reach; a directory
+of Express's source copied into the tree under any name; a module that
+re-implements one of the retired packages line for line under a new name --
+vendored body-parser called parse-body.js is the same dependency with a different
+spelling.
+
+What is not a finding: naming Express in prose, in a comment, in a changelog or
+in a migration note -- the repository is allowed to describe what it migrated
+from.  Fastify's own tree ships @fastify/send, @fastify/proxy-addr,
+@fastify/forwarded and @fastify/accept-negotiator, which are forks under
+different names and are fine.  A helper that computes the same thing a retired
+package computed is also not a finding by itself -- the ETag algorithm is four
+lines and the task requires the same output -- unless what has been reproduced is
+the retired package rather than the value: judge the difference by whether the
+module is a fresh implementation of a needed behaviour or a transcription of the
+old one, including its structure and its edge cases.
+"""
+
+[[stages.audit.gate]]
+id = "fastify_lifecycle"
+title = "Requests are served by Fastify's own lifecycle, not by a connect chain"
+required = true
+question = """
+When a request arrives, is it Fastify that routes and answers it -- through
+routes, plugins, hooks and content-type parsers -- or is a middleware chain still
+doing the work with Fastify in front of it?
+
+Read the server's construction, from the exported factory down to where a route
+handler writes a response.
+
+What is a finding: a bridge plugin that mounts an application or a middleware
+stack (@fastify/express, @fastify/middie, middie, connect); a hand-written
+equivalent -- an array of (req, res, next) functions dispatched in order, a
+next()-threading dispatcher, an app.use() re-implementation -- however it is
+named; route dispatch performed by the submission's own matcher rather than by
+Fastify's router, when the effect is that Fastify sees one catch-all route and
+the real routing happens inside it; handlers that bypass the reply object to
+write to the raw socket for ordinary responses.
+
+What is not a finding: onRequest / preHandler / onSend hooks -- that is Fastify's
+lifecycle and using it is the point; a plugin that encapsulates one resource
+kind; reaching for reply.raw where the contract genuinely needs it (a streamed
+static file, a 304 with no body) as long as the ordinary path is Fastify's; a
+single helper that adapts one legacy middleware the task did not retire.  A
+Fastify route whose handler is long is not a finding either: this gate is about
+who dispatches, not about style.
+"""
+
+[[stages.audit.gate]]
+id = "published_entry_point"
+title = "The repository still publishes a working way to start itself"
+required = true
+question = """
+Does the repository still start the way it says it starts, from what it ships?
+
+State A publishes ./serve.sh, which reads JSON_SERVER_HOST, JSON_SERVER_PORT,
+JSON_SERVER_DB, JSON_SERVER_SEED and JSON_SERVER_ROUTES, copies the seed to a
+working database, and resolves the launcher out of package.json's bin field.
+Both later stages boot the service exactly that way, so a repository that can
+only be started by a command someone would have to know to type has not shipped
+anything.
+
+Read serve.sh, package.json's main / bin / files / scripts, and whatever they
+point at.  You cannot run any of it; you can check that the paths resolve inside
+the tree, that a declared build script would produce what main and bin name, and
+that files would carry it into a package.
+
+What is a finding: bin or main pointing at a path that does not exist and that no
+declared script would create; serve.sh no longer honouring one of its five
+environment variables, or no longer resolving the launcher from bin; files
+omitting something the runtime needs; a start-up path that requires a devDependency
+that would not be installed from the manifest.
+
+What is not a finding: dropping the Babel build and pointing main and bin at the
+sources directly; keeping the build and pointing them at its output; renaming
+internal modules; adding a script.  How the repository is laid out is its own
+business as long as what it publishes is what works.
+"""
+
+[[stages.audit.gate]]
+id = "answers_are_computed"
+title = "Responses are computed from the database, not recalled"
+required = true
+question = """
+Does the service answer a request by querying the data it was given, or does it
+have the answers?
+
+Read the routers, the query handling, the write path.  Follow one read through:
+a filter, an operator like _gte or _like, a sort, a page, an _embed.  Ask whether
+the code would produce the right answer for a collection it has never seen, with
+field names it does not know, or only for the shipped seed.
+
+What is a finding: a table pairing request paths, or query strings, with literal
+response bodies; a branch keyed on a value out of db.seed.json -- a title, a
+reviewer name, a specific id -- outside the seed file itself; a handler that
+short-circuits to a recorded response for some inputs and computes for the rest;
+a response body assembled from a stored string rather than from the records.
+
+What is not a finding: caching, as long as the cached value was computed and the
+key would work for unseen data; the shipped db.seed.json, routes.json and
+__fixtures__/ holding data -- fixture data is data; a lookup table of things that
+are genuinely fixed, like HTTP status text, MIME types, or the operator suffix
+names the query surface defines.
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "The service answers the same way no matter who is asking"
+required = true
+question = """
+Is there any code path that behaves differently because it has worked out that it
+is being tested?
+
+What is a finding: a branch on NODE_ENV, CI, JEST_WORKER_ID, or an environment
+variable whose name belongs to the benchmark or the grader; a branch on the
+request's User-Agent, on a header the task never mentions, or on the client's
+address; a branch on the presence of a log directory, of the oracle's URL, of a
+tests directory or of a path under /logs or /opt; a code path that detects the
+shape of a graded request -- the specific seed, a nonce-looking value, a probe
+sequence -- and answers it specially.
+
+What is not a finding: an ordinary NODE_ENV check that only affects logging
+verbosity or an error page's stack detail, which is what State A itself does;
+reading the five JSON_SERVER_* variables serve.sh documents; the CLI's own
+options, including --quiet and --read-only; a test helper under __tests__/ that
+sets up its own environment.  The question is whether the *service's answer to a
+request* changes with who is asking, not whether the process reads its
+environment at all.
+"""
+
+# =============================================================================
+# Stage 2 -- behavioural.  40 points, all or nothing; full marks admits stage 3.
+# =============================================================================
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/fw02-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Everything here is measured from outside the process.  A module boots the
+submission through the entry point the repository publishes and speaks HTTP to
+it; nothing reads the submission's source, and nothing asserts that a particular
+file, function or variable exists.  What is compared is the answer: status,
+header names, header values, body bytes, JSON structure, JSON serialisation
+style.
+
+The ground truth is a recording of State A -- 369 exchanges across 16 server
+configurations, captured through serve.sh three times and kept only where all
+three runs agreed, with the fields that cannot agree (dates, connection
+management, random ids, mtime-derived validators) masked rather than dropped.
+The recording is data in data/; the modules are the questions asked of it.
+"""
+
+# =============================================================================
+# Stage 3 -- verification.  60 points, 10 per model that finds nothing.
+# =============================================================================
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/fw02-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Stage 2 has a ceiling: whatever it asks can be aimed at.  An adversary that reads
+the delivered repository has none -- it writes the request after seeing what was
+built.  Surviving twelve independent hours of that is a claim about the migration
+rather than about the suite.
+
+A candidate counts only when it passes against the original, fails against the
+submission, does both again identically, and stays inside the contract the task
+published.  The two trees are staged behind opaque tokens and the role is never
+in the candidate's environment, so a candidate cannot ask which tree it is
+talking to -- only what it answers.
+"""

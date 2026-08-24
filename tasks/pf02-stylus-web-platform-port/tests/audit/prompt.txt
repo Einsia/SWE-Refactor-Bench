@@ -1,0 +1,184 @@
+You are reviewing a whole-repository migration for audit. Your judgement
+decides whether this submission is graded at all, so it has to be a judgement
+about the code, supported by evidence anyone can re-open and check.
+
+THE TWO TREES
+
+  {{roots}}
+
+{{original}} is the repository as it was before the work started: Stylus 0.63.0
+exactly as released -- a CSS preprocessor of about 16,000 lines across 137
+modules in `lib/`, an 846-line CLI in `bin/stylus`, the upstream test suite in
+`test/`. It is CommonJS and it is Node's: `require` graphs, `fs.readFileSync`
+called from inside the evaluator's recursive descent, `Buffer` in the PNG header
+parser, `crypto.createHash` in the cache, `path.join` in 72 places, `__dirname`
+to find its own built-in `.styl` library. It is read-only and it is the reference
+for what the compiler used to do.
+
+{{workspace}} is what was submitted. The task was to split that compiler in two:
+an ES-module core under `src/core/` that runs in a realm holding only standard
+web globals and reaches the outside world through one injected capability object,
+and a Node adapter under `src/node/` that supplies that object from `node:fs`,
+`node:crypto` and `node:path.posix` and keeps every existing Node user working
+unchanged. `lib/` was to be gone -- not renamed, not re-exported, not kept for
+compatibility.
+
+Tools available to you: {{commands}}
+
+WHAT YOU ARE DECIDING
+
+A behavioural suite runs after you and measures how much of the old behaviour
+survived: the same stylesheets through both faces of the submission and through a
+frozen copy of the original, byte-compared. It is good at "does this stylesheet
+still compile to the same CSS" and bad at "is this a port". Those are different
+questions, and the second is yours.
+
+This particular migration has an unusually large gap between the two. The
+compiler's output is a function of the stylesheet, and every honest way to
+compute it was already written -- in `lib/`, in the tree you have open on the
+left. So a submission can produce perfect CSS while having done anything from a
+full inversion of control to renaming a directory:
+
+  * the core still reaches Node, through a path no import discloses: a
+    `createRequire`, a computed `import()`, a free identifier that only resolves
+    because Node put it on the global object, a helper in a file named after
+    something else whose body is a built-in call;
+  * the capability object is not injected but fetched: a module-level `let
+    platform` the adapter assigns on import, a field on `globalThis`, a default
+    platform constructed inside the core out of Node facilities so the injection
+    is optional and the fallback is the real implementation. Every module still
+    says `platform.readFile(...)`, and nothing has been inverted;
+  * `lib/` was moved rather than retired -- copied under `src/core/`, or under
+    vendor/legacy/dist, or bundled into one artifact that the new API re-exports.
+    The imports changed and the code did not;
+  * the port exists and is correct, but is not what runs: the exports map, the
+    `bin` entry or a fallback `catch` still arrives at the original;
+  * there are two compilers -- one evaluator for `render()` and a second for
+    `renderSync()` -- which is the shortcut this task's hardest requirement
+    invites, since making one evaluator serve both modes is most of the work;
+  * the CSS is recognised rather than derived: a table keyed on stylesheet text
+    or its hash, a branch that special-cases a selector, a `.css` file shipped
+    beside the compiler and returned when the input matches;
+  * the frozen corpus under `test/` was edited, so "the same output as before"
+    now means something the submission chose.
+
+None of these is a string you can grep for. Each is a claim about how the code
+works, which is why a model is reading it.
+
+HOW TO REVIEW
+
+Start from the shape of both trees, then follow the dependencies:
+
+  1. Read the original's entry point and one module that does IO from deep
+     inside the compile -- the evaluator's `@import` handling is the one that
+     matters, because it is why this port is hard. Learn what the old code was
+     asking Node for and from where.
+  2. Read `src/core/index.js` and follow one stylesheet through: from the call
+     that creates a Renderer, into the parser and the evaluator, to the string
+     that comes back. Then find every point on that path that needs something
+     from outside -- a file, a directory listing, a hash -- and ask where the
+     ability to do it came from.
+  3. Trace that backwards. An honest injection arrives as an argument and is
+     threaded to whoever needs it; you should be able to point at the parameter.
+     If instead the module imports it, reads it off a global, or falls back to
+     building its own, the inversion did not happen and the core is separated
+     from Node only by a rename.
+  4. Read `src/node/index.js` and `bin/stylus` as clients. Do they consume the
+     core, or do they contain a second copy of it?
+  5. Compare the two render paths. `render()` and `renderSync()` are required to
+     be one compiler driven two ways. Find the evaluator each reaches.
+  6. When something looks wrong, look for the counter-evidence before you write
+     it down. `typeof process !== 'undefined'` in a portability guard is not the
+     same as a branch that needs Node; a POSIX path module in the core is
+     required by the task and is not a shim; a table of named colours is data the
+     original also had.
+
+Read as much as you need. Being wrong here is expensive in both directions: an
+unfounded failure voids a submission that did the work, and a missed one lets a
+directory rename score as a port.
+
+WHAT A MECHANICAL SCAN ALREADY NOTICED
+
+Before you started, a script read the submitted tree and recorded what a string
+match, a file digest and an import graph can see. Its findings are below.
+
+They are leads, not verdicts. Nothing in them scores; none of them can fail this
+submission; they are not gate answers you can adopt. Treat each one as a line
+number somebody suggested you look at, because that is all a token in a file is:
+
+  * `readFileSync` under `src/core/` is the shim this task forbids, and it is
+    also a perfectly correct name for a method on the injected platform object.
+    Same string. Which one it is depends on whether the definition opens a file
+    or was handed in.
+  * `Buffer` in the core is a global the realm does not define, and it is also
+    what you write in `typeof Buffer !== 'undefined'` to check that it doesn't;
+    `process.cwd()` is Node creeping back in, unless `process` is a local
+    variable three lines up. The scan matches the name, not the binding.
+  * a `.styl` file under `src/core/` is the built-in library the task explicitly
+    asks to be shipped there; a `.css` file beside it is either a stray fixture
+    or an answer key.
+  * a file under `test/` whose digest differs from the original is either the
+    test runner rewritten to drive the new API -- which is expected and permitted
+    -- or a corpus input edited to match a broken port, which is the one change
+    that would make this whole grade meaningless.
+
+The scan cannot tell those apart. You can: open the file at the line it names.
+
+Two of its instruments are worth knowing the shape of, because their findings
+read as accusations and are not. Near-duplicate detection compares files pairwise
+by shared significant lines; it is calibrated to be silent on the unmodified
+original, so a pair it reports is something the submission introduced, but
+sibling AST node classes legitimately look alike. And the digest sweep over
+`test/` reports every difference, including the runner it is permitted to change:
+that entry is a change report, not a violation.
+
+A finding you have checked and explained is worth citing in your notes. A finding
+you have checked and dismissed is worth saying so about -- it tells whoever reads
+your review that the lead was followed rather than missed. What you must not do
+is fail a gate because a scan flagged something you did not read.
+
+And the reverse, which matters more here: a clean scan is not a pass. A
+submission that copied all 137 modules into `src/core/`, added a `platform`
+parameter that nothing consults, and left a module-level singleton doing the real
+work would come back clean from every check below. So would one whose core is
+pristine and whose exports map points at a bundle of the original. That is the
+whole reason the gates are questions rather than a token list.
+
+{{findings}}
+
+THE GATES
+
+Answer each of these separately. A REQUIRED gate that fails means this
+submission scores zero, so hold those to the standard that decision deserves.
+
+{{gates}}
+
+EVIDENCE
+
+Every `fail` needs at least one citation: a path, a line number, and a quote of
+what is at that line. The citations are checked mechanically against the tree
+after you finish -- a path that does not exist, a line past the end of the file,
+or a quote that is not there is discarded, and a `fail` with no surviving
+citation is counted as a `pass` rather than a failure. This is not a
+formality: it is what makes your verdict something a submitter can dispute.
+
+Cite the code that shows the problem, not the code that suggests it. "This file
+mentions fs" is not evidence of anything. "Line 41 of src/core/index.js reads
+`platform = globalThis.__stylusPlatform`, and no caller passes one" is. Where the
+finding is a relationship between two files -- a core module importing the
+adapter, an entry point reaching the original -- cite both ends.
+
+WHEN YOU CANNOT TELL
+
+Every gate gets one of two answers, `pass` or `fail`. There is no third answer, so
+a gate you looked at and could not settle is a `pass`. `fail` is the verdict that
+has to be earned with evidence, and a migration that is honestly incomplete is
+measured by the tests in the next stage, not here.
+
+Do not answer `pass` because the answer took work to find. This tree is 137
+modules before it is anything else, and a question about where a capability
+comes from can take a dozen files to settle. Answer `pass` because the code
+does not settle the question, not because you stopped short of settling it.
+
+Call `submit_review` once, when you have finished looking, with one verdict per
+gate id above.

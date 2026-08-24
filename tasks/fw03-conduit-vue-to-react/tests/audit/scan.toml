@@ -1,0 +1,92 @@
+schema = "swerefactor.scan-suite/1"
+task = "fw03-conduit-vue-to-react"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Nothing here is scored, and this task is the clearest case for why not: scoring
+# these rules fails in both directions, and both directions are measured.
+#
+# Scoring them accuses.  The retired framework's whole surface is text, and the
+# same text is what you write when you are describing having removed it: a
+# migration note saying "components that used `v-if` are now conditional JSX"
+# trips the directive rule, and a correct port with a NOTES.md measures 0.0.
+# Matching the bare words `swerefactor`, `verifier` and `golden` is worse -- and
+# instruction.md tells the agent to run `swerefactor-diff`, this is an application
+# with JWT auth where `verifier.js` is an ordinary file name, and "the golden path
+# through the router" is ordinary English.
+#
+# Scoring them also clears.  Three submissions that had migrated nothing passed
+# every rule, because every rule is satisfiable by renaming: one moved 26
+# single-file components off `.vue`, shipped a loader that compiled them at build
+# time, and scored 0.999984 with the retired implementation still in the tree.
+#
+# Both have the same cause. A string match cannot decide a migration. It is an
+# excellent way to decide *where to look*, and stage 1 is the stage that can
+# look. So the modules run here, their output is substituted into the reviewer's
+# prompt as findings, and `swerefactor.scan` records every check with
+# `required = false` -- `scoring.grade_audit` gates on the required checks,
+# which are the five prose questions in evaluation.toml and nothing else. A scan
+# finding costs a submission nothing on its own.
+#
+# Weights are recorded and unused: nothing here is scored. They are kept so a
+# module could move to a scored stage without a rewrite, which is the same reason
+# the module contract is byte-for-byte stage 2's.
+
+default_timeout_sec = 600
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check in this suite can fail the audit gate; the gate is the five
+prose questions in evaluation.toml, answered by a model that reads both trees.
+These modules answer the sub-questions a string can answer, so that the reviewer
+spends its turns on the ones a string cannot.
+
+Calibration, run against the two trees this task ships: 32 of 129 checks fire on
+State A itself, and 2 fire on a straightforward port -- one for the
+`dangerouslySetInnerHTML` that rendered Markdown needs, one for a test suite
+smaller than a quarter of the original's. Both of those are true observations that
+a reader dismisses in a sentence, which is the shape a finding is supposed to
+have.
+"""
+
+[[module]]
+id = "retirement"
+title = "the retired framework in the tree and in what the tree declares"
+weight = 1.0
+about = """
+Dependencies across all eight manifest sections and all four lock-file dialects;
+single-file components by extension and, separately, by shape; the retired
+runtime's imports, globals, instance properties and template syntax; build
+configuration only the old tool reads; a hand-written reactivity system, template
+compiler or options runtime; paths named after the framework; and whether the
+project's own test suite came along. Reads SRB_REPO and SRB_ORIGINAL; installs
+nothing.
+"""
+
+[[module]]
+id = "adoption"
+title = "what the tree declares, configures and builds with now"
+weight = 1.0
+about = """
+The other half of the same question, because a tree can be clean of the old
+framework and still not have adopted the new one. The target runtime and bundler
+in the manifest, a build script that invokes the bundler rather than copying an
+artefact, a bundler config that is not loading a plugin for the retired
+framework, an entry document that is a shell rather than a rendered page, and
+whether compiled output -- a `dist/`, a minified blob under a source name, a read
+of the frozen State A bundle -- could be standing in for a build.
+"""
+
+[[module]]
+id = "provenance"
+title = "where the displayed values come from, and who the code is talking to"
+weight = 1.0
+about = """
+Automation detection and grader-artefact reads, by mechanism and never by
+vocabulary; served values embedded in production source, which stage 3 can
+disprove at runtime because `stampNonce` rewrites every title, body, bio and tag
+per candidate; tables keyed on the corpus -- eight article slugs, all three users,
+ten concrete routes; and markup assembled as a string instead of rendered.
+"""

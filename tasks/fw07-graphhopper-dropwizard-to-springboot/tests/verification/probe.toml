@@ -1,0 +1,291 @@
+schema = "swerefactor.verification-probe/1"
+task = "fw07-graphhopper-dropwizard-to-springboot"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file speaking raw HTTP to servers this script built and
+# booted from the tree under test.  Both trees are built by the same offline Maven
+# command against the same local repository, and each is served under the same two
+# graph profiles stage 2 drives -- `base` (Andorra, three routing profiles across
+# CH, LM and flexible) and `pt` (Beatty plus two GTFS feeds, transit endpoints
+# live).  A candidate is a black-box HTTP test and has no way to tell the trees
+# apart except by the bytes they answer with.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two JVM web
+# applications differ somewhere, and on a framework migration the easiest
+# differences to find are the ones that are not the submission's fault.  Jetty and
+# Tomcat disagree about header order, about the error page for a malformed request
+# line, about what a path with an empty segment resolves to, and about the wording
+# of a 400 produced before any application code runs.  A probe that returned those
+# would be measuring Jetty against Tomcat.
+#
+# The allow list is the application's public contract as instruction.md states it;
+# the deny list is what evaluation.toml says stage 2 does not compare, which this
+# stage mirrors clause for clause.  The two documents have to agree.  A scope
+# forbidding what the instruction promised makes the task unwinnable; a scope
+# permitting what the instruction excluded makes it unlosable.
+[scope]
+allow = [
+  "the status code, headers and body of any request to any path, on either connector, under either graph profile",
+  "which endpoints exist and which methods they answer: /route on both GET and POST, and the 405-versus-404 split on the paths that answer only one verb",
+  "the JSON error contract: that a rejected request answers a document with a `message` and a `hints` array whose entries carry their own `message`, and which class of input produces which status",
+  "how routing parameters are parsed and validated: a missing `point`, one `point`, three, a malformed coordinate pair, a coordinate outside the imported extract, a `profile` that was never configured, and a numeric parameter given a non-numeric value",
+  "the interaction between `custom_model` and the back-end a profile is prepared for: a CH-prepared profile refuses a custom model unless CH is disabled for that request, and the refusal is a specific status with a specific hint",
+  "`algorithm`, `ch.disable`, `lm.disable`, `heading`, `pass_through`, `snap_prevention`, `curbside`, `point_hint`, `details`, `instructions`, `elevation`, `calc_points`, `debug` and `optimize`: that each is accepted where the original accepted it and refused where the original refused it",
+  "content negotiation the application performs: `type=gpx` versus `type=json`, an `Accept` header the resource cannot satisfy, and gzip when the request asks for it against when it does not",
+  "localisation: `locale=de` and the language of the instruction text, and the /i18n endpoints including an unknown locale",
+  "conditional registration by configuration: that /route-pt, /isochrone-pt and /pt-mvt exist under the `pt` profile and are absent under `base`, and what a request to an absent one answers",
+  "the transit contract under the `pt` profile: `pt.earliest_departure_time`, `pt.arrive_by`, `pt.profile`, `pt.limit_street_time`, a missing timestamp, and a malformed one",
+  "the shape and status of /info, /health, /nearest, /isochrone, /spt, /mvt, /match and /navigate, including a request each of them rejects",
+  "which surfaces live on the ADMIN connector and which on the application connector, and what the other connector answers for a path that belongs to its sibling",
+  "the healthcheck document: its status when healthy, and the shape of what it returns",
+  "static assets the application serves: /maps/ and its index, /maps without the trailing slash, a missing file underneath it, and the root path",
+  "CORS headers the application writes, on a success, on an error, on a 404 and on a preflight",
+  "a body the application must parse: a JSON /route POST with a wrong field type, a truncated document, a /match upload that is not GPX, and a declared Content-Type the resource does not accept",
+]
+deny = [
+  "the Date header, and any header the embedded container emits without the application asking",
+  "HTTP reason phrases",
+  "header name casing, and the order of distinct header names -- Jetty and Tomcat do not agree on it and the order is not the contract",
+  "the charset parameter on a Content-Type; the media type is compared and the parameter is the container's choice",
+  "wall-clock timing and anything derived from it: `X-GH-Took`, the `info.took` field, a GPX `<time>` element, a healthcheck `timestamp`, the log id in a 500 body",
+  "errors the container generates before the application is reached -- `//route` is answered by Jetty's URI parser, not by any code either side wrote -- and container error-page bodies generally",
+  "the byte-exactness of the command-line usage text, which State A gets from argparse4j",
+  "the bodies of /metrics and /threads: one is a metrics registry's serialisation and the other is a thread dump, and both are properties of the retired container's admin servlets",
+  "the exact bytes of a protobuf tile from /mvt or /pt-mvt; that a tile is produced and its status and media type are in scope, its encoding is not",
+  "log output, on stdout or stderr, in any format",
+  "which launch convention started the server, how many JVM processes exist, JMX, heap size, thread names, or anything else about the process rather than about what it answers",
+  "anything requiring the retired framework to be present, importable or nameable in the submission",
+  "the internal structure of the submission: file layout, package names, class and method names, annotations, how dispatch or injection is implemented, which Maven modules exist",
+  "behaviour under a request the original also mishandles -- a candidate must pass on the original",
+  "the identity of the tree under test, however it is learned: the harness environment, a path the candidate was handed, the contents of /proc, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking a running server a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# Three reruns.  This application holds no mutable state -- every endpoint is a
+# reader and the graph is imported once at startup -- so nothing here depends on
+# what ran before it.  What the reruns are for is the other hazard: a route
+# request's `took`, a `Date`, a healthcheck `timestamp`, a GPX `<time>`.  Stage 2
+# masks those by measurement, asking every case twice per side and dropping
+# whatever differs within one side's own pair.  This stage has no fixed corpus to
+# measure, so it gets the same protection from repetition: a candidate keyed on a
+# volatile field fails to reproduce and is rejected as a flake rather than counted.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Generous, and it has to be, because the first execution of a round pays for
+# everything: an offline Maven build of the whole reactor, then two cold graph
+# imports -- GraphHopper reads the OSM extract and runs the CH and LM preparations
+# before it binds a port -- and, for a submission that starts by an unusual
+# convention, several rungs of the launch ladder before the one that works.
+#
+# All of it is cached under $SRB_WORK, which the harness shares across candidates
+# AND across all six rounds, so this ceiling is reached once per tree per stage
+# rather than once per candidate.  Later executions build nothing, boot nothing,
+# and cost pytest.
+candidate_timeout_sec = 7200.0
+run_timeout_sec = 240.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one request the original answers
+correctly and the submission does not. A round that finds nothing pays the
+submission 10 points; a round that errors pays nothing and is reported as an error
+rather than as either verdict.
+
+Every round gets FOUR servers: two graph profiles per tree. The second profile is
+not a luxury. Under `config-base.yml` the transit endpoints are not registered at
+all -- /route-pt, /isochrone-pt and /pt-mvt are absent as routes rather than
+present and empty -- so a probe confined to one configuration could not reach the
+transit stack, and the transit stack is where three PtRouter implementations
+compete for one injection point. That is among the likeliest places for a port to
+be subtly wrong, and it is invisible from a single configuration.
+
+The first round carries a larger budget than the other five, and the reason is
+worth stating rather than hiding. Tool time is charged to the round that spends
+it, and the first candidate ever executed pays for both trees' Maven builds and
+all four cold graph imports -- work every later round inherits for free from the
+shared work directory. Giving round one the same hour as the others would spend
+most of it compiling. This is an imbalance in what the six rounds cost, not in
+what they are allowed to do: the scope, the reruns and the adjudication are
+identical, and the five 3600-second rounds are the ones the stage is calibrated
+on.
+
+Peak memory is four JVMs, one per (tree, profile), each with stage 2's heap
+setting. The heap is stage 2's deliberately rather than a smaller one chosen to
+fit: a divergence that appears only under a tighter heap than the behavioural
+suite used would be a finding about this image.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures is how
+# much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable.
+#
+# `focus` is metadata, appended to the round's opening.  Six unguided rounds
+# converge on the same two or three obvious requests -- on this task, all six would
+# write a /route happy path and a missing-`point` 400.  Six pointed ones cover the
+# surface.  It is a hint about where to look, never a list of tests to write.
+#
+# The assignments follow where this migration can actually go wrong, which is not
+# evenly spread.  The web tier is 58 files and the whole of it changes: 25 explicit
+# Jersey registrations become whatever the target framework's discovery does, 16
+# bound types in a hand-written injection binder become beans, and the error
+# contract is produced by three exception mappers and a message-body writer that
+# have no direct equivalent.  Four of the six rounds are pointed at consequences of
+# those three facts.
+
+[[adversary]]
+id = "a01-parameter-validation-and-error-contract"
+model = "gpt-5.6-sol"
+driver = "openai"
+# See `about`: this round pays for both builds and all four graph imports, which
+# every later round inherits.
+budget_sec = 7200.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the error contract and the parameter validation that produces it. The original
+answers a rejected request with a JSON document carrying `message` and a
+`hints` array, and it is built by exception mappers registered explicitly on the
+retired framework -- a rewrite has to reproduce the document from whatever its
+own framework offers, and the easy mistake is to reproduce the status while
+losing the shape.
+
+Work through what /route rejects and with which status: no `point` at all, one
+`point`, a coordinate that is not a pair of numbers, a pair outside the Andorra
+extract, a `profile` that was never configured, a numeric parameter given text,
+an unknown parameter, a parameter given twice. Then find the ones where a
+plausible rewrite would answer 400 where the original answers 500, or the
+reverse, and the ones where the body loses `hints` while keeping `message`.
+"""
+
+[[adversary]]
+id = "a02-dispatch-surface-and-methods"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+which paths exist and which methods each answers. The original registers its
+resources explicitly, one call per class, and a rewrite that relies on its own
+framework's component scanning will not necessarily end up with the same set --
+a resource that was registered but is not discovered is a 404 on a path that
+used to work, and a resource discovered twice is a different failure.
+
+/route answers both GET and POST and they are two separate bindings, one
+reading query parameters and one deserialising a body. Find the paths that
+answer one verb and not another, what the other verb gets, and whether a path
+that answers nothing gives you a 404 or a 405. Include the paths with template
+segments -- /i18n/{locale}, /mvt/{z}/{x}/{y}.mvt -- where the template's own
+shape is part of the route: a wrong number of segments, a segment that will not
+parse as a number, an unknown locale, and the bare prefix with no segment at
+all.
+"""
+
+[[adversary]]
+id = "a03-configuration-and-conditional-wiring"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+what the configuration decides, which is more than it looks. Compare the two
+profiles you have been given: the `pt` server was started from a configuration
+naming two GTFS feeds and the `base` server was not, and the transit endpoints
+exist only on the first. Confirm what the second answers for /route-pt,
+/isochrone-pt and /pt-mvt, and whether the two are consistent about it.
+
+Then the transit stack itself, which is bound through a mechanism of its own
+and where three router implementations compete for one injection point:
+`pt.earliest_departure_time` present, absent and malformed; `pt.arrive_by`;
+`pt.profile` and the cardinality of what it returns; `pt.limit_street_time`
+large enough that a walking-only itinerary wins. Also /info under both
+profiles, which reports the configured profile list and is the cheapest proof
+that a configuration reached the application at all.
+"""
+
+[[adversary]]
+id = "a04-back-ends-and-custom-models"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the three routing back-ends and the rules about which requests each one
+accepts. In the `base` configuration `car` is prepared for contraction
+hierarchies, `bike` for landmarks, and `foot` for neither -- so the same
+request is legal on one profile and refused on another, and the refusal is a
+specific status with a specific hint. `custom_model` is the sharpest case: it
+is refused on a CH-prepared profile unless that request disables CH, and a
+rewrite that lost the check answers 200 where the original answers 400.
+
+Work through `ch.disable`, `lm.disable`, `algorithm` with each of its accepted
+values and an unaccepted one, `heading` with and without `pass_through`,
+`curbside`, `snap_prevention`, and the combinations where two of them
+contradict each other. Then the POST form of /route with the same content, and
+a POST body whose `custom_model` is malformed rather than merely refused.
+"""
+
+[[adversary]]
+id = "a05-connectors-negotiation-and-assets"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the two connectors and what each serves. The original runs the application on
+one port and a separate admin surface on another -- /healthcheck, /ping,
+/tasks, /metrics, /threads and an index -- and a rewrite has to reproduce that
+split from its own framework's equivalent. Ask each connector for the other's
+paths and find where the two disagree with the original. The healthcheck
+document's shape is in scope; the bodies of /metrics and /threads are not.
+
+Then negotiation and assets on the application port: `type=gpx` against
+`type=json`, an `Accept` header the resource cannot satisfy, gzip requested
+against not requested, HEAD against GET on a route and on /info, /maps/ and its
+index, /maps without the trailing slash, a missing file under it, and the root
+path. And CORS: on a success, on an error, on a 404 and on a preflight -- which
+headers the application writes, in each case.
+"""
+
+[[adversary]]
+id = "a06-bodies-and-the-rest"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+requests carrying a body, which is where the deserialisation the original does
+explicitly can quietly change. A /route POST with a field of the wrong JSON
+type, an empty object, a truncated document, a document declaring a
+Content-Type the resource does not accept, and no Content-Type at all. Then
+/match, which takes a GPX upload: the fixture track, a truncated one, XML that
+is not GPX, and a `type=json` variant of the same request.
+
+Then, with whatever budget remains, nothing in particular -- read both trees
+and follow what looks weakest. /nearest, /isochrone with each of its limits and
+with `buckets`, /spt with `columns`, /navigate and the parameter values it
+refuses, /health. The other five rounds were told where to look, so this tail
+is where anything they were not told about has to be found.
+"""

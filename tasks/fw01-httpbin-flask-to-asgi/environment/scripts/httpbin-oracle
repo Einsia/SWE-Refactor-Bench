@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# =============================================================================
+# httpbin-oracle -- run the ORIGINAL (State A) httpbin 0.10.2 application.
+#
+# This is the behavioural reference implementation.  It is served from an
+# immutable, read-only virtualenv (/opt/oracle) that has its own copy of the
+# original sources, so it keeps responding correctly no matter what you do to
+# /workspace/repo.
+#
+# Use it as ground truth: send the same request to the oracle and to your
+# migrated server and compare the two responses byte for byte.
+#
+#   httpbin-oracle &                      # listens on 127.0.0.1:8899
+#   curl -sD- http://127.0.0.1:8899/get
+#
+# Environment:
+#   ORACLE_PORT   port to bind (default 8899)
+#   ORACLE_HOST   address to bind (default 127.0.0.1)
+#
+# NOTE: the oracle is a *reference*, not a target.  It runs on Flask +
+# Werkzeug + gunicorn/gevent, which is exactly the stack you are required to
+# remove from the project.  Do not copy it into your deliverable.
+# =============================================================================
+set -euo pipefail
+
+ORACLE_HOST="${ORACLE_HOST:-127.0.0.1}"
+ORACLE_PORT="${ORACLE_PORT:-8899}"
+
+if [ ! -x /opt/oracle/bin/gunicorn ]; then
+    echo "httpbin-oracle: /opt/oracle is missing or broken" >&2
+    exit 1
+fi
+
+echo "httpbin-oracle: serving the original httpbin 0.10.2 (Flask/WSGI) on ${ORACLE_HOST}:${ORACLE_PORT}" >&2
+
+# gunicorn with the gevent worker, matching the upstream Procfile
+# (`web: gunicorn httpbin:app -k gevent`).  Running under gunicorn also
+# reproduces upstream's SERVER_SOFTWARE-dependent handling of chunked
+# request bodies.
+exec /opt/oracle/bin/gunicorn \
+    --bind "${ORACLE_HOST}:${ORACLE_PORT}" \
+    --worker-class gevent \
+    --workers 1 \
+    --worker-connections 100 \
+    --timeout 120 \
+    --graceful-timeout 10 \
+    --access-logfile /dev/null \
+    --error-logfile - \
+    --log-level warning \
+    --chdir /tmp \
+    httpbin:app

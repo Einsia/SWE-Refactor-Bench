@@ -1,0 +1,47 @@
+# Variant: one profile instead of three.
+#
+# The variant a hard-coded profile list cannot survive.  /info has to report a
+# single profile, a car request has to succeed, and a bike request has to fail —
+# where under config-base.yml the same bike request succeeds.  A submission that
+# compiled in the three profiles it needed to pass the corpus answers the bike
+# request correctly here, which is exactly the wrong answer.
+#
+# Its own graph directory, because the encoded values differ from the base
+# profile's: reusing a graph built with bike's encoded values would let a service
+# route on data its configuration never asked for.
+#
+# `profiles_ch` still names car, so the speedup wiring is exercised too.  Dropping
+# it would test one thing less for no saving.
+
+graphhopper:
+  datareader.file: @REPO_ROOT@/core/files/andorra.osm.pbf
+  graph.location: @GRAPH_DIR@
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+  profiles_ch:
+    - profile: car
+  graph.encoded_values: car_access, car_average_speed, roundabout, road_class, road_environment, road_access, max_speed, road_class_link, lanes, country, urban_density
+  graph.urban_density.threads: 1
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 1
+  import.osm.ignored_highways: ""
+  graph.dataaccess.default_type: RAM_STORE
+
+server:
+  application_connectors:
+    - type: http
+      port: @APP_PORT@
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: @ADMIN_PORT@
+      bind_host: 0.0.0.0
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

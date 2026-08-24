@@ -1,0 +1,288 @@
+# =============================================================================
+# SWERefactorBench -- framework rewrite
+#
+#   State A : svenstaro/miniserve 0.27.1, whose HTTP layer is actix-web 4.5.1
+#             plus three actix-coupled satellites: actix-files (static serving
+#             and the ETag algorithm), actix-multipart (upload parsing) and
+#             actix-web-httpauth (the Basic/Digest challenge).  12 source files,
+#             3484 LOC; 7 of them name actix, across 15 lines that mention
+#             HttpResponse (8 of them constructions) and 33 uses of web::.
+#   State B : the same file server on axum 0.7 -- routing, extractors, static
+#             serving, multipart, auth, compression and TLS rebuilt on
+#             axum/tower/tower-http/hyper.  Observable HTTP behaviour, the CLI
+#             surface and the release profile unchanged.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# What makes this more than a router swap is that the bytes miniserve sends are
+# largely actix's, not miniserve's.  actix-files derives its ETag from
+# `inode:size:mtime_secs:mtime_nanos` and its Last-Modified from the same stat;
+# it answers If-Range/If-None-Match/If-Modified-Since with actix's precedence
+# rules, emits multipart/byteranges for a multi-range request and picks actix's
+# own 416 body.  Content-Encoding negotiation is actix-web's Compress middleware,
+# including how it breaks ties between equal q-values and which content types it
+# declines to compress.  The Digest challenge, the nonce format and the exact
+# WWW-Authenticate parameter order come from actix-web-httpauth.  A port that
+# rebuilds routing correctly and leaves those to tower-http's defaults fails on
+# response bytes, which is where most of the 612 graded cases look.
+#
+# The dependency boundary is enforced by omission rather than by inspection: the
+# delivery registry the agent installs from is a cargo local-registry with no
+# index entry and no .crate payload for any of the 18 retired names, so
+# `cargo build` stops with "no matching package named `actix-web` found".  There
+# is no registry to reach past and no network to reach it over.
+#
+# The cheat this task is built to defeat is not a wrapper -- it is delegation.
+# The agent container ships a working State A binary at /opt/oracle/miniserve,
+# read-only, as the differential oracle.  Copying, symlinking, exec-ing or
+# proxying it satisfies every behavioural test the agent can run locally.  No
+# grading stage has one.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, six gates, all required.  Failing one is a zero and nothing
+#      after it runs.
+#   2. fourteen behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the original passes
+#      and this one fails.  60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has no
+# Rust toolchain, because a review that can build grades a build log instead of
+# an implementation -- and because it removes the only way a read-only scan could
+# accidentally become an execution.  Stage 2 carries both registries and compiles
+# against the complete one, because the reference tree it grades every expectation
+# against is itself built on actix -- a pruned registry there would make State A
+# uncompilable and the suite ungradable for the one submission whose behaviour
+# defines it.  Resolving is therefore *not* the evidence in stage 2; the retired
+# closure is measured in stage 1, where the scan reads the manifest, the lock file,
+# the feature table and the shipped source mechanically and the reviews vote on
+# what it found.  Stage 3 is the only image that can build both trees, because
+# "the original passes this test" is a claim that has to be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# What Harbor collects from the agent container after the trial.
+#
+# Every path cargo writes as build output or dependency state is excluded: the
+# verifier re-materialises the repo and rebuilds from its own registry, so an
+# agent's compiled artefacts never influence the score.  target/ is excluded for
+# a second reason -- it is where a delegating submission would put the oracle's
+# bytes, and a pre-built binary that survived collection would be a binary the
+# submitted source never had to produce.
+#
+# Solutions must therefore live in tracked source files, never inside these
+# paths.  instruction.md states that rule explicitly.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "target",
+    "vendor",
+    ".cargo-vendor",
+    "third_party",
+    "crates-vendor",
+    "*.crate",
+    "*.tar.gz",
+    "*.tgz",
+    "*.tar",
+    "*.zip",
+    "*.tar.xz",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".git",
+    ".venv",
+]
+
+[task]
+name = "swerefactor/fw05-miniserve-actix-to-axum"
+description = """
+Migrate miniserve 0.27.1 off actix-web 4 and its ecosystem -- actix-files,
+actix-multipart and actix-web-httpauth -- onto axum 0.7, across the whole
+repository, preserving byte-exact HTTP behaviour, the CLI surface and the
+release profile.
+"""
+authors = []
+keywords = [
+    "swe-refactor",
+    "framework-migration",
+    "rust",
+    "actix-web",
+    "axum",
+    "tower",
+    "hyper",
+    "miniserve",
+    "static-file-server",
+    "http-contract",
+    "offline",
+]
+
+[metadata]
+category = "framework-rewrite"
+difficulty = "frontier"
+license = "MIT"
+source_repository = "https://github.com/svenstaro/miniserve"
+source_version = "0.27.1"
+state_a = "actix-web 4.5.1 + actix-files 0.6.5 + actix-multipart 0.6.1 + actix-web-httpauth 0.8.1"
+# Names only the framework.  Which tower-http layers a submission reaches for --
+# if any -- is an engineering decision the gates do not grade; what is graded is
+# that axum is what actually serves the release binary's requests.
+state_b = "axum 0.7.9 on tower/hyper (layer choice at the submission's discretion); actix ecosystem absent"
+language = "rust"
+edition = "2021"
+toolchain = "1.77.2"
+tags = [
+    "whole-repository",
+    "framework-rewrite",
+    "http-contract",
+    "response-byte-contract",
+    "release-closure",
+    "offline-local-registry",
+    "differential-oracle",
+    "oracle-delegation-gated",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 8h wall clock.  The scale is the whole repository: 12 modules under src/, the
+# renderer's 773 lines of maud templates, and the CLI's full clap surface.  Every
+# file that touches the framework has to be rewritten, and the release closure --
+# Cargo.toml's feature table, the Containerfile, the CI workflow -- has to follow.
+#
+# The project's own suite is 14 integration binaries, 1887 lines, and it is the one
+# part of the repository that does *not* have to be rewritten: it drives the built
+# executable over the wire with reqwest and assert_cmd and names no actix type
+# anywhere, so it is framework-agnostic by construction.  instruction.md points the
+# agent at it as a first regression signal rather than as more work.  A submission
+# that has to edit those tests to make them pass has changed behaviour they pin.
+#
+# The State A oracle is a read-only binary at /opt/oracle/miniserve with a pinned
+# tree at /opt/oracle-root, so the time is spent on engineering rather than on
+# guessing what actix-files does with a conditional request.
+#
+# no-network: every crate the target stack may use is already in the local
+# registry at /opt/srb/registry.  Offline is what turns "the old framework left
+# the dependency closure" from a code-review opinion into a mechanical fact.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 28800.0
+network_mode = "no-network"
+
+[environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+CARGO_TERM_COLOR = "never"
+RUST_BACKTRACE = "1"
+MINISERVE_ORACLE_BIN = "/opt/oracle/miniserve"
+MINISERVE_ORACLE_ROOT = "/opt/oracle-root"
+SRB_REGISTRY_ROOT = "/opt/srb/registry"
+SRB_RETIRED_CRATES = "/opt/srb/retired-crates.txt"
+SRB_TARGET_MANIFEST = "/opt/srb/manifest-target.toml"
+SRB_TREE_SPEC = "/opt/srb/tree-spec.json"
+SRB_TLS_DIR = "/opt/srb/tls"
+SRB_AUTH_FILE = "/opt/srb/auth/auth-file.txt"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 14400 + 54000 = 73800s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.  A run that does reach it spends most of its
+# day there -- six adversaries with an hour each, sequentially, so a candidate
+# cannot be broken by what the previous one did to the server.
+#
+# Stage 2's own 4h is larger than the other tasks' because a release build of this
+# project is slow by design: the profile sets lto = true, codegen-units = 1 and
+# opt-level = 'z', which is most of that time, and the recorded corpus boots 62
+# differently-configured servers on top of it.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota to
+# be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 79200.0
+environment_mode = "separate"
+
+[verifier.environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+PYTHONDONTWRITEBYTECODE = "1"
+CARGO_TERM_COLOR = "never"
+RUST_BACKTRACE = "1"
+REPO_DIR = "/workspace/repo"
+VERIFIER_LOG_DIR = "/logs/verifier"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+# The registry, the credentials, the TLS material and the tree spec live at the
+# same paths in every stage image that has them, so a module or a candidate does
+# not have to know which stage it is running in.  Stage 1 has none of them: it
+# reads two source trees and executes nothing.
+SRB_REGISTRY_ROOT = "/opt/srb/registry"
+SRB_RETIRED_CRATES = "/opt/srb/retired-crates.txt"
+SRB_TREE_SPEC = "/opt/srb/tree-spec.json"
+SRB_TLS_DIR = "/opt/srb/tls"
+SRB_AUTH_FILE = "/opt/srb/auth/auth-file.txt"
+SRB_VERIFIER = "1"
+# No MINISERVE_ORACLE_BIN, unlike the agent environment above, and that asymmetry
+# is the point of the ladder.  Stage 1 reads and does not execute.  Stage 2 grades
+# against the frozen capture, so it never needs a reference implementation -- and
+# shipping one would put a working actix binary inside the container whose job is
+# to establish that actix is gone.  Stage 3 does build the original, from its own
+# complete registry, because a candidate's claim is only worth points if the
+# original demonstrably passes it.
+#
+# Any MINISERVE_* variable set here would also be a bug rather than a leak: the
+# CLI accepts its whole flag surface through MINISERVE_-prefixed environment
+# aliases, so one left in the verifier's environment would silently reconfigure
+# every server the suite boots.  The stage-2 harness deletes them from the child
+# environment for exactly that reason, and stage 3's launcher does the same.
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a smoke
+# test that the suite can be passed at all.  The suite's own gate answers that:
+# stage 3 is asked only of a submission that scored stage 2 in full, so a tree
+# that reaches it has already passed every recorded check.  What six models add is
+# the other half -- an hour each spent hunting for a behaviour nobody thought to
+# record.

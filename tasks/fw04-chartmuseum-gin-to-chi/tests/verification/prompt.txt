@@ -1,0 +1,125 @@
+TASK {{task}} -- find what the migration got wrong.
+
+ChartMuseum is a Helm chart repository: you POST it a packaged chart, it stores
+it, and it serves back the index.yaml that a Helm client reads to discover what
+is available. It also has a JSON API for listing, inspecting and deleting charts.
+The original's HTTP layer is built on Gin -- routing, middleware, the per-request
+context, the request-size limiter and the Prometheus instrumentation all come
+from Gin or from a Gin plugin. The submission is supposed to be the same server
+with that layer rewritten on chi v5 and net/http, the old stack removed, and
+every observable behaviour preserved.
+
+Preserved means byte for byte where it can be: same status codes, same bodies,
+same semantic headers. It has already been checked that the migration is real and
+that a large recorded corpus of requests still gets the right answers. Your job
+is the part that corpus cannot do: find a request nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original server, on Gin
+  {{submission}}   the submission, which claims to be the same server on chi
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories, and both are read-only to you -- you
+attack them over HTTP, not by editing them.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner compiles
+it, starts the resulting binary with a fresh storage directory seeded from a fixed
+set of charts, waits for it to answer, and runs your file against it. You are told
+the outcome on each tree separately.
+
+Your file gets three things from the environment:
+
+    SRB_BASE_URL   e.g. http://127.0.0.1:8080 -- the running target
+    SRB_CHARTS     a directory of packaged charts you may read and upload
+    SRB_TMP        scratch space you may write to
+
+The standard library is available, and `pytest`, and `PyYAML` for reading an
+index. Nothing else -- in particular there is no third-party HTTP client, and
+that is deliberate: `http.client` lets you see the response exactly as it came
+off the socket, and a client that normalises headers or follows redirects for you
+would hide the differences you are looking for. Do not read the tree under test
+from inside the test, and do not inspect the binary: what is being graded is a
+server, and a test that opens a source file is measuring the wrong thing.
+
+Both servers are started with the same flags. Storage is local, overwrite is
+allowed, and metrics are on. You cannot change the flags, so a difference that
+only appears under a configuration you cannot reach is not something you can
+demonstrate here.
+
+Exit status is the verdict: zero means your test passed against that tree,
+non-zero means it failed. pytest does this for you.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter,
+and the first is where most attempts die: a test that fails on both trees has
+found a bug in the test, or a behaviour the original never had. Run every idea --
+you have budget for many, and one call tells you which of the four outcomes you
+got.
+
+Then it has to assert on something that was promised. The scope below is
+ChartMuseum's public contract; a divergence outside it is thrown out on review no
+matter how real it is, and you will have spent the budget for nothing. The Date
+header, header name casing, the order of tokens inside a Vary or an Allow, the
+value of X-Request-Id, any timestamp, the host and port the server echoes back:
+all genuinely different or genuinely per-run, all excluded, none worth a
+candidate.
+
+Your test also has to give the same answer three times. Storage state, an index
+that gets regenerated, and a metrics counter that your own requests move are all
+live here. A test that passes twice and fails once is discarded, so make each
+test set up what it needs and not depend on what a previous test left behind.
+
+WHERE A ROUTER SWAP ACTUALLY FAILS
+
+Not on the main path. Uploading a chart and fetching index.yaml work in every
+submission, because they are the first thing anyone tries and the first thing
+anyone tests. What gets left out is:
+
+  * Path matching at the edges. The two routers do not agree about a trailing
+    slash, about a doubled slash, about a path that is a prefix of a real route,
+    or about how many segments a wildcard will swallow. Neither author chose these
+    differences and neither had to think about them until now.
+  * What a path parameter contains. A percent-encoded separator inside a segment
+    is the classic: one router hands the handler the decoded value and the other
+    hands it the raw one, and chart names are attacker-chosen strings that end up
+    in file paths. A dot, a plus, a space and a non-ASCII byte are all worth one
+    test each.
+  * Method dispatch. When a path matches a route but the method does not, the
+    answer is a status, possibly an Allow header, and a body -- and a router that
+    synthesises that answer itself does it differently from one that leaves it to
+    the application.
+  * The Prometheus route label. The old server reports request metrics labelled by
+    route *template*, not by concrete URL, and Gin gave it the matched template
+    for free. Nothing in the new stack does. Whatever the submission built to
+    recover it is new code that nobody has a reference implementation for, which
+    makes it the single most likely thing in the tree to be almost right.
+  * Middleware that has to be rebuilt rather than ported: the request-size limit,
+    the panic recovery, the per-request identifier, the CORS headers. Each was a
+    plugin and is now somebody's hand-written handler.
+  * Error paths. What the original returns for a chart that does not exist, a
+    malformed upload, a version that collides, a request to no route at all --
+    and whether the error body is the same shape at every one of those.
+  * Anything the API and the index have to agree about. A chart the API lists must
+    be downloadable at the URL the index advertises, and the digest the index
+    publishes must match the bytes served. Two code paths, one invariant, and the
+    port touched both.
+
+Read the original's implementation of whatever you are attacking before you write
+the test. The point is not to guess what the original does; it is there, and it
+is the standard your test has to meet first.
+
+REPORTING
+
+If you find a divergence that holds up, report it with the candidate name and a
+description of what the submission gets wrong in terms of behaviour, plus which
+part of the contract it violates.
+
+If you do not, report that you found nothing, and say what you tried and where
+you looked. That is a real result -- it is what a sound submission is supposed to
+produce -- and a claim you cannot support is worth nothing more.

@@ -1,0 +1,25 @@
+# Every stage directory is a Docker build context and every stage Dockerfile
+# copies the whole of it into the image, so anything left lying about here gets
+# baked in.  Nothing below is a file the stage needs: it is the debris that
+# accumulates from running the suite locally, plus editor backups.  The same
+# list ships in all three of this task's stage directories -- a stage that
+# excluded something the others kept would produce an image nobody could
+# reproduce from the tree.
+#
+# Every pattern is `**/`-prefixed, which is not decoration.  These are not
+# gitignore patterns: Docker anchors an unprefixed pattern at the context root
+# and its `*` does not cross a `/`, so a bare `__pycache__/` guards this
+# directory and nothing beneath it.  Measured rather than assumed -- with the
+# unprefixed list, `docker export` of a `FROM scratch` + `COPY .` image still
+# contained lib/__pycache__/catalog.cpython-310.pyc,
+# lib/.pytest_cache/CACHEDIR.TAG and data/documents/x.yaml~.  The `**/` form
+# matches at the root too, so one pattern per kind covers both depths.
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*~
+**/*.orig
+**/*.rej
+**/.DS_Store

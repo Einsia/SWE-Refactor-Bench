@@ -1,0 +1,228 @@
+schema = "swerefactor.verification-probe/1"
+task = "fw05-miniserve-actix-to-axum"
+prompt = "prompt.txt"
+
+# One candidate test is a pytest file run against a target that this script
+# builds and boots.  Both trees are built the same way -- cargo, offline, release
+# -- from different registries, because the original needs actix and the
+# submission is forbidden it.  A candidate is a black-box test of a *binary*: it
+# boots the binary with flags it chooses and asks the resulting server or the
+# process itself a question.  It cannot tell which tree it is on except by the
+# answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two HTTP
+# servers differ somewhere, and any two Rust binaries differ in their `--help`
+# output somewhere.  The allow list is miniserve's own observable contract, the
+# deny list is what instruction.md told the agent is explicitly not compared.
+# They have to agree: a scope that forbids what the instruction promised would
+# make the task unwinnable, and a scope that permits what the instruction
+# excluded would make it unlosable.
+[scope]
+allow = [
+  "the status code of any request, on any path, with any method",
+  "response bodies byte for byte: the directory listing HTML, the file bodies, the error pages, the generated favicon and stylesheet",
+  "semantic headers: Content-Type with its exact charset spelling, Content-Length, Content-Disposition and its filename encoding, Content-Encoding, Location, WWW-Authenticate including the realm and the challenge scheme, ETag in whatever form the original emitted it, Last-Modified, Accept-Ranges, Content-Range, Cache-Control, and Vary",
+  "conditional requests: If-None-Match, If-Modified-Since, If-Match, If-Unmodified-Since, and the 304 and 412 responses including which headers a 304 carries",
+  "range requests: single ranges, suffix ranges, open-ended ranges, unsatisfiable ranges, multipart/byteranges if the original produced one, and 416",
+  "the directory listing in full: entry order under every ?sort= and ?order= query pair and under the --default-sorting-method / --default-sorting-order flags that supply their defaults, the mtime column, the size column and its unit spelling, breadcrumbs, the parent link, symlink presentation, hidden files under --hidden, and the HTML escaping of names containing quotes, ampersands, angle brackets, newlines, backslashes, emoji and percent sequences",
+  "percent-encoded and unicode paths, including %2F inside a segment, %00, dot segments, a trailing slash where the original treated it as significant, and a path that resolves outside the served root",
+  "archive generation: tar, tar.gz and zip -- the member list, the member paths, the modes and mtimes stored, the ordering, and the Content-Disposition filename",
+  "upload and mkdir when enabled: the multipart parse, the conflict behaviour, the overwrite flag, the path traversal refusals, and the redirect or body that follows a success",
+  "HTTP basic auth: the challenge, the accepted and rejected credentials, the hashed-credential forms the original accepted, and which paths are protected",
+  "TLS: that --tls-cert and --tls-key result in HTTPS being served, and that the served bytes over TLS match the plaintext ones",
+  "the CLI as an observable surface: the exit status and the stderr text of an invalid invocation, the value parsing and rejection of every flag, and the startup banner's content on stdout",
+  "flag interactions: --index with --spa, --route-prefix with --random-route, --readme, --show-symlink-info, --hide-version-footer, --header, --default-sorting-method with --default-sorting-order, and the MINISERVE_* environment aliases",
+  "that a request the original answers does not become a panic, a hang, or a connection reset in the submission",
+]
+deny = [
+  "the Server and Date headers",
+  "HTTP reason phrases",
+  "header name casing, and the order of distinct header names",
+  "whether a response arrives with Content-Length or chunked transfer encoding, except where the original's own choice is part of a range or archive contract",
+  "connection-management headers: Connection, Keep-Alive",
+  "the humanised relative time in a listing (\"2 years ago\"), which drifts with wall-clock time",
+  "the exact wording of a log line on stdout after startup, and the presence or absence of a log line at all",
+  "the ANSI colouring of any output, and the terminal width the CLI wraps its help to",
+  "the exact wording and layout of --help and --version beyond the version number itself, because clap's rendering is a library detail that no observable behaviour depends on",
+  "the wording of an error message where the status code and the semantics agree; a 400 that says something different is not a finding, a 400 that should have been a 404 is",
+  "timing, throughput, memory, the number of threads, and anything requiring a stopwatch other than that a request completes",
+  "anything requiring the retired stack to be present, nameable or linkable in the submission",
+  "the internal structure of the submission: module layout, type names, function signatures, the symbols in its binary, its build output, its Cargo.toml",
+  "behaviour under a request the original also mishandles -- a candidate must pass on the original",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the bytes or symbols of the binary it boots, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artifact a question about its behaviour. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Nothing here is timing-dependent by
+# design, but a server boots on a fresh port for every run and an archive is
+# built by a thread: a flake that costs a submission ten points is a bug in the
+# benchmark, not a finding.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Build + boot + pytest, for one candidate, on one tree.  The release build is
+# done once per tree and cached, so only the first candidate pays for it -- but
+# that first one pays a lot: miniserve's dependency closure is ~320 crates and a
+# cold release build is minutes, not seconds.
+candidate_timeout_sec = 1200.0
+run_timeout_sec = 600.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a
+# candidate that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one request or one invocation
+the original answers correctly and the submission does not. A round that finds
+nothing pays the submission 10 points; a round that errors pays nothing and is
+reported as an error rather than as either verdict.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name
+# the round, so two rounds on one model with different briefs stay distinguishable
+# in the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds
+# converge on the same three obvious surfaces; six pointed ones cover the
+# repository.  It is a hint about where to look, never a list of tests to write.
+#
+# The assignments follow where this particular migration has to do work by hand.
+# actix-files gave the original its conditional requests, its ranges and its
+# Content-Disposition; axum's equivalent is tower-http's ServeFile, which is a
+# different implementation with its own opinions, and every difference between
+# them is a place the submitter had to notice something.
+
+[[adversary]]
+id = "a01-conditional-and-range"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+conditional requests and validators: the form of the ETag, whether it is weak
+or strong, If-None-Match with a list and with `*`, If-Modified-Since at one-
+second boundaries, If-Match and If-Unmodified-Since, precedence when several
+are sent together, and which headers the 304 carries.
+
+Then ranges: suffix and open-ended forms, a range past the end, a zero-length
+range, multiple ranges in one header, Range combined with If-Range, 416 and
+its Content-Range, and whether the body bytes and Content-Length agree with
+the slice rather than with the file.
+"""
+
+[[adversary]]
+id = "a02-path-decoding-and-listing-html"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+path handling: %2F inside a segment, double-encoded sequences, %00, dot and
+dot-dot segments, a trailing slash, an empty segment, a path that escapes the
+served root, and the sample tree's own hostile names -- quotes, ampersands,
+angle brackets, literal newlines, backslashes, emoji, and a name containing a
+literal %20.
+
+Then the directory listing as bytes: entry order under each
+?sort=name|size|date crossed with ?order=asc|desc, every casing of each value,
+what an unrecognised, empty or repeated value for either does to the status as
+well as to the order, whether ?raw= and ?download= change the listing, the
+size column's unit spelling and rounding, the mtime column's format,
+breadcrumb and parent-link construction, symlink rows, --hidden, and the HTML
+escaping of every hostile name in the tree.
+"""
+
+[[adversary]]
+id = "a03-archives-and-upload-mkdir"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+tar, tar.gz and zip: the member list and its order, the stored paths and
+whether they are prefixed, the stored modes and mtimes, what happens to a
+symlink and to a hostile filename, the Content-Disposition filename, and
+whether an archive of an empty or unreadable directory still produces a valid
+file.
+
+Then upload and mkdir, which arrive as multipart fields rather than as query
+parameters: odd and absent filenames, a part whose value is split across
+several chunks, missing and duplicated and empty parts, a field ordered before
+or after the one that matters, the conflict and overwrite behaviour,
+backslashes and dot-dot and hidden segments and symlinks in a directory name,
+and the status, headers and body on success rather than only on failure.
+"""
+
+[[adversary]]
+id = "a04-auth-and-cli-parsing"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+basic auth: the challenge and its realm, the hashed-credential forms the
+original accepted from --auth and --auth-file, malformed and missing
+Authorization headers, credentials containing a colon, and which paths and
+which methods the protection covers.
+
+Then the CLI as a surface: the exit status and stderr of an invalid
+invocation, each flag's value parser and what it rejects, a flag given twice,
+a flag given an empty value, the MINISERVE_* environment aliases, and the
+startup banner's content.
+"""
+
+[[adversary]]
+id = "a05-flag-interactions-and-static-errors"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+flags that interact: --index with --spa and with a missing index file,
+--route-prefix with --random-route and with an encoded prefix, --readme,
+--show-symlink-info, --hide-version-footer, --header with a malformed and a
+repeated value, and --default-sorting-method with --default-sorting-order.
+
+Then the surfaces that are easy to forget: the generated favicon and
+stylesheet and their exact bytes and Content-Types, the 404 and 500 pages, a
+method the route does not take, HEAD and OPTIONS on every kind of path, and a
+request for a file the process cannot read.
+"""
+
+[[adversary]]
+id = "a06-tls-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+TLS: that --tls-cert and --tls-key actually serve HTTPS, that the bytes match
+the plaintext ones, what happens when the certificate or key is missing,
+unreadable or malformed, and whether the flags are accepted and then ignored.
+
+Then, with whatever budget remains, nothing in particular -- read the original
+and follow what looks weakest. The other five rounds were told where to look,
+so this tail is where anything they were not told about has to be found.
+"""

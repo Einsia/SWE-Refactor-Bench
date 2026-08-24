@@ -1,0 +1,1190 @@
+{
+ "behavioral_contract": {
+  "authority": "sqlparse 0.5.3 as shipped in State A, executed by the verifier at image build time. Not the documentation, not the SQL standard, not any later sqlparse release. Where the reference is surprising, the surprising thing is the specification.",
+  "comparison": "byte-exact against the pinned reference",
+  "not_graded": [
+   "The exact nesting depth at which the reference raises 'Maximum recursion depth exceeded'. It is a property of CPython's stack, not of sqlparse, and it is not even stable within one interpreter. What is graded: nesting up to 400 parses identically, and nesting at 20000 produces an error rather than a crash or a hang.",
+   "Wall-clock time, except that a case which takes longer than its timeout is a failure.",
+   "The text of Python's OSError strings that the CLI interpolates into its 'Failed to read' message.",
+   "argparse's own wording for usage errors.",
+   "Memory use, allocation counts and goroutine counts.",
+   "The order of map iteration anywhere it is not observable through the graded surface."
+  ],
+  "quirks_that_are_graded": [
+   "`select .5` tokenizes `select` as Token.Name, not Token.Keyword.DML, because the float pattern consumes the boundary the keyword pattern needs.",
+   "`1-2` is two Number.Integer tokens, '1' and '-2'; `a-1` is a Name and a Number.Integer '-1'.",
+   "The character class [A-ZA-U] under IGNORECASE|UNICODE matches the multiplication sign U+00D7 but not U+00DF, U+00DE, U+00FE or U+00FF.",
+   "Python's \\w under re.UNICODE matches CJK and Cyrillic letters, so identifiers in those scripts are Names. Go's \\w does not.",
+   "The lazy \\s+? in the whitespace rule emits one Whitespace token per character, so a run of four spaces is four tokens, not one.",
+   "An unterminated quote yields a Token.Error for the quote character alone, and tokenization continues after it.",
+   "`x$abc$` is a single Name: the dollar-quote rule's lookbehind refuses to start a quoted body directly after a word character.",
+   "Input that is bytes with no declared encoding and does not decode as UTF-8 falls back to Python's unicode-escape codec rather than raising. That codec is not Latin-1: it maps bytes 0x00-0xff to the same code points, but it ALSO interprets backslash sequences, so a fallback decode of rb\"a\\x41b\" yields 'aAb' and of rb\"a\\nb\" yields a real newline. A port that reaches for Latin-1 passes every non-ASCII case and fails every case containing a backslash."
+  ],
+  "version_string": "0.5.3"
+ },
+ "build_contract": {
+  "commands": {
+   "build": "go build ./...",
+   "install": "go install -trimpath ./cmd/sqlformat",
+   "test": "go test ./...",
+   "vet": "go vet ./..."
+  },
+  "env": {
+   "CGO_ENABLED": "0",
+   "GOFLAGS": "-mod=mod",
+   "GOPROXY": "off",
+   "GOSUMDB": "off"
+  },
+  "go_directive_max": "1.24",
+  "go_directive_min": "1.22",
+  "graded_independently": [
+   "go build ./... succeeds with no output",
+   "go vet ./... succeeds with no findings",
+   "gofmt -l . reports no files",
+   "go build ./... from a clean module cache succeeds with GOFLAGS=-mod=mod GOPROXY=off, i.e. the module graph needs no network",
+   "go install -trimpath ./cmd/sqlformat produces bin/sqlformat",
+   "a second go install -trimpath produces a byte-identical binary"
+  ],
+  "module_path": "github.com/andialbrecht/sqlparse-go",
+  "toolchain": "the Go toolchain already in the image; nothing is downloaded"
+ },
+ "category": "language-rewrite",
+ "cli_contract": {
+  "error_surface": {
+   "bad choice for a flag": {
+    "exit": 2,
+    "graded": "diagnostic-shape",
+    "note": "argparse's own usage error. The wording is not graded, because it is the parser's phrasing and no port would reproduce it. What is graded is the shape: see graded_diagnostic_bits."
+   },
+   "input not decodable in the declared encoding": {
+    "exit": 1,
+    "graded": "diagnostic-shape",
+    "note": "--encoding names a real codec and the bytes are not valid in it. The reference raises UnicodeDecodeError uncaught, same as above. A port must report the failure and must not substitute replacement characters and carry on: exiting 0 with formatted SQL is a wrong answer here."
+   },
+   "invalid option value": {
+    "exit": 1,
+    "note": "message is the reference's SQLParseError text, verbatim",
+    "stderr": "[ERROR] Invalid options: {message}\\n"
+   },
+   "no arguments": {
+    "exit": 2,
+    "graded": "diagnostic-shape",
+    "note": "as above"
+   },
+   "unknown encoding name": {
+    "exit": 1,
+    "graded": "diagnostic-shape",
+    "note": "--encoding names a codec that does not exist. The reference raises LookupError uncaught, so its stderr is an interpreter traceback and is not gradable; the shape is. A port is free to print whatever it likes, on stderr."
+   },
+   "unreadable file": {
+    "exit": 1,
+    "note": "the reason text is Python's OSError string and is NOT graded; the prefix, the path and the exit status are",
+    "stderr": "[ERROR] Failed to read {path}: {reason}\\n"
+   }
+  },
+  "flags_from_reference": "cli.py's create_parser; every flag it defines must exist with the same short and long forms, the same choices, and the same defaults",
+  "graded_diagnostic_bits": {
+   "stderr-empty": "it must say something; exiting non-zero in silence fails this",
+   "stdout-empty": "an error must write nothing to the output stream",
+   "usage-first": "whether the first line's first word is 'usage'. True for the argument errors, which is the conventional shape; false for the two encoding failures, which are not argument errors. Matched case-insensitively on the first word alone, so argparse's 'usage: sqlformat [OPTIONS]...' and Go's flag package's 'Usage of sqlformat:' both satisfy it."
+  },
+  "must_match_reference": [
+   "the exit status for every invocation the suite exercises",
+   "stdout, byte for byte",
+   "stderr for the error cases listed below",
+   "--version prints the version and a newline, and exits 0"
+  ],
+  "name": "sqlformat",
+  "usage_first_line": "usage: sqlformat  [OPTIONS] FILE, ..."
+ },
+ "encoding_contract": {
+  "alias_resolution": {
+   "names": {
+    "1251": "cp1251",
+    "646": "ascii",
+    "8859": "latin-1",
+    "ansi_x3.4-1968": "ascii",
+    "ascii": "ascii",
+    "cp1251": "cp1251",
+    "cp819": "latin-1",
+    "iso-8859-1": "latin-1",
+    "iso8859-1": "latin-1",
+    "iso_8859-1": "latin-1",
+    "l1": "latin-1",
+    "latin": "latin-1",
+    "latin-1": "latin-1",
+    "latin1": "latin-1",
+    "u16": "utf-16",
+    "u8": "utf-8",
+    "us-ascii": "ascii",
+    "us_ascii": "ascii",
+    "utf": "utf-8",
+    "utf-16": "utf-16",
+    "utf-16-be": "utf-16-be",
+    "utf-16-le": "utf-16-le",
+    "utf-16be": "utf-16-be",
+    "utf-16le": "utf-16-le",
+    "utf-8": "utf-8",
+    "utf-8-sig": "utf-8-sig",
+    "utf16": "utf-16",
+    "utf16-be": "utf-16-be",
+    "utf16-le": "utf-16-le",
+    "utf8": "utf-8",
+    "utf_16": "utf-16",
+    "utf_16_be": "utf-16-be",
+    "utf_16_le": "utf-16-le",
+    "utf_8": "utf-8",
+    "utf_8_sig": "utf-8-sig",
+    "windows-1251": "cp1251",
+    "windows_1251": "cp1251"
+   },
+   "normalization": "the name is stripped of leading and trailing whitespace and lowered before the lookup, and nothing else. `  UTF-8  ` and `UTF_16_LE` resolve; `utf 8` does not, because the space is interior. CPython's codec lookup also folds interior spaces, hyphens and underscores together -- this does not, and the suite grades the difference.",
+   "on_miss": "an error distinguishable from a decode failure. The two are graded as separate categories, `unknown-encoding` and `undecodable`, because a port that answers 'error' to both passes the rejection cases for the wrong reason.",
+   "table": "given below in full, 37 names over the 8 canonical encodings. It is published rather than described because which spellings are in it is a decision this task makes, not a fact a port could derive: CPython would resolve several hundred, and the set here is the subset a stdlib-only Go implementation can honor."
+  },
+  "fallback": {
+   "codec": "Python's unicode-escape",
+   "graded_escapes": [
+    "the byte-to-code-point mapping, i.e. 0x00-0xff -> U+0000-U+00FF",
+    "\\xHH  two hex digits",
+    "\\n \\r \\t \\a \\b \\f \\v \\0 and \\\\ and \\' and \\\" ",
+    "\\OOO  one to three octal digits",
+    "\\uHHHH and \\UHHHHHHHH",
+    "a trailing lone backslash, which the reference rejects"
+   ],
+   "not_graded": [
+    "\\N{NAME}, which needs the Unicode character-name database. Go's standard library does not expose it and x/text is forbidden, so no corpus document reaches it. A port may implement it or not."
+   ],
+   "note": "A port that reaches for Latin-1 here decodes every non-ASCII byte correctly and every backslash sequence wrongly. The corpus contains documents specifically to separate the two.",
+   "when": "the input is bytes, no encoding was declared, and it is not UTF-8"
+  },
+  "must_reject": {
+   "behavior": "any encoding name outside must_support must produce an error rather than a wrong decode or a panic. The error's text is not graded; the fact that it is an error, and that it is reported as `unknown-encoding` rather than as a decode failure, is.",
+   "examples": [
+    "gbk",
+    "big5",
+    "shift-jis",
+    "euc-jp",
+    "cp437",
+    "cp1252",
+    "koi8-r",
+    "utf-32",
+    "iso-8859-5",
+    "mac_roman",
+    "not-an-encoding",
+    "utf-9",
+    "utf 8",
+    ""
+   ],
+   "note": "cp1252 and iso-8859-5 are on the list on purpose. Both are one table away from an encoding that is supported, and a port that generalized its single-byte decoder to 'any 8859 or any cp12xx' would decode them -- which is a wrong answer, not a bonus, because the declared set is the contract."
+  },
+  "must_support": {
+   "ascii": "reject any byte >= 0x80, as CPython does",
+   "cp1251": "a 128-entry table for 0x80-0xff. The table is derivable from the fixture's expected output plus the published Windows-1251 layout, and a full single-byte table is 128 lines of Go.",
+   "latin-1": "bytes 0x00-0xff map to U+0000-U+00FF; aliases latin1, iso8859-1",
+   "utf-16": "with BOM sniffing, as CPython's 'utf-16' does",
+   "utf-16-be": "no BOM, big endian",
+   "utf-16-le": "no BOM, little endian",
+   "utf-8": "Go native; also the aliases utf8 and UTF-8",
+   "utf-8-sig": "utf-8, and a leading EF BB BF is consumed rather than decoded to U+FEFF. Plain utf-8 keeps it, so the two differ on exactly one document and the suite grades that document under both names."
+  }
+ },
+ "forbidden_paths": [
+  ".git",
+  ".hg",
+  ".svn",
+  ".bzr",
+  "_darcs",
+  "CVS",
+  "vendor",
+  "__pycache__",
+  ".netrc",
+  ".npmrc",
+  ".pypirc",
+  "go.work",
+  "go.work.sum"
+ ],
+ "forbidden_paths_note": "vendor/ and go.work would change what `go build` resolves against, and the point of the module gate is that the closure is the standard library. The credential files are listed because a submission that leaves one behind has been talking to a network it was not supposed to have.",
+ "go_code_policy": {
+  "allowed_import_prefixes": [
+   "github.com/andialbrecht/sqlparse-go"
+  ],
+  "forbidden_import_note": "A SQL parser needs none of these. os/exec and plugin are how a submission would shell out to a Python that is still on the machine; net/* is how it would ask something else for the answer; unsafe and cgo are how it would embed a C or Python runtime. net/url is listed because it is the one net package with a plausible parsing excuse.",
+  "forbidden_imports": [
+   "os/exec",
+   "plugin",
+   "net",
+   "net/http",
+   "net/url",
+   "syscall",
+   "unsafe",
+   "runtime/cgo",
+   "C"
+  ],
+  "min_go_logic_lines": 3500,
+  "min_go_logic_lines_note": "The Python implementation is 4024 lines. A faithful Go port is normally larger, because the four regex features the reference depends on -- lookbehind, lookahead, backreferences and Unicode character classes -- do not exist in Go's regexp package and have to be written out. A submission far below this floor has not ported the implementation; it has stubbed it.",
+  "no_module_requires": "go.mod may declare no require directives other than the toolchain line: the module closure has to be the standard library plus itself",
+  "no_vendor_directory": true,
+  "stdlib_only": true,
+  "test_files_required": 1
+ },
+ "go_contract": {
+  "closed_world": true,
+  "closed_world_note": "For each package listed here, the set of exported identifiers must be exactly the set given -- no more, no fewer. Unexported identifiers are unconstrained, and any number of internal/... packages may exist: Go's import rules already keep those out of the public surface. A rewrite that grows the public API has not preserved the interface.",
+  "doc_comment_policy": {
+   "measured_in_state_a": "37 of the 39 top-level public functions and classes in sqlparse 0.5.3 carry a docstring (95%). The floor is set below that: the port has to explain its public surface, but is not held to a higher standard than the code it replaces.",
+   "min_documented_ratio": 0.75,
+   "package_doc_note": "Every package listed in go_contract.packages must carry a package comment on one of its files. This is Go's own convention and what `go doc` prints for the package; the reference's own modules carry module docstrings on the public-facing ones.",
+   "package_doc_required": true,
+   "ratio_scope": "func and type symbols in the package's contract entry",
+   "ratio_scope_note": "`value` symbols are excluded from the ratio. A comment on an enclosing `var (...)` or `const (...)` block documents every name in it, which is the right way to write a set of 22 related token kinds, and counting each name separately would either demand 22 redundant sentences or reward writing them. The dumper still reports value symbols, and a block comment counts for each name in the block."
+  },
+  "module_path": "github.com/andialbrecht/sqlparse-go",
+  "packages": {
+   ".": {
+    "notes": [
+     "Parse corresponds to sqlparse.parse; the returned nodes are Statement-kind nodes in source order.",
+     "The bool on Split is strip_semicolon.",
+     "The string argument on the *Bytes and ParseStream entry points is the encoding name; empty means None in Python terms.",
+     "Error.Error() must return exactly the message the reference SQLParseError carries for the same condition.",
+     "IsNotImplemented reports whether an error is the port's way of saying a requested feature is not implemented. The reference has exactly one such feature: RightMarginFilter.process is a bare `raise NotImplementedError` under a FIXME, so any accepted right_margin (an int >= 10) makes format fail rather than wrap. That is behavior State A has and the port must keep: Format with such a right_margin, and the RightMargin filter run directly, must both return an error for which IsNotImplemented is true. A port that implements the filter correctly returns no error and is graded as diverging, because the reference's callers can and do rely on the failure.",
+     "IsNotImplemented(nil) is false. Where an error is both the library's own *Error and a not-implemented signal, the not-implemented answer takes precedence -- in Python the two are disjoint classes, in Go they can be one value, so the order is fixed here rather than left to the port."
+    ],
+    "package_name": "sqlparse",
+    "python_origin": [
+     "sqlparse/__init__.py",
+     "sqlparse/exceptions.py"
+    ],
+    "role": "the top-level API: parse, split, format, and the error type",
+    "symbols": [
+     "func (*Error).Error() string",
+     "func Format(string, map[string]any) (string, error)",
+     "func FormatBytes([]byte, string, map[string]any) (string, error)",
+     "func IsNotImplemented(error) bool",
+     "func Parse(string) ([]*sql.Node, error)",
+     "func ParseBytes([]byte, string) ([]*sql.Node, error)",
+     "func ParseStream(io.Reader, string) ([]*sql.Node, error)",
+     "func Split(string, bool) ([]string, error)",
+     "func SplitBytes([]byte, string, bool) ([]string, error)",
+     "type Error struct",
+     "value Version"
+    ]
+   },
+   "cmd/sqlformat": {
+    "notes": [
+     "No exported surface is required or permitted to be checked here; the command is graded through its behavior as a process."
+    ],
+    "package_name": "main",
+    "python_origin": [
+     "sqlparse/cli.py",
+     "sqlparse/__main__.py"
+    ],
+    "role": "the sqlformat command",
+    "symbols": []
+   },
+   "engine": {
+    "notes": [
+     "Group applies the whole grouping pass in the reference's order. The 18 individual grouping functions are not part of the public surface: the reference exposes them, but nothing outside the engine calls them, and grading the composed result is what matters.",
+     "NewFilterStack's bool is strip_semicolon."
+    ],
+    "package_name": "engine",
+    "python_origin": [
+     "sqlparse/engine/__init__.py",
+     "sqlparse/engine/filter_stack.py",
+     "sqlparse/engine/statement_splitter.py",
+     "sqlparse/engine/grouping.py"
+    ],
+    "role": "statement splitting, grouping, and the filter pipeline",
+    "symbols": [
+     "func (*FilterStack).EnableGrouping()",
+     "func (*FilterStack).Run(string, string) ([]*sql.Node, error)",
+     "func (*FilterStack).SetPostprocess([]filters.Filter)",
+     "func (*FilterStack).SetPreprocess([]filters.Filter)",
+     "func (*FilterStack).SetStmtprocess([]filters.Filter)",
+     "func Group(*sql.Node) *sql.Node",
+     "func NewFilterStack(bool) *FilterStack",
+     "func SplitStatements([]sql.Item) [][]sql.Item",
+     "type FilterStack struct"
+    ]
+   },
+   "filters": {
+    "fields": {
+     "ReindentConfig": [
+      "field ReindentConfig.Char string",
+      "field ReindentConfig.CommaFirst bool",
+      "field ReindentConfig.Compact bool",
+      "field ReindentConfig.IndentAfterFirst bool",
+      "field ReindentConfig.IndentColumns bool",
+      "field ReindentConfig.Newline string",
+      "field ReindentConfig.Width int",
+      "field ReindentConfig.WrapAfter int"
+     ]
+    },
+    "notes": [
+     "Filter's method set is unconstrained beyond being satisfied by all 13 constructors, so the implementation chooses how a filter is invoked. What is graded is the output of the composed stack.",
+     "ReindentConfig's eight fields are named in `fields` and are checked: they correspond to ReindentFilter's keyword arguments width, char, wrap_after, n, comma_first, indent_after_first, indent_columns and compact, in that order. Newline carries `n`. No other struct in this contract has binding field names.",
+     "NewRightMargin is the one filter whose contract is to fail. The reference's RightMarginFilter.process raises NotImplementedError outright -- the working implementation is commented out beneath a FIXME -- so running this filter must return an error satisfying sqlparse.IsNotImplemented, both on its own and through a stack the formatter built from a right_margin option. Porting the commented out `_process` into working code is a behavioral change, not a repair, and is graded as one."
+    ],
+    "package_name": "filters",
+    "python_origin": [
+     "sqlparse/filters/__init__.py",
+     "sqlparse/filters/aligned_indent.py",
+     "sqlparse/filters/others.py",
+     "sqlparse/filters/output.py",
+     "sqlparse/filters/reindent.py",
+     "sqlparse/filters/right_margin.py",
+     "sqlparse/filters/tokens.py"
+    ],
+    "role": "the 13 filters the formatter composes",
+    "symbols": [
+     "func NewAlignedIndent(string, string) Filter",
+     "func NewIdentifierCase(string) Filter",
+     "func NewKeywordCase(string) Filter",
+     "func NewOutputPHP(string) Filter",
+     "func NewOutputPython(string) Filter",
+     "func NewReindent(ReindentConfig) Filter",
+     "func NewRightMargin(int) Filter",
+     "func NewSerializerUnicode() Filter",
+     "func NewSpacesAroundOperators() Filter",
+     "func NewStripComments() Filter",
+     "func NewStripTrailingSemicolon() Filter",
+     "func NewStripWhitespace() Filter",
+     "func NewTruncateStrings(int, string) Filter",
+     "type Filter interface",
+     "type ReindentConfig struct"
+    ]
+   },
+   "formatter": {
+    "notes": [
+     "ValidateOptions returns the normalized option map the reference produces, or an error whose message is the reference's error message, verbatim. Both halves are graded.",
+     "Options is the typed convenience form; ToMap converts to the map the graded entry points take. Its field names are unconstrained."
+    ],
+    "package_name": "formatter",
+    "python_origin": [
+     "sqlparse/formatter.py"
+    ],
+    "role": "option validation and stack assembly",
+    "symbols": [
+     "func (*Options).ToMap() map[string]any",
+     "func BuildFilterStack(*engine.FilterStack, map[string]any) error",
+     "func OptionKeys() []string",
+     "func ValidateOptions(map[string]any) (map[string]any, error)",
+     "type Options struct"
+    ]
+   },
+   "keywords": {
+    "notes": [
+     "Lookup applies the reference's dictionary order: the tables are consulted in the order the default lexer registers them, and the first hit wins. It is the exact behavior of Lexer.is_keyword, including that the lookup is upper-cased and the table is not, and including the fallback: a miss returns (tokens.Name, false), which is the type is_keyword returns for a non-keyword.",
+     "That order is NOT the order a reader would guess. default_initialization installs KEYWORDS_COMMON, then the seven dialect tables, and the general KEYWORDS table LAST -- so for the three words in both KEYWORDS and a dialect table (CHARACTER, MAP, TIMESTAMP) the dialect entry wins. A port that installs the general table first passes 806 of the 809 lookups.",
+     "Table(name) returns one named table, e.g. \"KEYWORDS_ORACLE\". TableNames() returns the names in that same registration order, NOT sorted: the order is itself observable, because it is the resolution order Lookup applies.",
+     "Rule describes one entry of SQL_REGEX. Its fields are unconstrained -- what is graded is Rules() length and the tokenizer behavior it produces."
+    ],
+    "package_name": "keywords",
+    "python_origin": [
+     "sqlparse/keywords.py"
+    ],
+    "role": "the keyword tables and the lexer's pattern list",
+    "symbols": [
+     "func All() []string",
+     "func Lookup(string) (tokens.TokenType, bool)",
+     "func Rules() []Rule",
+     "func Table(string) map[string]tokens.TokenType",
+     "func TableNames() []string",
+     "type Rule struct"
+    ]
+   },
+   "lexer": {
+    "notes": [
+     "Tokenize is get_tokens: a flat stream, before any grouping.",
+     "IsKeyword returns the resolved type and the normalized value, which is what the reference's is_keyword produces as a pair.",
+     "Default() is get_default_instance and must return the same instance every time: the reference's default lexer is global mutable state, and AddKeywords/Clear on it are observable through parse. Reproduce that, including the fact that a Clear() leaves the default lexer unable to tokenize anything."
+    ],
+    "package_name": "lexer",
+    "python_origin": [
+     "sqlparse/lexer.py"
+    ],
+    "role": "text to a flat token stream",
+    "symbols": [
+     "func (*Lexer).AddKeywords(map[string]tokens.TokenType)",
+     "func (*Lexer).Clear()",
+     "func (*Lexer).DefaultInitialization()",
+     "func (*Lexer).IsKeyword(string) (tokens.TokenType, string)",
+     "func (*Lexer).Tokenize(string) ([]sql.Item, error)",
+     "func (*Lexer).TokenizeBytes([]byte, string) ([]sql.Item, error)",
+     "func Default() *Lexer",
+     "func New() *Lexer",
+     "type Lexer struct"
+    ]
+   },
+   "sql": {
+    "kinds": [
+     "KindToken",
+     "KindTokenList",
+     "KindStatement",
+     "KindIdentifier",
+     "KindIdentifierList",
+     "KindTypedLiteral",
+     "KindParenthesis",
+     "KindSquareBrackets",
+     "KindAssignment",
+     "KindIf",
+     "KindFor",
+     "KindComparison",
+     "KindComment",
+     "KindWhere",
+     "KindOver",
+     "KindHaving",
+     "KindCase",
+     "KindFunction",
+     "KindBegin",
+     "KindOperation",
+     "KindValues",
+     "KindCommand"
+    ],
+    "notes": [
+     "One Node type covers what the reference splits across Token, TokenList and 20 group subclasses. Kind() reports which; Kind.String() renders the reference's class name, so KindIdentifierList.String() == \"IdentifierList\".",
+     "All 22 kinds must be declared and Kind.String() must be total over them, but three of them can never appear in a tree the reference produces, and a port is not expected to produce them either. KindTokenList: grouping.py builds a bare TokenList only at the `extend=True` call in align_comments, and that branch requires the target to already be a TokenList -- which every group class is -- so the constructing branch is unreachable; the one real `sql.TokenList(...)` call is a throwaway inside the aligned-indent filter and never lands in a tree. KindHaving: sql.Having is declared, and carries M_OPEN/M_CLOSE, but no group_having exists to call it. KindCommand: sql.Command is declared and constructed nowhere (the `\\dt` case uses the tokens.Command *token type*, not the node class). They are in the surface because they are in the reference's public surface, and a consumer can name sql.Having; they are not in any graded answer.",
+     "TypeName() is Statement.get_type(): the statement keyword, or \"UNKNOWN\". It is defined on any node but only meaningful on a statement.",
+     "Name/RealName/ParentName/Alias/Ordering/Typecast correspond to get_name, get_real_name, get_parent_name, get_alias, get_ordering and get_typecast, and each returns (value, ok). ok is false where the reference returns None. It is not enough to return the empty string for a missing value: `select \"\" from t` parses to an Identifier whose get_name() is the empty string -- an empty quoted identifier is legal SQL -- while a bare Token's get_name() is None, and those are different answers. HasAlias stays a plain bool because the reference returns a bool, and TypeName stays a plain string because get_type() returns the literal \"UNKNOWN\" rather than None.",
+     "Cases takes skipWS, the reference's get_cases(skip_ws=...): with it set, whitespace tokens are left out of each side of every (condition, value) pair. Both settings are graded, on the same documents, so a port that ignores the flag fails half of them.",
+     "TokenNext/TokenPrev take (idx, skipWS, skipComment) and return (index, node); index is -1 and node is nil when there is none.",
+     "Match takes (ttype, values, regex) and follows the reference's rule exactly (sql.py:99-121), which is narrower than it looks. The type test is identity, not containment: `self.ttype is ttype`, so a token of Keyword.DML does not match Keyword, and Match(tokens.Keyword, [\"SELECT\"], false) is false for every SELECT in a DML statement. A nil or empty values slice returns the type test alone. Case folding is keyword-only and one-directional: when the token is a keyword the *values* are uppercased and compared against Normalized, which is already uppercase for keywords; when it is not a keyword, comparison is exact. In regex mode the IGNORECASE flag is likewise set only for keywords, and the match is a search against Normalized rather than a full-string match.",
+     "String() must return the exact source text the node spans, so that String() over a parsed statement round-trips the input.",
+     "Which accessors a node answers is a function of its Kind, published as `accessor_scope` in the probe's spec.json and normative here. The reference spreads its read surface over a class hierarchy -- get_type on Statement, left/right on Comparison, get_parameters and get_window on Function, get_cases on Case, get_ordering, get_typecast, get_array_indices and is_wildcard on Identifier, get_identifiers on IdentifierList, is_multiline on Comment, and thirteen more on TokenList that Token does not inherit -- and asking a class for an accessor it does not define raises AttributeError. That is published API shape, not an implementation detail. A *Node on which every method is always callable cannot reproduce it by being asked, so the port is not required to: every method must exist and be callable on every Node, and the probe consults the table to decide which positions to grade. A (kind, accessor) pair the table excludes renders `no-method` on both sides and the port's return value there is not examined. Scope `group` means exactly the kinds whose IsGroup is true, which is every kind except KindToken.",
+     "TokenIndex's graded position is a node's index within its own parent, and a root statement has no parent to index it. That is a runtime precondition rather than a scope rule -- it depends on where the node sits, not on what its kind defines -- and it renders `no-parent`, which is a distinct answer from both `no-method` and index 0. The second parameter is the reference's `start`, the index to begin searching from.",
+     "Window must fail for a Function with no OVER clause, and the error must carry the category `nil-deref`. This is not latitude to fail: the reference's guard is `if not over_clause` against the pair (None, None), which is truthy because it is a populated tuple, so the guard never fires and the None is dereferenced (sql.py:639-642). Every function with no OVER clause raises AttributeError -- 81 top-level positions in the corpus. A port that returns (nil, nil) there is more correct than the reference and less compatible with it, and is graded wrong.",
+     "IsMultiline is Comment.is_multiline, which 0.5.3 declares as a plain method and not a property, and it is scoped to KindComment alone. Its body is `self.tokens and self.tokens[0].ttype == T.Comment.Multiline`, so a token-less Comment would answer with the empty list rather than False; the grouper never builds one -- 234 Comment nodes in the corpus, none empty -- so a bool return is sufficient and that branch is not graded. A node's own multi-line-ness, which any kind answers, is not this method: it is a newline in String().",
+     "An accessor that fails renders `raise` plus a portable category, never a language-specific exception or error type name. The categories are the ones the probe's error_lines emits; `nil-deref` is the category for reaching through something that was not there, which is what the reference's AttributeError and Go's nil pointer dereference both are. It is a category of its own rather than `other` so that Window's failure is graded as the specific thing it is.",
+     "Item is one entry of the flat pre-grouping stream: the (ttype, value) pair the reference's lexer yields. Its fields may be exported or not, but the two accessors must exist."
+    ],
+    "package_name": "sql",
+    "python_origin": [
+     "sqlparse/sql.py"
+    ],
+    "role": "the parse tree: one node type for both tokens and groups",
+    "symbols": [
+     "func (*Node).Alias() (string, bool)",
+     "func (*Node).ArrayIndices() []*Node",
+     "func (*Node).Cases(bool) [][2][]*Node",
+     "func (*Node).Flatten() []*Node",
+     "func (*Node).HasAlias() bool",
+     "func (*Node).HasAncestor(*Node) bool",
+     "func (*Node).Identifiers() []*Node",
+     "func (*Node).IsChildOf(*Node) bool",
+     "func (*Node).IsGroup() bool",
+     "func (*Node).IsKeyword() bool",
+     "func (*Node).IsMultiline() bool",
+     "func (*Node).IsNewline() bool",
+     "func (*Node).IsWhitespace() bool",
+     "func (*Node).IsWildcard() bool",
+     "func (*Node).Kind() Kind",
+     "func (*Node).Left() *Node",
+     "func (*Node).Match(tokens.TokenType, []string, bool) bool",
+     "func (*Node).Name() (string, bool)",
+     "func (*Node).Normalized() string",
+     "func (*Node).Ordering() (string, bool)",
+     "func (*Node).Parameters() []*Node",
+     "func (*Node).Parent() *Node",
+     "func (*Node).ParentName() (string, bool)",
+     "func (*Node).RealName() (string, bool)",
+     "func (*Node).Right() *Node",
+     "func (*Node).String() string",
+     "func (*Node).Sublists() []*Node",
+     "func (*Node).TType() tokens.TokenType",
+     "func (*Node).TokenAtOffset(int) *Node",
+     "func (*Node).TokenFirst(bool, bool) *Node",
+     "func (*Node).TokenIndex(*Node, int) int",
+     "func (*Node).TokenNext(int, bool, bool) (int, *Node)",
+     "func (*Node).TokenPrev(int, bool, bool) (int, *Node)",
+     "func (*Node).Tokens() []*Node",
+     "func (*Node).TypeName() string",
+     "func (*Node).Typecast() (string, bool)",
+     "func (*Node).Value() string",
+     "func (*Node).Window() (*Node, error)",
+     "func (*Node).Within(Kind) bool",
+     "func (Item).TType() tokens.TokenType",
+     "func (Item).Value() string",
+     "func (Kind).String() string",
+     "func NewGroup(Kind, []*Node) *Node",
+     "func NewToken(tokens.TokenType, string) *Node",
+     "type Item struct",
+     "type Kind int",
+     "type Node struct",
+     "value KindAssignment",
+     "value KindBegin",
+     "value KindCase",
+     "value KindCommand",
+     "value KindComment",
+     "value KindComparison",
+     "value KindFor",
+     "value KindFunction",
+     "value KindHaving",
+     "value KindIdentifier",
+     "value KindIdentifierList",
+     "value KindIf",
+     "value KindOperation",
+     "value KindOver",
+     "value KindParenthesis",
+     "value KindSquareBrackets",
+     "value KindStatement",
+     "value KindToken",
+     "value KindTokenList",
+     "value KindTypedLiteral",
+     "value KindValues",
+     "value KindWhere"
+    ]
+   },
+   "tokens": {
+    "notes": [
+     "TokenType must be comparable with == and usable as a map key: the reference relies on identity comparison of token types throughout.",
+     "String() renders as the reference's repr does: 'Token' for the root, otherwise 'Token.' plus the dot-joined path.",
+     "Contains models Python's `ttype in Other`: a type contains itself and all of its descendants. Note the receiver is the ancestor.",
+     "Sub interns: t.Sub(\"X\") == t.Sub(\"X\") must hold, mirroring the reference's cached __getattr__.",
+     "Lookup resolves a rendered name such as 'Token.Keyword.DML' back to its TokenType; the bool reports whether it was ever created. Because Sub creates on demand, walking a well-formed name always succeeds, so Lookup's bool is false only for a name that is not rooted at 'Token'.",
+     "Parent() of the root reports the root: the reference's root has a None parent, and the probe renders an absent parent as '-', so Parent() needs no nil case."
+    ],
+    "package_name": "tokens",
+    "python_origin": [
+     "sqlparse/tokens.py"
+    ],
+    "role": "the token-type lattice",
+    "symbols": [
+     "func (TokenType).Contains(TokenType) bool",
+     "func (TokenType).Parent() TokenType",
+     "func (TokenType).String() string",
+     "func (TokenType).Sub(string) TokenType",
+     "func Lookup(string) (TokenType, bool)",
+     "type TokenType struct",
+     "value Assignment",
+     "value CTE",
+     "value Command",
+     "value Comment",
+     "value Comparison",
+     "value DDL",
+     "value DML",
+     "value Error",
+     "value Generic",
+     "value Keyword",
+     "value Literal",
+     "value Name",
+     "value Newline",
+     "value Number",
+     "value Operator",
+     "value Other",
+     "value Punctuation",
+     "value String",
+     "value Text",
+     "value Token",
+     "value Whitespace",
+     "value Wildcard"
+    ]
+   },
+   "utils": {
+    "notes": [
+     "consume, imt, indent and recurse are Python plumbing (iterator advancement and decorators) with no meaning in Go; they are not part of this surface."
+    ],
+    "package_name": "utils",
+    "python_origin": [
+     "sqlparse/utils.py"
+    ],
+    "role": "the helpers the reference exposes as sqlparse.utils",
+    "symbols": [
+     "func Offset(string, int) string",
+     "func RemoveQuotes(string) string",
+     "func SplitUnquotedNewlines(string) []string"
+    ]
+   }
+  },
+  "probe_tiers": {
+   "core": {
+    "imports": [
+     "github.com/andialbrecht/sqlparse-go"
+    ],
+    "note": "This tier names only the root package, and it means it: the binary does not import sql, so it reaches Parse's statements through a one-method interface. A submission whose sql.Node is missing every accessor still answers every case here, which is what the split exists to show.",
+    "ops": [
+     "rt",
+     "rt-enc",
+     "rt-raw",
+     "split",
+     "split-strip",
+     "parsestream",
+     "fmt",
+     "tostr",
+     "err-encoding",
+     "version"
+    ],
+    "purpose": "the top-level API only: the smallest surface that can be graded"
+   },
+   "keywords": {
+    "imports": [
+     "github.com/andialbrecht/sqlparse-go/keywords",
+     "github.com/andialbrecht/sqlparse-go/tokens"
+    ],
+    "note": "The `keyword` op resolves through keywords.Lookup, not through Lexer.IsKeyword -- the two are contracted to agree, and Lookup is the one that exists without a lexer. That is the whole reason Lookup is in the API: the reference keeps this logic on the Lexer, so a Go port that also kept it there would leave the keyword tables ungradeable on their own.",
+    "ops": [
+     "keyword",
+     "kwtable",
+     "kwnames"
+    ],
+    "purpose": "the keyword tables, independent of the parser. This tier does not import the lexer, so it cannot tokenize: everything it answers is a table lookup or a table dump."
+   },
+   "model": {
+    "imports": [
+     "github.com/andialbrecht/sqlparse-go",
+     "github.com/andialbrecht/sqlparse-go/sql",
+     "github.com/andialbrecht/sqlparse-go/tokens"
+    ],
+    "ops": [
+     "tok",
+     "tree",
+     "stmt",
+     "api",
+     "ttype"
+    ],
+    "purpose": "the parse tree and the token lattice"
+   },
+   "parts": {
+    "imports": [
+     "github.com/andialbrecht/sqlparse-go",
+     "github.com/andialbrecht/sqlparse-go/engine",
+     "github.com/andialbrecht/sqlparse-go/filters",
+     "github.com/andialbrecht/sqlparse-go/formatter",
+     "github.com/andialbrecht/sqlparse-go/lexer",
+     "github.com/andialbrecht/sqlparse-go/sql",
+     "github.com/andialbrecht/sqlparse-go/tokens",
+     "github.com/andialbrecht/sqlparse-go/utils"
+    ],
+    "note": "`validate` is here rather than in core because it calls formatter.ValidateOptions directly, which is where the reference's rejection messages live -- sqlparse.format only reaches them through the whole pipeline, and grading the messages needs the validator itself. An op's tier follows its imports; putting it in core would have meant core importing formatter, which would cost core its only claim, that it names the root package alone.",
+    "ops": [
+     "lex",
+     "kwlex",
+     "filter",
+     "stack",
+     "remove-quotes",
+     "split-unquoted-newlines",
+     "optkeys",
+     "optkeys-sorted",
+     "lexstate",
+     "validate"
+    ],
+    "purpose": "the lower-level packages a downstream consumer reaches into"
+   }
+  },
+  "standalone_closures": {
+   "closures": {
+    "core": {
+     "allowed": "any package in the module",
+     "build": [
+      "."
+     ]
+    },
+    "keywords": {
+     "allowed": [
+      "keywords",
+      "tokens",
+      "utils"
+     ],
+     "build": [
+      "./keywords",
+      "./tokens"
+     ]
+    },
+    "model": {
+     "allowed": [
+      "sql",
+      "tokens",
+      "utils"
+     ],
+     "build": [
+      "./sql",
+      "./tokens"
+     ]
+    }
+   },
+   "core_note": "The root package is allowed the whole module: it is the facade, and sqlparse/__init__.py imports the engine, the formatter and the lexer to be one. It is listed so the case is a build of the root package alone, which is what a consumer who imports only the top level compiles.",
+   "note": "Each entry is a set of packages that must compile without the rest of the module, and the module-internal packages their import closure may contain. This is State A's layering: sqlparse.tokens and sqlparse.utils import nothing internal, sqlparse.sql imports tokens and utils, and sqlparse.keywords imports tokens. A port that routes the token model back through the top-level package has collapsed that layering, and a consumer who wants the model without the formatter can no longer have it."
+  },
+  "symbol_notation": "Each symbol is one of four shapes. `func Name(argtypes) results` and `func (Recv).Name(argtypes) results` give a signature by type only, since parameter names are not part of an interface; the receiver is written with the pointer-ness that matters, so `func (*Node).Name()` wants a pointer receiver and `func (Item).Value()` wants a value receiver. `type Name struct` / `interface` / `int` gives the declared kind. Struct fields are unconstrained except where a package carries a `fields` map: those `field Struct.Name Type` lines are binding, because the grader constructs that struct by field name and a different name would not compile. Only filters.ReindentConfig has one. `value Name` means an exported identifier of that name must exist as a var or a const -- which of the two is deliberately not checked, because a port may reasonably declare the Kind values either way and a struct-valued token type can only be a var. Types are written as they appear from inside the declaring package: `tokens.TokenType` in `sql`, plain `Kind` in `sql`."
+ },
+ "install_inventory": {
+  "bin/sqlformat": {
+   "kind": "elf-executable",
+   "must": [
+    "ELF64, x86-64, statically linked",
+    "no PT_INTERP segment",
+    "no PT_DYNAMIC segment and no DT_NEEDED entries",
+    "a .go.buildinfo section",
+    "a .note.go.buildid section",
+    "go version -m reports the module path github.com/andialbrecht/sqlparse-go",
+    "go version -m reports CGO_ENABLED=0 and -trimpath=true"
+   ],
+   "must_not": [
+    "be a shell script, a wrapper, or anything that is not an ELF file",
+    "contain the byte sequences Py_Initialize, PyRun_, libpython or Py_Main anywhere in the file",
+    "spawn any process at run time"
+   ]
+  },
+  "share/man/man1/sqlformat.1": {
+   "kind": "file",
+   "must": [
+    "be present, carried over from docs/sqlformat.1",
+    "still document the options the command accepts"
+   ]
+  }
+ },
+ "migration": {
+  "axis": "dynamic interpreted library -> statically compiled binary",
+  "debt": "The library is distributed as Python source and needs a CPython interpreter at every point of use. Every consumer inherits a Python runtime, an install step and an import cost to parse SQL. The debt is repaid by making the parser a self-contained statically linked artifact and an importable Go module, with the same behavior.",
+  "from": "Python 3 package (sqlparse 0.5.3)",
+  "to": "Go module, standard library only"
+ },
+ "preserved_paths": {
+  "AUTHORS": "byte-identical",
+  "CHANGELOG": "must still be present and must still contain the 0.5.3 entry; appending to it is expected",
+  "CONTRIBUTING.md": "must still be present",
+  "LICENSE": "byte-identical; the license does not change because the language did",
+  "README.rst": "must still be present. Its content will have changed -- the install instructions are different now -- but the file is part of the release and must not simply be deleted",
+  "SECURITY.md": "must still be present",
+  "docs/sqlformat.1": "the man page must survive, at this path or installed as share/man/man1/sqlformat.1, and must still describe the command's real options"
+ },
+ "python_policy": {
+  "must_delete": [
+   "sqlparse/",
+   "pyproject.toml",
+   ".flake8"
+  ],
+  "must_delete_note": "These specifically must not survive in any form: the package directory is the old implementation, and pyproject.toml plus .flake8 are what make the repository install and lint as a Python project.",
+  "no_python_at_runtime": "The installed command must not invoke a Python interpreter, embed one, or read a Python file. This is checked from the binary's own bytes and from a shimmed PATH during the graded build.",
+  "no_python_sources": "No .py, .pyi, .pyc, .pyo or .pyd file anywhere in the repository, with no exceptions. sqlparse/ must be gone, not renamed, not moved under a subdirectory, not kept as reference material.",
+  "removable_note": "These are the Python implementation, its test suite, its examples and its packaging. Removing them is expected; a Go port has no use for pyproject.toml. Ported equivalents are welcome under Go names.",
+  "removable_paths": [
+   "sqlparse/",
+   "tests/",
+   "examples/",
+   "pyproject.toml",
+   ".flake8",
+   "Makefile",
+   "TODO"
+  ],
+  "shim_note": "During the graded build, every Python interpreter name on PATH is replaced by a shim that fails and records the invocation. A build that needs Python does not complete, and the attempt is evidence."
+ },
+ "schema_version": "swerefactor-source-contract-v1",
+ "state_a": {
+  "file_count": 73,
+  "files": {
+   ".flake8": {
+    "bytes": 99,
+    "sha256": "937089e1d6a2ed2910477c55e809ee311a76ff3dadc8b8da53f042162de8a74d"
+   },
+   "AUTHORS": {
+    "bytes": 3385,
+    "sha256": "e36a7e16adbefb29c715265789fd1fe38ea0f0c043e62da0caf31c973454e52e"
+   },
+   "CHANGELOG": {
+    "bytes": 22391,
+    "sha256": "3dc230a9b80ad8b5f4cd283fd151c6c8f89d83ea428e413f88c4c37d9b6d5076"
+   },
+   "CONTRIBUTING.md": {
+    "bytes": 399,
+    "sha256": "c366844410610bbd233e4f73843cda5c199da0a2ffa0cd6853c8741f14e27d42"
+   },
+   "LICENSE": {
+    "bytes": 1537,
+    "sha256": "c1938235b80d39e93138eae89edc3af67e18ecbc40d266529fa57b2dce426310"
+   },
+   "Makefile": {
+    "bytes": 546,
+    "sha256": "64b788621d927cf34cb5e63216ad9abe2e90a852c4b520208df264fc47cd812b"
+   },
+   "README.rst": {
+    "bytes": 2317,
+    "sha256": "2314b3e72aa29f4d9b6bab0bc14d89e03a2dc7bd914aab38d85dc2cf64b48051"
+   },
+   "SECURITY.md": {
+    "bytes": 520,
+    "sha256": "e560390ec9f16eda018acaa291b734442cb3ce29669b5cecdcd5aad31507abff"
+   },
+   "TODO": {
+    "bytes": 290,
+    "sha256": "90f3547c0bc4a3da62c487ae703a03a6407029716320cc3b86bbb6ba69bdfd57"
+   },
+   "docs/Makefile": {
+    "bytes": 2994,
+    "sha256": "be7497bd151e852f39b6d796581dacb6267338f4782008cd16ad777e390ab9a8"
+   },
+   "docs/source/analyzing.rst": {
+    "bytes": 1361,
+    "sha256": "0e075aa875a64abf313f39ae6864ae047ad93fb6d8a1782852270b78a484ca53"
+   },
+   "docs/source/api.rst": {
+    "bytes": 2138,
+    "sha256": "62502be1f7968f138028e49e9cab16ece0ff20d6619073e4fc30117d8746afcd"
+   },
+   "docs/source/changes.rst": {
+    "bytes": 311,
+    "sha256": "8b89c9d4fa05e9d081f7e5ec0a6f40046368d7367c63c0d9f87392dc91c60ae4"
+   },
+   "docs/source/conf.py": {
+    "bytes": 6608,
+    "sha256": "157162dc15735ce3ae30457ac06604829537e232d37671503382a7ae8a0f09d1"
+   },
+   "docs/source/extending.rst": {
+    "bytes": 3025,
+    "sha256": "40245ffcf02bcd471c8a0df728c690d82b88d71a933de8163316412c1590edd7"
+   },
+   "docs/source/index.rst": {
+    "bytes": 709,
+    "sha256": "6dc205c7582c2e819523f4130e8ddb3195cc204842790d22a1dbdd5b1f221bd3"
+   },
+   "docs/source/indices.rst": {
+    "bytes": 92,
+    "sha256": "02b2ea1b7bad5791ca8993a84e13ff531b44a9fb13e3c046b74c327cbbab7254"
+   },
+   "docs/source/intro.rst": {
+    "bytes": 4290,
+    "sha256": "c5985dddaabfe390135ac9ce06455bb09787bad6d6b59eb1d37d22f7776daaa3"
+   },
+   "docs/source/license.rst": {
+    "bytes": 43,
+    "sha256": "051d547e8c41b896e26c7235a7843c0669df0249adac4f0efa9883f34e12e6ff"
+   },
+   "docs/source/ui.rst": {
+    "bytes": 559,
+    "sha256": "051e0e2289d539ab80ce7b93cdd1d71ddcc670a63ff3b4bbac32baad1fd9f399"
+   },
+   "docs/sqlformat.1": {
+    "bytes": 1792,
+    "sha256": "d8faa20c7211f0ff2e3ae229b5401e1b68122acd81ee884cbab440a1851f3d31"
+   },
+   "examples/column_defs_lowlevel.py": {
+    "bytes": 1653,
+    "sha256": "d07bc62a0b0bf0bd7e91b184230dd8e971552c085c4c664a600d9214d7607164"
+   },
+   "examples/extract_table_names.py": {
+    "bytes": 2057,
+    "sha256": "83281424a2101c45602c0ef07a4e61931628cb92ecf1489a03559b769d8dee50"
+   },
+   "pyproject.toml": {
+    "bytes": 2671,
+    "sha256": "f45ed1a6a2c302a1b5a63cba825e9ad451c511427317faf52cf94492cb9f3144"
+   },
+   "sqlparse/__init__.py": {
+    "bytes": 2325,
+    "sha256": "5c81db373409aedf5dc63396d329601b78f380e5411151c8ae3a69238a59b0b8"
+   },
+   "sqlparse/__main__.py": {
+    "bytes": 610,
+    "sha256": "d6385514b1e566ce0d509a00b87bd040a5a0ca43d54dd81e13c5785c1e56433c"
+   },
+   "sqlparse/cli.py": {
+    "bytes": 5891,
+    "sha256": "0f6114197afd90cceb34e23ec95167c0f9ce79f79dffd377854d87809dd3ec29"
+   },
+   "sqlparse/engine/__init__.py": {
+    "bytes": 447,
+    "sha256": "8bd921d1448c8e4d5bc0a3c54e7e8ad0f282e791ceaaf9e4a311e2d6ded871c1"
+   },
+   "sqlparse/engine/filter_stack.py": {
+    "bytes": 1600,
+    "sha256": "a80d0c95a4d2377ac36b76944ec5be1b9c976d9b7ac67099944b0a4c630ef949"
+   },
+   "sqlparse/engine/grouping.py": {
+    "bytes": 14602,
+    "sha256": "079f164517efd1711c6575dd091c5a5720a7248e8a1b5717cb47bc45be4c0f08"
+   },
+   "sqlparse/engine/statement_splitter.py": {
+    "bytes": 4094,
+    "sha256": "881f8f732d3f3a6f5d1a74c53fb16fc0dcad95bd3bac60e114d1ceb45be7011b"
+   },
+   "sqlparse/exceptions.py": {
+    "bytes": 342,
+    "sha256": "43267d4ca4efce0726b90d5c264c408fd4a8030e0cd36f817f409250d58d0ca3"
+   },
+   "sqlparse/filters/__init__.py": {
+    "bytes": 1343,
+    "sha256": "1d2959223989054c23c107f4d0a0e9a24d5acca3b31555165c1369b152ca6776"
+   },
+   "sqlparse/filters/aligned_indent.py": {
+    "bytes": 5110,
+    "sha256": "92f3794d5331a2fc97e9c0e79b117eb7e294cf6467cdb4357c8433748c586368"
+   },
+   "sqlparse/filters/others.py": {
+    "bytes": 6658,
+    "sha256": "da6fce5dc7c8b2e7090cf2be49eb49ddd3bb13a4776f0f9d612999e4a0dc7011"
+   },
+   "sqlparse/filters/output.py": {
+    "bytes": 4001,
+    "sha256": "38c49a9523efab7b37fabdbaf138eff809ad8d33427e12dac96b5014ee68c951"
+   },
+   "sqlparse/filters/reindent.py": {
+    "bytes": 9906,
+    "sha256": "7208933927d6d362e5daf974a47a52b5b62da73b26a5306b785ac50c88d7c538"
+   },
+   "sqlparse/filters/right_margin.py": {
+    "bytes": 1543,
+    "sha256": "1e297af76241dd992230fa4f3d970c5224548c3a668458ae01152ee7f8a6ca6f"
+   },
+   "sqlparse/filters/tokens.py": {
+    "bytes": 1553,
+    "sha256": "099c03c0ccf339dab4aaf4d120889cef0e7d839e108701603363a9f7ddf666f9"
+   },
+   "sqlparse/formatter.py": {
+    "bytes": 7804,
+    "sha256": "09ffef00a99c48df96abfe87cf5341b458f1265f1dc98c1c65fefbd84732e0c5"
+   },
+   "sqlparse/keywords.py": {
+    "bytes": 30504,
+    "sha256": "962a1f866be174a2aeac9d307fd704d67c91f3c3bd3d0aa27dff88671599b620"
+   },
+   "sqlparse/lexer.py": {
+    "bytes": 5991,
+    "sha256": "20e7f0653c6fc348527c009103bdac6d66f029391a552342cca8d1f373d3a270"
+   },
+   "sqlparse/sql.py": {
+    "bytes": 20846,
+    "sha256": "15a666f39bae54a2a6a897e9294edff79038e335c5573a0082c80ee357c3d44f"
+   },
+   "sqlparse/tokens.py": {
+    "bytes": 1779,
+    "sha256": "83d8b064c2c66e84ae4505077d52d275d0b976fe373e4c493aee3eb6484cb34a"
+   },
+   "sqlparse/utils.py": {
+    "bytes": 3475,
+    "sha256": "6ca1646add4aa39c1f1083e10ff16f651301186f4e26dbfd7502c1a192a76e87"
+   },
+   "tests/__init__.py": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "tests/conftest.py": {
+    "bytes": 1571,
+    "sha256": "78a520624361004ba4d9928e332b8df9e99279bff81d73aa735e58b8fc4d7f60"
+   },
+   "tests/files/_Make_DirEntry.sql": {
+    "bytes": 109,
+    "sha256": "477c6e434484000c6d34d8a1189b636c8595a906bbfdaead27110d33be192361"
+   },
+   "tests/files/begintag.sql": {
+    "bytes": 45,
+    "sha256": "eaf3ccbbe3e8a519ec00d95e875cf2063da21be757e85fdd15c3e11627ca350f"
+   },
+   "tests/files/begintag_2.sql": {
+    "bytes": 357,
+    "sha256": "d2deb7406afd541424617d618413d632b079bd650622a58d797df197f92eead2"
+   },
+   "tests/files/casewhen_procedure.sql": {
+    "bytes": 150,
+    "sha256": "e2fffb5d1c32f750b652231ef6a8267797f91d902dd5fbd09cdafa1490d7a9f5"
+   },
+   "tests/files/dashcomment.sql": {
+    "bytes": 88,
+    "sha256": "77d2a0426573b95fea0f33ff300d29d8779d69f4d6aae52588d45832cc97a7f9"
+   },
+   "tests/files/encoding_gbk.sql": {
+    "bytes": 50,
+    "sha256": "b46e2aa2afd9973c1ecf6a1778b65c1b9c32eac1679d2dd733bff93bd8f71403"
+   },
+   "tests/files/encoding_utf8.sql": {
+    "bytes": 76,
+    "sha256": "abd229df1799a0e3cacf0262439ac446a6f9e1475a061a836d54f7bf71537dce"
+   },
+   "tests/files/function.sql": {
+    "bytes": 187,
+    "sha256": "f7ebcddcfa7366ac9ef1f2042e85980b9d1b709376504fbcac2fbaf31d500438"
+   },
+   "tests/files/function_psql.sql": {
+    "bytes": 3066,
+    "sha256": "374d3ad5a85b295656c80891414575d2e914b7d44441cf0c301c8ba7823ba6e2"
+   },
+   "tests/files/function_psql2.sql": {
+    "bytes": 177,
+    "sha256": "ca09b0d5ec71d6b14c3547bd1f50bbb43a3c41c67a82ea7da7925b4a360978eb"
+   },
+   "tests/files/function_psql3.sql": {
+    "bytes": 171,
+    "sha256": "ab11189f23be717c821e84b61a43d65be26898aab0ddc3312dd4c017460e8eb2"
+   },
+   "tests/files/function_psql4.sql": {
+    "bytes": 221,
+    "sha256": "855912b6749f5252ee5a9d0a701e3fd00e8436b50953d4cb21ad66e8bab836dc"
+   },
+   "tests/files/huge_select.sql": {
+    "bytes": 9434,
+    "sha256": "2833206b9559cbbac1bb0cb9c15fb66a593528ec47ae5b8168a56550903658e7"
+   },
+   "tests/files/multiple_case_in_begin.sql": {
+    "bytes": 193,
+    "sha256": "120212421cbff79b576e173d5e6f2bdd45d8a7e06cfc8379e595cdea6ee58cec"
+   },
+   "tests/files/mysql_handler.sql": {
+    "bytes": 134,
+    "sha256": "70142d797ca7acf904e77aaec0587fd578f5ce134860fd81fbe98166fcd87157"
+   },
+   "tests/files/stream.sql": {
+    "bytes": 44,
+    "sha256": "8d1fdb5798c601f75f6bbcc750d07544ea47452e78687151a39fd7eb3c4a64bb"
+   },
+   "tests/files/test_cp1251.sql": {
+    "bytes": 49,
+    "sha256": "46f1d9cafe3b6f90ee79096e434f4509f5fa725f9c1b307e9180b8e2318a90b2"
+   },
+   "tests/test_cli.py": {
+    "bytes": 3521,
+    "sha256": "2283827e9658c1d785ee377a792f209bcc66ef411784706ffdf24c50030c2d46"
+   },
+   "tests/test_format.py": {
+    "bytes": 28438,
+    "sha256": "becba5a71cf4890844f0d602dbafc1a1a8337e6cd207cd966c9a71808baf7a46"
+   },
+   "tests/test_grouping.py": {
+    "bytes": 23973,
+    "sha256": "355a2dc8089f4f396c52f7922f0e10e4f1eb1c6c2a5d3ea47c3ae86d8d1cccd3"
+   },
+   "tests/test_keywords.py": {
+    "bytes": 447,
+    "sha256": "149f6845de1ae252a0265cf3e91086c6259c131c0f7f7a7518ea628e7ad399a3"
+   },
+   "tests/test_parse.py": {
+    "bytes": 18335,
+    "sha256": "f979f4024d44443d50a17a0169ace2f6fd8693e2e513529f222f6e56e2898838"
+   },
+   "tests/test_regressions.py": {
+    "bytes": 14896,
+    "sha256": "2c7c6c70fb416836e46fe752463e280022ebe5c1ecdd7ec18795862644bcb70e"
+   },
+   "tests/test_split.py": {
+    "bytes": 6147,
+    "sha256": "28d8917cc41d1755e78416e79c9ad6bd9e781938ed0ad09a12e41d771fab3d48"
+   },
+   "tests/test_tokenize.py": {
+    "bytes": 6364,
+    "sha256": "a26ee60a83832e0dee1420ef2f7df84de3d19ce8a92e69fc4f2cc39c91fa8db3"
+   },
+   "tests/test_utils.py": {
+    "bytes": 268,
+    "sha256": "49ae35e7607af5c8a9b83b6f14f47c30d8fcdc27da06a677fd92bef3e55ab998"
+   }
+  },
+  "format_option_keys": [
+   "comma_first",
+   "compact",
+   "identifier_case",
+   "indent_after_first",
+   "indent_char",
+   "indent_columns",
+   "indent_tabs",
+   "indent_width",
+   "keyword_case",
+   "output_format",
+   "reindent",
+   "reindent_aligned",
+   "right_margin",
+   "strip_comments",
+   "strip_whitespace",
+   "truncate_char",
+   "truncate_strings",
+   "use_space_around_operators",
+   "wrap_after"
+  ],
+  "implementation_lines_by_file": {
+   "sqlparse/__init__.py": 72,
+   "sqlparse/__main__.py": 22,
+   "sqlparse/cli.py": 203,
+   "sqlparse/engine/__init__.py": 16,
+   "sqlparse/engine/filter_stack.py": 51,
+   "sqlparse/engine/grouping.py": 486,
+   "sqlparse/engine/statement_splitter.py": 115,
+   "sqlparse/exceptions.py": 12,
+   "sqlparse/filters/__init__.py": 42,
+   "sqlparse/filters/aligned_indent.py": 135,
+   "sqlparse/filters/others.py": 172,
+   "sqlparse/filters/output.py": 122,
+   "sqlparse/filters/reindent.py": 247,
+   "sqlparse/filters/right_margin.py": 48,
+   "sqlparse/filters/tokens.py": 59,
+   "sqlparse/formatter.py": 204,
+   "sqlparse/keywords.py": 1002,
+   "sqlparse/lexer.py": 161,
+   "sqlparse/sql.py": 660,
+   "sqlparse/tokens.py": 71,
+   "sqlparse/utils.py": 124
+  },
+  "implementation_python_files": 21,
+  "implementation_python_lines": 4024,
+  "keyword_entries_total": 809,
+  "keyword_tables": {
+   "KEYWORDS": 538,
+   "KEYWORDS_BIGQUERY": 10,
+   "KEYWORDS_COMMON": 43,
+   "KEYWORDS_HQL": 78,
+   "KEYWORDS_MSACCESS": 1,
+   "KEYWORDS_MYSQL": 1,
+   "KEYWORDS_ORACLE": 86,
+   "KEYWORDS_PLPGSQL": 40,
+   "KEYWORDS_SNOWFLAKE": 12
+  },
+  "keyword_ttype_vocabulary": [
+   "Token.Keyword",
+   "Token.Keyword.CTE",
+   "Token.Keyword.DCL",
+   "Token.Keyword.DDL",
+   "Token.Keyword.DML",
+   "Token.Name",
+   "Token.Name.Builtin",
+   "Token.Operator"
+  ],
+  "note": "Everything in this section was read out of the State A tree that the agent's workspace was unpacked from. It is a description of the starting point, not of the target.",
+  "public_api_python": {
+   "__version__": "0.5.3",
+   "format": "(sql, encoding=None, **options) -> str",
+   "parse": "(sql, encoding=None) -> tuple[Statement, ...]",
+   "parsestream": "(stream, encoding=None) -> Iterator[Statement]",
+   "split": "(sql, encoding=None, strip_semicolon=False) -> list[str]"
+  },
+  "sql_regex_patterns": 52,
+  "test_lines_by_file": {
+   "tests/__init__.py": 0,
+   "tests/conftest.py": 47,
+   "tests/test_cli.py": 122,
+   "tests/test_format.py": 774,
+   "tests/test_grouping.py": 679,
+   "tests/test_keywords.py": 13,
+   "tests/test_parse.py": 595,
+   "tests/test_regressions.py": 467,
+   "tests/test_split.py": 210,
+   "tests/test_tokenize.py": 247,
+   "tests/test_utils.py": 12
+  },
+  "test_python_files": 11,
+  "test_python_lines": 3166,
+  "token_type_count": 22,
+  "token_type_names": [
+   "Assignment",
+   "CTE",
+   "Command",
+   "Comment",
+   "Comparison",
+   "DDL",
+   "DML",
+   "Error",
+   "Generic",
+   "Keyword",
+   "Literal",
+   "Name",
+   "Newline",
+   "Number",
+   "Operator",
+   "Other",
+   "Punctuation",
+   "String",
+   "Text",
+   "Token",
+   "Whitespace",
+   "Wildcard"
+  ],
+  "upstream_project": "sqlparse",
+  "upstream_release_tag": "0.5.3",
+  "upstream_version": "0.5.3"
+ },
+ "task": "lang03-sqlparse-python-to-go"
+}

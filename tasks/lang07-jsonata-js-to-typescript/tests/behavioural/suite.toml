@@ -1,0 +1,262 @@
+# The behavioural stage: fifteen modules over one frozen corpus.
+#
+# Fourteen of them score. Each owns a disjoint set of case families and its weight
+# is the sum of those families' budgets, which live in `lib/catalog.py` and are
+# checked against this file by `catalog.py --suite` -- including the percentages in
+# the prose below, to half of the last published digit. A budget moved there and not
+# here does not break anything visibly; it just produces a different score from the
+# one this file describes. That is the failure the check exists for.
+#
+# The fifteenth is `build`, at weight 0, and it is the only module here allowed to
+# be worth nothing. It is not a measurement: it runs the repository's build and
+# writes the ledger the other fourteen read, so the build happens once instead of
+# fifteen times. Its cost is charged in full through them -- a tree that does not
+# build fails every family below it and the stage totals 0 -- which is why paying it
+# a share as well would charge one failure twice. `check_suite_weights` holds that
+# to one module: any OTHER weight-0 module is rejected as a check nothing can be
+# paid for.
+#
+# Where an answer came from is asked outside this file. `structure` scores
+# `struct/probe-standalone` and `struct/dist-self-contained` -- the built artifact
+# run away from its own tree -- and stage 1's `no-reference-relay` and
+# `no-answer-tables` gates read the submitted source for a relay or a lookup table
+# and are required there, so a cheat that a rate cannot see is a gate failure
+# rather than a lost fraction.
+#
+# Order matters once: `build` runs first and writes the build ledger every other
+# module reads instead of rebuilding. Nothing else here depends on order.
+
+schema = "swerefactor.behavioural-suite/1"
+task = "lang07-jsonata-js-to-typescript"
+default_timeout_sec = 1200
+lib_dir = "lib"
+
+# Every module declares its own `timeout_sec` anyway, so the default above is a
+# backstop for a module added later without one rather than a number anything
+# currently uses.
+#
+# The sizes are headroom, not measurements. State A answers the whole corpus in
+# about fourteen seconds of engine time -- 10,598 main cases in 3.8s, the 117
+# protocol cases in 4.4s because each one is its own process -- so every number
+# below is one to two orders of magnitude above what the reference needs. That is
+# deliberate: the thing being timed is a port nobody has written yet, and a
+# TypeScript rewrite that builds an AST per evaluation or reparses inside a loop
+# can be fifty times slower while being completely correct. A timeout that fits
+# the reference would grade performance, which this suite does not measure and
+# `instruction.md` does not ask for.
+#
+# The one number with a real reason behind it is `build` at 2400: it runs `tsc`
+# over the submission's whole source tree from a cold cache, which is the only
+# step here whose cost is set by the toolchain rather than by the corpus.
+
+[env]
+SWEREFACTOR_ASSETS = "/opt/assets"
+
+[metadata]
+name = "jsonata-js-to-typescript-behavioural"
+weight_total = 2349.0
+corpus_cases = 13940
+about = """
+13,940 frozen cases and 24 type rows, graded against expectations captured from the
+original JavaScript repository. Every case is a request to a probe the repository
+publishes, and every expectation is the answer the original gave -- so the corpus
+describes behaviour, not implementation, and a rewrite that preserves behaviour
+passes it whatever it looks like inside.
+"""
+
+# -- the ledger --------------------------------------------------------------
+
+[[module]]
+id = "build"
+title = "npm run build from the submitted source; dist/probe.js answers the handshake"
+weight = 0.0
+timeout_sec = 2400
+about = """
+Runs the build the repository publishes and records what it produced. Writes the
+build ledger the rest of the suite reads, so the build happens once rather than
+fifteen times.
+
+No share of the stage, and no veto either. Weight 0 is right here because it is
+not a measurement of the port, it is the step that produces the artefact the
+measurements run against, and its failure is already priced through them. A tree
+that does not build fails every family below and the stage totals 0, so a weight
+here would charge the same failure a second time.
+"""
+
+# -- release shape -----------------------------------------------------------
+
+[[module]]
+id = "structure"
+title = "the delivered package as a consumer meets it: require, resolve, rebuild"
+weight = 23.0
+timeout_sec = 2400
+about = """
+1.0% of the stage. Eight release cases, `_release` 23 weight between them: the
+things a consumer of the built package can observe that no individual expression
+exercises -- that the entry point is importable and callable, that the probe's two
+invocations agree, that declarations sit where the build contract says. Behavioural
+throughout: each case runs something and compares what came out.
+"""
+
+# -- the language ------------------------------------------------------------
+
+[[module]]
+id = "navigation"
+title = "path navigation: sequences, predicates, wildcards, descendants, parent"
+weight = 190.0
+timeout_sec = 1800
+about = """
+8.1% of the stage. `paths` 190: path navigation, the part of JSONata that has no
+equivalent in the host language -- sequence flattening, singleton collapse, the
+difference between a missing key and an empty sequence, predicates, wildcards,
+descendants, parent, and the array-constructor forms that decide whether a result
+keeps its brackets.
+"""
+
+[[module]]
+id = "operators"
+title = "operators and the numeric surface: coercion, ranges, formatting, limits"
+weight = 185.0
+timeout_sec = 1500
+about = """
+7.9% of the stage. `operators` 95 and `numbers` 90: comparison, concatenation,
+range, the boolean operators and their coercions, plus the numeric surface --
+integer and float formatting, the boundaries where a number stops being safe, and
+the three spellings a non-finite value has on the wire.
+"""
+
+[[module]]
+id = "strings"
+title = "string builtins, wire encoding above the BMP, and the regex surface"
+weight = 270.0
+timeout_sec = 1500
+about = """
+11.5% of the stage. `strings` 100, `encoding` 100 and `regex` 70: the string
+builtins, the escaping every response goes through -- control characters,
+surrogate pairs, characters above the BMP -- and the regular-expression surface,
+where a pattern's flags and its match objects are both observable.
+"""
+
+[[module]]
+id = "datetime"
+title = "$fromMillis / $toMillis and the picture-string formatter, under a pinned clock"
+weight = 85.0
+timeout_sec = 900
+about = """
+3.6% of the stage. `datetime` 85: `$fromMillis`, `$toMillis` and the picture-string
+formatter, including the field widths and calendars it accepts. The clock is pinned
+for every case that reads it, so these grade the formatter rather than the moment
+the suite ran.
+"""
+
+[[module]]
+id = "collections"
+title = "arrays and objects: aggregates, reshaping, construction, key order"
+weight = 120.0
+timeout_sec = 1200
+about = """
+5.1% of the stage. `collections` 120: arrays and objects -- the aggregate and
+reshaping builtins, object construction, and key order, which JSONata preserves and
+the wire encoding carries as ordered pairs precisely so it can be graded.
+"""
+
+[[module]]
+id = "lambdas"
+title = "lambdas, closures, signatures, recursion, and host-registered functions"
+weight = 195.0
+timeout_sec = 1500
+about = """
+8.3% of the stage. `behavioural` 105 and `register` 90: lambdas, closures,
+higher-order builtins, signature validation, recursion including the tail-recursive
+depths, and functions registered from the host -- where the arity a callee declares
+decides what it is passed, and a registered function's signature is enforced the
+same way a native one's is.
+"""
+
+[[module]]
+id = "transform"
+title = "the |...|...| transform operator, and that the input survives it"
+weight = 90.0
+timeout_sec = 1200
+about = """
+3.8% of the stage. `transform` 90: the `|...|...|` transform operator, which copies
+its input and mutates the copy. What makes it worth its own module is that a
+mistake here is invisible elsewhere: a transform that mutated the original would
+answer every single-evaluation case correctly.
+"""
+
+[[module]]
+id = "errors"
+title = "diagnostics as answers: 96 of 101 codes, with position, token, and recovery"
+weight = 175.0
+timeout_sec = 1500
+about = """
+7.4% of the stage. `errors` 105 and `syntax` 70: the diagnostics. A failed
+evaluation is an answer like any other -- code, position, token -- and the corpus
+reaches 96 of the 101 codes the implementation declares. Includes the recovery
+path, where the parser returns a tree with error nodes in it instead of throwing.
+"""
+
+[[module]]
+id = "api"
+title = "the host-driven API: options, bindings, assigns, callbacks, re-evaluation, wire"
+weight = 322.0
+timeout_sec = 1800
+about = """
+13.7% of the stage. `options` 75, `bindings` 70, `assigns` 60, `callback` 70,
+`repeat` 25 and `_protocol` 22: the API surface a host program drives rather than
+the language a document is written in. Compile options, variable bindings, values
+assigned onto a compiled expression, the evaluation callback, repeated evaluation
+of one compiled expression -- which is how per-evaluation state becomes observable
+-- and the wire protocol itself, whose 117 cases are graded on whole streams
+because their subject is how many lines came back.
+"""
+
+[[module]]
+id = "compose"
+title = "composed and mutated expressions: interactions nobody would write by hand"
+weight = 150.0
+timeout_sec = 2400
+about = """
+6.4% of the stage. `compose` 150: expressions built by composing and by mutating
+the ones the other modules use. Composition reaches interactions no hand-written
+case would think to write; mutation reaches the parser's failure paths, since most
+mutations are syntax errors and the graded answer is the diagnostic.
+"""
+
+[[module]]
+id = "suite"
+title = "the upstream project's own 1,675 cases, re-expected against the original"
+weight = 130.0
+timeout_sec = 1800
+about = """
+5.5% of the stage. `_fixture` 130: the upstream project's own test suite, 1,675
+cases, driven through the same probe as everything else. Their expected values are
+discarded and re-captured from the original repository, so they grade agreement
+with the tree being rewritten rather than with a third party's idea of correct.
+"""
+
+[[module]]
+id = "fresh"
+title = "1,550 held-out cases from unseen seeds: a rewrite, not a fit to the corpus"
+weight = 270.0
+timeout_sec = 1800
+about = """
+11.5% of the stage. `fresh-composed` 150 and `fresh-mutated` 120: 1,550 cases drawn
+by the same generators from different seeds, held out from every other module. They
+exist so the stage measures a rewrite rather than a fit to the cases: a submission
+that special-cased its way through the graded families has done nothing for these.
+"""
+
+[[module]]
+id = "types"
+title = "the emitted declarations, compiled: 12 uses must pass, 12 misuses must not"
+weight = 144.0
+timeout_sec = 1800
+about = """
+6.1% of the stage. `_types` 144: 24 rows compiled against the declarations the
+build emits -- twelve uses that must compile clean and twelve misuses that must be
+rejected, each at a marked line with an accepted diagnostic. The only module that
+grades the type surface, because it is the only thing in the repository a runtime
+test cannot see.
+"""

@@ -1,0 +1,320 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "lang06-jsonnet-cpp-to-csharp"
+
+# A family of a thousand cases runs in about two minutes; the build takes most of
+# an hour on a cold offline restore.  The default is generous for the families and
+# `build` overrides it.
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+SWEREFACTOR_ASSETS = "/opt/assets"
+
+[metadata]
+runtime = "dotnet-8.0"
+reference_version = "jsonnet-0.20.0"
+# Written by hand and checked by `driver.py --self-check` against the frozen
+# expectations at image-build time, so a number here that drifts from what runs
+# fails the build rather than misleading a reader.
+programs = ["jsonnet", "jsonnetfmt"]
+channels = ["exit status", "stdout", "stderr", "files written", "files removed"]
+
+# --------------------------------------------------------------------------- #
+# The shared build.  First, and worth nothing.
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "the submission publishes two runnable programs"
+weight = 0.00
+timeout_sec = 5400
+about = """
+Copies the submission, discards any build output it shipped, and publishes the
+two programs the contract names.
+
+Projects are found by the assembly they produce -- <AssemblyName>, or the .csproj
+file name when a project does not set one -- and not by their path or filename.
+The contract says project layout is unconstrained and this is where that promise
+is kept: a solution whose projects are Jsonnet.Cli and Jsonnet.Core publishes
+here exactly as one laid out like the original does.
+
+The publish forces PublishSingleFile, PublishAot, PublishTrimmed,
+PublishReadyToRun and SelfContained off.  Not to constrain the port -- none of
+them changes anything a case can observe -- but because this image has no network
+and the offline feed holds packages, not runtime packs: framework-dependent is
+the only shape a publish here can restore.  Every publish the image performs for
+itself passes the same flags.
+
+Worth zero.  Every expectation this stage scores was recorded from State A, and
+State A is 14,958 lines of C++ with a Makefile: it has no .csproj, so `dotnet
+publish` cannot produce anything from it.  That is not a defect this stage found,
+it is the migration not having happened -- and a stage that charges for a check
+its own oracle fails by construction is one the reference cannot pass.  Stage 1's
+`no-cpp-build-system` is the owner and asks it directly -- "is the build that
+remains a .NET build that produces the two CLIs from C# source?" -- required,
+reading both trees, and a failure there scores the whole submission zero before
+this image is pulled.
+
+The module stays, first and unchanged, because eighteen modules need build.json
+and because "which project produced which assembly, and what the restore said
+when it failed" is the one report that turns a stage-1 finding into a fix.
+
+A weight of zero costs no strictness here, which is measured rather than argued:
+`run_family` records every case as *fail* rather than skip when build.json says
+ok=false, so a tree that does not publish rates 0.0 in all eighteen families and
+the stage pays nothing through the ordinary path.
+
+No module in any task vetoes its own stage, because every weighted module has to
+pass every scored check for the stage to pay at all, and `required` is not a module
+key -- the runner refuses a suite that declares one.  driver.py --self-check
+therefore rejects *any* module in this file that declares one too, because such a
+declaration describes a distinction the stage does not draw, which is worse than
+none.
+"""
+
+# --------------------------------------------------------------------------- #
+# The graded families.  These eighteen are the whole of the score.
+#
+# One module per family, and the weights are spec.FAMILY_WEIGHTS verbatim.  Those
+# numbers are a judgment about how much of a port's *work* each area represents,
+# argued for where they are defined, and deliberately not proportional to how many
+# cases each area happens to contain: `op` holds 1004 cases and carries 0.06,
+# `err-trace` holds 23 and carries 0.04.  A weight per case would mean the score
+# tracked how many inputs I thought to enumerate.
+#
+# They sum to exactly 1.00, and with `build` at 0.00 that is the whole
+# denominator -- the scorer normalises by the sum of the weights, so 1.00 is what
+# a port with no behavioural failure divides by.  So a port that answers all 2,602
+# cases byte-for-byte reaches 40.00, and a port that answers all 2,602 without
+# publishing reaches 0: a failed `build` records every case in every family as
+# failed, which leaves no scored check passing anywhere in the stage.
+#
+# Nothing here scores a property of the build output.  Whether the published
+# assemblies declare a P/Invoke or reference a process-spawning API is asked once,
+# by stage 1's `no-native-interop` gate, which reads the submitted source, is
+# required there, and zeroes the whole submission.  The honest cost of asking it
+# there is that source is a weaker place to read it from than the assemblies' own
+# metadata tables -- but this stage is frozen from a C++ reference that publishes
+# no assembly, so a module here could not be passed by the tree its expectations
+# come from.
+#
+# 2,602 is also the number the reference answers correctly, all of them, which is
+# the claim this stage rests on and which the image build proves rather than
+# asserts: freeze.py records the expectations from the C++ reference, and
+# driver.py --replay-reference then replays all eighteen families against that
+# same reference through this suite's own executor and grading path and requires
+# 2,602/2,602.  A case these families ask that the reference cannot answer is a
+# defect in the case, and it fails the build where it is cheap to fix.
+#
+# driver.py --self-check reads these back and refuses to build the image if any
+# one of them disagrees with spec.FAMILY_WEIGHTS, if a family in the frozen
+# expectations has no module here, if `build` stops being 0.00, or if any module
+# declares `required`.  The sum being 1.00 is asserted one file over, by
+# spec._self_check, which freeze.py runs two stages earlier -- the module list here
+# is tuple(spec.FAMILY_WEIGHTS), so a second copy of that assertion could only fire
+# after the first had already failed the build.
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "num"
+title = "numbers: parsing, arithmetic, and how a double is printed"
+weight = 0.09
+about = """
+Every number that reaches output goes through one formatter, and reproducing it is
+the single most common way a port of this program is subtly wrong.  The reference
+prints 1 rather than 1.0, 1e+100 rather than 1e100, and -0 for negative zero; it
+rejects 0x10 and 1_000; its integer range ends where a double's does.  These are
+not choices a port makes freely -- they are observable, and they are here.
+"""
+
+[[module]]
+id = "obj"
+title = "objects: inheritance, hidden fields, self and super"
+weight = 0.07
+about = """
+The object model: `+` inheritance, the three field visibilities, computed field
+names, `self` and `super` binding, and what the manifester chooses to print.  A
+port that treats objects as dictionaries passes the easy half of this and fails
+the half where a field's value depends on which object it was inherited into.
+"""
+
+[[module]]
+id = "lazy"
+title = "laziness: what is never evaluated, and what is evaluated once"
+weight = 0.05
+about = """
+Fields are computed on demand and memoized.  Both halves are observable: an error
+in a field nobody reads must not be reported, and a side effect visible through
+std.trace must happen exactly once.  A port that evaluates eagerly produces errors
+the reference does not; one that forgets to memoize produces output the reference
+does, but takes exponential time to do it.
+"""
+
+[[module]]
+id = "op"
+title = "operators over every pair of value types"
+weight = 0.06
+about = """
+Every binary and unary operator against every type of operand, including the pairs
+that are errors.  A thousand cases because the surface is a product of two type
+lists rather than a list of interesting examples -- and because the error message
+for `null < 1` is as much a part of the behaviour as the answer to `1 < 2`.
+"""
+
+[[module]]
+id = "str"
+title = "strings: escapes, verbatim and block literals, unicode"
+weight = 0.05
+about = """
+Escape sequences in both directions, verbatim strings, text blocks and their
+indentation rules, and what happens to a lone surrogate or a codepoint above the
+BMP.  The last of those is where a port written in a UTF-16 language and a program
+written in a UTF-8 one most often part company.
+"""
+
+[[module]]
+id = "stdlib"
+title = "the standard library"
+weight = 0.09
+about = """
+The functions in std, called with the arguments that reveal their edges: an empty
+array, a negative index, a comparator that is inconsistent, a UTF-8 string in a
+function that indexes by codepoint.  Some of std is written in Jsonnet and some is
+native to the interpreter, and a port has to decide which is which -- but from
+outside, only the answers show.
+"""
+
+[[module]]
+id = "format"
+title = "the % operator and std.format"
+weight = 0.02
+about = """
+printf-style formatting, which the reference implements itself rather than
+delegating: field widths, precision, the flag characters, %s against a
+non-string, and the errors for a malformed specifier.
+"""
+
+[[module]]
+id = "parsejson"
+title = "std.parseJson"
+weight = 0.01
+about = """
+Reading JSON back in: what is accepted, what is rejected, and what the rejection
+says.  Small because the surface is small, and separate from parseyaml because
+they are different code in the reference and usually different code in a port.
+"""
+
+[[module]]
+id = "parseyaml"
+title = "std.parseYaml"
+weight = 0.02
+about = """
+The YAML subset the reference accepts, which is neither all of YAML nor exactly
+JSON.  Multi-document streams, anchors, the several spellings of a boolean, and
+the places where a plausible reading differs from the reference's.
+"""
+
+[[module]]
+id = "err-static"
+title = "errors found before evaluation begins"
+weight = 0.04
+about = """
+Lexical and syntactic errors, and the static checks: an unbound variable, a
+duplicate field, a `self` outside an object.  Produced by a different pass than
+runtime errors and reported in a different shape, which is why they are graded
+separately -- a port that gets the message right but the position wrong fails
+here and nowhere else.
+"""
+
+[[module]]
+id = "err-runtime"
+title = "errors raised while evaluating"
+weight = 0.04
+about = """
+Type errors, index errors, std.assertEqual failures, explicit error expressions,
+and division by zero.  Both channels matter: the message on stderr and the exit
+status, which is not the same for every kind of failure.
+"""
+
+[[module]]
+id = "err-trace"
+title = "stack traces"
+weight = 0.04
+about = """
+The trace printed beneath an error: which frames appear, in which order, how a
+frame inside std is named, and what a thunk forced from another file looks like.
+The most implementation-revealing output the program has, and the part a port is
+most likely to approximate.
+"""
+
+[[module]]
+id = "imports"
+title = "import, importstr and the search path"
+weight = 0.04
+about = """
+Resolution order between -J, JSONNET_PATH and the importing file's own directory;
+importing the same file twice; a cycle; a missing file; importstr on something
+that is not valid UTF-8.  The error for a failed import lists every path that was
+tried, which makes it one of the more exacting messages to reproduce.
+"""
+
+[[module]]
+id = "cli"
+title = "the command line of jsonnet"
+weight = 0.05
+about = """
+Argument handling: every flag, the flags that take values, --, unknown flags,
+missing operands, -e, stdin as input, and the usage text.  Graded because a
+program's command line is part of what it is -- a correct evaluator behind a
+different argument parser is not a port of this program.
+"""
+
+[[module]]
+id = "out"
+title = "output modes: -o, -m, -S, --yaml-stream"
+weight = 0.03
+about = """
+The modes whose observable effect is on the filesystem rather than on stdout.
+Which files appear, what is in them, what is printed while they are written, and
+what happens when a target exists already or a directory does not.  These are the
+cases the executor's file capture exists for.
+"""
+
+[[module]]
+id = "fmtr"
+title = "jsonnetfmt"
+weight = 0.05
+about = """
+The formatter: comment attachment, string quoting, line breaking, indentation,
+sort order under --sort-imports, --test and --in-place.  A separate program with
+its own argument surface, and the one place where the reference's output is a
+formatting decision rather than a computed value -- so every case here is a
+decision a port has to make identically.
+"""
+
+[[module]]
+id = "upstream-eval"
+title = "the reference test suite, evaluated"
+weight = 0.18
+about = """
+Every .jsonnet file the original ships -- its own test suite, its command tests,
+its examples -- evaluated and compared.  The largest single weight, for one
+reason: it is the only family nobody here wrote, so it is the only one that can
+fail in a way nobody here anticipated.  The programs are the ones the original's
+authors thought were worth testing, and they use the language the way its authors
+use it.
+
+The files are materialized from the verifier's own read-only copy of the original
+tree, never from the submission -- so this measures the port, and editing the
+repository's copy of the suite changes nothing.
+"""
+
+[[module]]
+id = "upstream-fmt"
+title = "the reference test suite, formatted"
+weight = 0.07
+about = """
+The same files through jsonnetfmt.  Cheaper than evaluating them and it fails
+differently: formatting touches every token of a file, so one mishandled comment
+in 189 real programs shows up here when no hand-written case thought to ask.
+"""

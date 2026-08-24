@@ -1,0 +1,21 @@
+# The four files stage 2 and stage 3 share, and their digests.
+#
+# Both stages own a copy: tests/behavioural/ and tests/verification/ are separate
+# Docker build contexts, so neither can COPY from the other or from here.  The
+# copies have to agree, because the two stages ask the same probe the same
+# questions and stage 3's whole claim is that a candidate which passes on the
+# original and fails on the submission found a real difference -- a claim that is
+# void if the two halves of the comparison were compiled from different sources.
+#
+# `swerefactor validate` compares same-named files at a stage's top level and in its
+# data/ directory against environment/, but not files under a stage's lib/.  These
+# four are all under lib/, so this file is what closes that gap: it lives here, is
+# copied byte-identically into both stages' data/, and each stage's Dockerfile
+# checks its own lib/ against it at build time.  A file edited in one stage and not
+# the other fails that stage's build.
+#
+# Paths are relative to a stage's lib/ directory.
+0b5a592d0d41ed400b7fa9bd148a8b96d70b09c1796b51648958f929e2887e5d  probe/probe.c
+f984db1a23777fb5fa3a1f47634c937f9b47398d203f6ec596de3812d016ce7d  probe/Probe.java
+4349d967b26c41810a1b12410725df782e2f11180ab01d50c78d608f27731190  executor.py
+0fd2eb535593c74fb37487b3d893a4a320db3e51e2f5145331c9789085be6157  vlib.py

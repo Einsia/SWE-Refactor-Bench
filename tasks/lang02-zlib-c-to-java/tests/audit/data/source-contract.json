@@ -1,0 +1,1562 @@
+{
+  "api_contract": {
+    "classes": [
+      {
+        "constructors": [],
+        "extends": "java.lang.Object",
+        "kind": "class",
+        "method_notes": {
+          "adler32(long,byte[],int,int)": "C adler32 and adler32_z collapse: the length is an int either way in Java. A null buffer with length 0 must return the initial value, which is how callers query it.",
+          "adler32Combine(long,long,long)": "C adler32_combine and adler32_combine64 collapse: z_off_t and z_off64_t are both long.",
+          "compress(byte[],int[],byte[],int)": "C compress(dest, destLen, source, sourceLen). destLen is a one-element int[], in-out: the caller sets the room available and the call writes back the bytes used.",
+          "crc32(long,byte[],int,int)": "C crc32 and crc32_z collapse for the same reason.",
+          "crcTable()": "C get_crc_table. Returns the 256-entry table, values held as signed int with the same bit pattern as the C z_crc_t. The array must be a copy or an unmodifiable view: a caller must not be able to corrupt the library's table, which is a hazard C's `const` prevented and Java's array type does not.",
+          "errorString(int)": "C zError.",
+          "uncompress2(byte[],int[],byte[],int[])": "sourceLen is in-out here, which is the whole difference from uncompress: it reports how much of the input was consumed."
+        },
+        "methods": [
+          {
+            "name": "version",
+            "params": [],
+            "returns": "java.lang.String",
+            "static": true
+          },
+          {
+            "name": "compileFlags",
+            "params": [],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "errorString",
+            "params": [
+              "int"
+            ],
+            "returns": "java.lang.String",
+            "static": true
+          },
+          {
+            "name": "adler32",
+            "params": [
+              "long",
+              "byte[]",
+              "int",
+              "int"
+            ],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "adler32Combine",
+            "params": [
+              "long",
+              "long",
+              "long"
+            ],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "crc32",
+            "params": [
+              "long",
+              "byte[]",
+              "int",
+              "int"
+            ],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "crc32Combine",
+            "params": [
+              "long",
+              "long",
+              "long"
+            ],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "crc32CombineGen",
+            "params": [
+              "long"
+            ],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "crc32CombineOp",
+            "params": [
+              "long",
+              "long",
+              "long"
+            ],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "crcTable",
+            "params": [],
+            "returns": "int[]",
+            "static": true
+          },
+          {
+            "name": "compress",
+            "params": [
+              "byte[]",
+              "int[]",
+              "byte[]",
+              "int"
+            ],
+            "returns": "int",
+            "static": true
+          },
+          {
+            "name": "compress2",
+            "params": [
+              "byte[]",
+              "int[]",
+              "byte[]",
+              "int",
+              "int"
+            ],
+            "returns": "int",
+            "static": true
+          },
+          {
+            "name": "compressBound",
+            "params": [
+              "long"
+            ],
+            "returns": "long",
+            "static": true
+          },
+          {
+            "name": "uncompress",
+            "params": [
+              "byte[]",
+              "int[]",
+              "byte[]",
+              "int"
+            ],
+            "returns": "int",
+            "static": true
+          },
+          {
+            "name": "uncompress2",
+            "params": [
+              "byte[]",
+              "int[]",
+              "byte[]",
+              "int[]"
+            ],
+            "returns": "int",
+            "static": true
+          }
+        ],
+        "modifiers": [
+          "public",
+          "final"
+        ],
+        "name": "org.zlib.Zlib",
+        "note": "The entry points that are free functions in C, plus every public constant. No instances: the class is a namespace."
+      },
+      {
+        "extends": "java.lang.Object",
+        "fields": [
+          {
+            "name": "nextIn",
+            "note": "C next_in. null is legal and means no input buffer.",
+            "type": "byte[]"
+          },
+          {
+            "name": "nextInIndex",
+            "note": "Offset into nextIn. C's pointer arithmetic.",
+            "type": "int"
+          },
+          {
+            "name": "availIn",
+            "type": "int"
+          },
+          {
+            "name": "totalIn",
+            "note": "uLong in C, so long here: it can exceed 2^31.",
+            "type": "long"
+          },
+          {
+            "name": "nextOut",
+            "type": "byte[]"
+          },
+          {
+            "name": "nextOutIndex",
+            "type": "int"
+          },
+          {
+            "name": "availOut",
+            "type": "int"
+          },
+          {
+            "name": "totalOut",
+            "type": "long"
+          },
+          {
+            "name": "msg",
+            "note": "C sets this to a static English string. The strings are part of the observable surface and are compared verbatim.",
+            "type": "java.lang.String"
+          },
+          {
+            "name": "dataType",
+            "type": "int"
+          },
+          {
+            "name": "adler",
+            "note": "uLong holding a 32-bit checksum: always 0..0xffffffff.",
+            "type": "long"
+          },
+          {
+            "name": "allocator",
+            "note": "C zalloc. null means the implementation allocates for itself.",
+            "type": "org.zlib.ZStream$Allocator"
+          },
+          {
+            "name": "deallocator",
+            "note": "C zfree.",
+            "type": "org.zlib.ZStream$Deallocator"
+          },
+          {
+            "name": "opaque",
+            "note": "C opaque. Must reach the hooks unchanged, by identity.",
+            "type": "java.lang.Object"
+          }
+        ],
+        "kind": "class",
+        "methods": [],
+        "modifiers": [
+          "public",
+          "abstract"
+        ],
+        "name": "org.zlib.ZStream",
+        "nested": [
+          {
+            "kind": "interface",
+            "methods": [
+              {
+                "name": "allocate",
+                "params": [
+                  "java.lang.Object",
+                  "int",
+                  "int"
+                ],
+                "returns": "java.lang.Object"
+              }
+            ],
+            "modifiers": [
+              "public",
+              "static",
+              "abstract"
+            ],
+            "name": "org.zlib.ZStream$Allocator",
+            "note": "C's zalloc(opaque, items, size). Returns a primitive array whose component type is fixed by `size`: 1 -> byte[], 2 -> short[], 4 -> int[], 8 -> long[]. Returning null must produce Z_MEM_ERROR rather than an exception. The point of the hook surviving the port is that a sandboxed consumer can still account for every buffer the library takes."
+          },
+          {
+            "kind": "interface",
+            "methods": [
+              {
+                "name": "release",
+                "params": [
+                  "java.lang.Object",
+                  "java.lang.Object"
+                ],
+                "returns": "void"
+              }
+            ],
+            "modifiers": [
+              "public",
+              "static",
+              "abstract"
+            ],
+            "name": "org.zlib.ZStream$Deallocator",
+            "note": "C's zfree(opaque, address). Called once for every non-null allocate result, at latest by the time end() returns."
+          }
+        ],
+        "note": "Base class carrying the observable state of C's z_stream. Abstract: a bare ZStream is not a usable engine, Deflater and Inflater are."
+      },
+      {
+        "constructors": [
+          {
+            "params": []
+          }
+        ],
+        "extends": "org.zlib.ZStream",
+        "kind": "class",
+        "method_notes": {
+          "copy(org.zlib.Deflater)": "C deflateCopy(dest, source). Called on the source, argument is the destination -- so src.copy(dst) is deflateCopy(dst, src). The copy must be independent: deflating either afterwards must not perturb the other.",
+          "getDictionary(byte[],int[])": "dictLength is a one-element int[] used as C's uInt* out-parameter. A null dictionary array means 'report the length only'.",
+          "init(int)": "C deflateInit. Defaults: Z_DEFLATED, windowBits 15, memLevel 8, Z_DEFAULT_STRATEGY.",
+          "init(int,int)": "level and windowBits, other parameters defaulted. Convenience for the raw/gzip wrappers, which is by far the most common deflateInit2 call in the wild.",
+          "init2(int,int,int,int,int)": "C deflateInit2: level, method, windowBits, memLevel, strategy.",
+          "initRaw(java.lang.String,int,int)": "C deflateInit_(strm, level, version, stream_size). Present so the version and stream-size guard stays reachable: a version whose major differs from ZLIB_VERSION, or a size != Z_STREAM_SIZE, must return Z_VERSION_ERROR.",
+          "pending(int[],int[])": "pending and bits as one-element out-parameters."
+        },
+        "methods": [
+          {
+            "name": "init",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "init",
+            "params": [
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "init2",
+            "params": [
+              "int",
+              "int",
+              "int",
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "initRaw",
+            "params": [
+              "int",
+              "java.lang.String",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "deflate",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "end",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "reset",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "resetKeep",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "setDictionary",
+            "params": [
+              "byte[]",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "getDictionary",
+            "params": [
+              "byte[]",
+              "int[]"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "params",
+            "params": [
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "tune",
+            "params": [
+              "int",
+              "int",
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "bound",
+            "params": [
+              "long"
+            ],
+            "returns": "long"
+          },
+          {
+            "name": "pending",
+            "params": [
+              "int[]",
+              "int[]"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "prime",
+            "params": [
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "setHeader",
+            "params": [
+              "org.zlib.GzHeader"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "copy",
+            "params": [
+              "org.zlib.Deflater"
+            ],
+            "returns": "int"
+          }
+        ],
+        "modifiers": [
+          "public"
+        ],
+        "name": "org.zlib.Deflater"
+      },
+      {
+        "constructors": [
+          {
+            "params": []
+          }
+        ],
+        "extends": "org.zlib.ZStream",
+        "kind": "class",
+        "method_notes": {
+          "copy(org.zlib.Inflater)": "C inflateCopy(dest, source), called on the source.",
+          "initRaw(java.lang.String,int)": "C inflateInit_. Same version guard as Deflater.initRaw.",
+          "mark()": "C inflateMark. The return is two packed halves: the high half is `back`, the count of bits back to the start of the length/literal code being decoded, and the low half is how far into a copy the decoder is -- `length` while copying a stored block, `was - length` while copying a match, and zero everywhere else. Exactly (back << 16) + that, so a fresh stream reads -65536 because `back` starts at -1, and an unusable state reads -65536 as well. The packing is part of the contract, not an implementation detail: callers unpack it."
+        },
+        "methods": [
+          {
+            "name": "init",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "init2",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "initRaw",
+            "params": [
+              "java.lang.String",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "inflate",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "end",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "reset",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "reset2",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "resetKeep",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "setDictionary",
+            "params": [
+              "byte[]",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "getDictionary",
+            "params": [
+              "byte[]",
+              "int[]"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "sync",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "syncPoint",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "mark",
+            "params": [],
+            "returns": "long"
+          },
+          {
+            "name": "prime",
+            "params": [
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "getHeader",
+            "params": [
+              "org.zlib.GzHeader"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "codesUsed",
+            "params": [],
+            "returns": "long"
+          },
+          {
+            "name": "validate",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "undermine",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "copy",
+            "params": [
+              "org.zlib.Inflater"
+            ],
+            "returns": "int"
+          }
+        ],
+        "modifiers": [
+          "public"
+        ],
+        "name": "org.zlib.Inflater"
+      },
+      {
+        "constructors": [
+          {
+            "params": []
+          }
+        ],
+        "extends": "java.lang.Object",
+        "fields": [
+          {
+            "name": "text",
+            "type": "int"
+          },
+          {
+            "name": "time",
+            "note": "gzip MTIME. Seconds since the epoch, unsigned 32-bit.",
+            "type": "long"
+          },
+          {
+            "name": "xflags",
+            "type": "int"
+          },
+          {
+            "name": "os",
+            "type": "int"
+          },
+          {
+            "name": "extra",
+            "type": "byte[]"
+          },
+          {
+            "name": "extraLen",
+            "type": "int"
+          },
+          {
+            "name": "extraMax",
+            "type": "int"
+          },
+          {
+            "name": "name",
+            "note": "C uses Bytef* and the bytes are not necessarily valid UTF-8, so this stays a byte array rather than becoming a String. NUL-terminated in both directions: on the deflate side setHeader writes bytes until it reaches a zero byte, exactly as C does, so the terminator must be present in the array; on the inflate side getHeader fills the array up to nameMax and writes a terminating zero. This is the one place the port keeps a C string convention rather than a Java one, and it is not an oversight: the gzip format itself specifies NUL-terminated fields, so the convention belongs to the wire format rather than to C.",
+            "type": "byte[]"
+          },
+          {
+            "name": "nameMax",
+            "note": "Capacity of the name array; an input to getHeader.",
+            "type": "int"
+          },
+          {
+            "name": "comment",
+            "note": "NUL-terminated, as name.",
+            "type": "byte[]"
+          },
+          {
+            "name": "commMax",
+            "type": "int"
+          },
+          {
+            "name": "hcrc",
+            "type": "int"
+          },
+          {
+            "name": "done",
+            "type": "int"
+          }
+        ],
+        "kind": "class",
+        "methods": [],
+        "modifiers": [
+          "public"
+        ],
+        "name": "org.zlib.GzHeader",
+        "note": "C gz_header, field for field. Like z_stream it is caller-allocated and caller-read, so the fields stay public. The *_max fields are inputs on the inflate side (how much room the caller provided) and the lengths are outputs."
+      },
+      {
+        "constructors": [
+          {
+            "params": []
+          }
+        ],
+        "extends": "org.zlib.ZStream",
+        "kind": "class",
+        "method_notes": {
+          "init(int,byte[])": "C inflateBackInit_(strm, windowBits, window). The window must be at least 1 << windowBits bytes or the call returns Z_STREAM_ERROR."
+        },
+        "methods": [
+          {
+            "name": "init",
+            "params": [
+              "int",
+              "byte[]"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "inflateBack",
+            "params": [
+              "org.zlib.InflateBack$In",
+              "org.zlib.InflateBack$Out",
+              "java.lang.Object"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "end",
+            "params": [],
+            "returns": "int"
+          }
+        ],
+        "modifiers": [
+          "public"
+        ],
+        "name": "org.zlib.InflateBack",
+        "nested": [
+          {
+            "kind": "interface",
+            "methods": [
+              {
+                "name": "read",
+                "params": [
+                  "java.lang.Object"
+                ],
+                "returns": "byte[]"
+              }
+            ],
+            "modifiers": [
+              "public",
+              "static",
+              "abstract"
+            ],
+            "name": "org.zlib.InflateBack$In",
+            "note": "C's in_func. Returns the next input chunk, or null / a zero-length array to signal no more input -- which inflateBack reports as Z_BUF_ERROR. No message is set: C's PULL() sets only the return code, and nulls next_in so the caller can tell an input failure from an output one."
+          },
+          {
+            "kind": "interface",
+            "methods": [
+              {
+                "name": "write",
+                "params": [
+                  "java.lang.Object",
+                  "byte[]",
+                  "int"
+                ],
+                "returns": "int"
+              }
+            ],
+            "modifiers": [
+              "public",
+              "static",
+              "abstract"
+            ],
+            "name": "org.zlib.InflateBack$Out",
+            "note": "C's out_func. Returns 0 on success and non-zero to abort, which inflateBack reports as Z_BUF_ERROR."
+          }
+        ],
+        "note": "C's inflateBack: a callback-driven raw inflater with a caller-supplied window. Separate from Inflater because it has its own init/end pair and its own state in C."
+      },
+      {
+        "constructors": [],
+        "extends": "java.lang.Object",
+        "kind": "class",
+        "method_notes": {
+          "dopen(java.io.FileDescriptor,java.lang.String)": "C gzdopen takes an int fd. Java has no portable int-fd handle, so this takes a FileDescriptor, which is the same capability and reaches FileDescriptor.in / .out for the stdio case minigzip needs.",
+          "error(int[])": "C gzerror(file, &errnum). The int[] is a one-element out-parameter for the code; the return is the message.",
+          "gets(byte[],int)": "C gzgets(file, buf, len) returns buf or NULL. Here it returns the same array on success and null at EOF or on error, so the caller can distinguish without a second call.",
+          "printf(java.lang.String,java.lang.Object[])": "Varargs. The format string follows java.util.Formatter rather than C printf: the two agree on the conversions the graded cases use, and inventing a C format parser in Java would be a different task than porting zlib.",
+          "seek(long,int)": "C gzseek/gzseek64 collapse: z_off_t and z_off64_t are both long here. whence is SEEK_SET (0) or SEEK_CUR (1)."
+        },
+        "methods": [
+          {
+            "name": "open",
+            "params": [
+              "java.lang.String",
+              "java.lang.String"
+            ],
+            "returns": "org.zlib.GzFile",
+            "static": true
+          },
+          {
+            "name": "dopen",
+            "params": [
+              "java.io.FileDescriptor",
+              "java.lang.String"
+            ],
+            "returns": "org.zlib.GzFile",
+            "static": true
+          },
+          {
+            "name": "buffer",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "setParams",
+            "params": [
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "read",
+            "params": [
+              "byte[]",
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "fread",
+            "params": [
+              "byte[]",
+              "long",
+              "long"
+            ],
+            "returns": "long"
+          },
+          {
+            "name": "write",
+            "params": [
+              "byte[]",
+              "int",
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "fwrite",
+            "params": [
+              "byte[]",
+              "long",
+              "long"
+            ],
+            "returns": "long"
+          },
+          {
+            "name": "printf",
+            "params": [
+              "java.lang.String",
+              "java.lang.Object[]"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "puts",
+            "params": [
+              "java.lang.String"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "gets",
+            "params": [
+              "byte[]",
+              "int"
+            ],
+            "returns": "byte[]"
+          },
+          {
+            "name": "putc",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "getc",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "ungetc",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "flush",
+            "params": [
+              "int"
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "seek",
+            "params": [
+              "long",
+              "int"
+            ],
+            "returns": "long"
+          },
+          {
+            "name": "rewind",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "tell",
+            "params": [],
+            "returns": "long"
+          },
+          {
+            "name": "offset",
+            "params": [],
+            "returns": "long"
+          },
+          {
+            "name": "eof",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "direct",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "close",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "closeRead",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "closeWrite",
+            "params": [],
+            "returns": "int"
+          },
+          {
+            "name": "error",
+            "params": [
+              "int[]"
+            ],
+            "returns": "java.lang.String"
+          },
+          {
+            "name": "clearerr",
+            "params": [],
+            "returns": "void"
+          }
+        ],
+        "modifiers": [
+          "public",
+          "final"
+        ],
+        "name": "org.zlib.GzFile",
+        "note": "C gzFile. Opaque: no public fields, no public constructor. open() and dopen() return null on failure, like gzopen."
+      }
+    ],
+    "closed_world": true,
+    "closed_world_note": "No public class outside org.zlib, and no public member of the listed classes beyond the listed ones. Members inherited from java.lang.Object are exempt. A synthetic member the compiler emits for a nested class is exempt. A constructor the compiler supplies implicitly is a public member like any other: javac gives a concrete public class that declares no constructor an implicit public no-arg one, so a class listed here with an empty `constructors` list must declare its constructor `private`. That is Zlib, whose members are all static, and GzFile, whose instances come from open/dopen. An abstract class is exempt, since its constructor is not callable as a constructor of the listed type.",
+    "constants": {
+      "holder": "org.zlib.Zlib",
+      "int_values": {
+        "MAX_MEM_LEVEL": 9,
+        "MAX_WBITS": 15,
+        "ZLIB_VERNUM": 4880,
+        "ZLIB_VER_MAJOR": 1,
+        "ZLIB_VER_MINOR": 3,
+        "ZLIB_VER_REVISION": 1,
+        "ZLIB_VER_SUBREVISION": 0,
+        "Z_ASCII": 1,
+        "Z_BEST_COMPRESSION": 9,
+        "Z_BEST_SPEED": 1,
+        "Z_BINARY": 0,
+        "Z_BLOCK": 5,
+        "Z_BUF_ERROR": -5,
+        "Z_DATA_ERROR": -3,
+        "Z_DEFAULT_COMPRESSION": -1,
+        "Z_DEFAULT_STRATEGY": 0,
+        "Z_DEFLATED": 8,
+        "Z_ERRNO": -1,
+        "Z_FILTERED": 1,
+        "Z_FINISH": 4,
+        "Z_FIXED": 4,
+        "Z_FULL_FLUSH": 3,
+        "Z_HUFFMAN_ONLY": 2,
+        "Z_MEM_ERROR": -4,
+        "Z_NEED_DICT": 2,
+        "Z_NO_COMPRESSION": 0,
+        "Z_NO_FLUSH": 0,
+        "Z_NULL": 0,
+        "Z_OK": 0,
+        "Z_PARTIAL_FLUSH": 1,
+        "Z_RLE": 3,
+        "Z_STREAM_END": 1,
+        "Z_STREAM_ERROR": -2,
+        "Z_STREAM_SIZE": 112,
+        "Z_SYNC_FLUSH": 2,
+        "Z_TEXT": 1,
+        "Z_TREES": 6,
+        "Z_UNKNOWN": 2,
+        "Z_VERSION_ERROR": -6
+      },
+      "modifiers": [
+        "public",
+        "static",
+        "final"
+      ],
+      "note": "javac inlines a static final int at every use site, so a renumbered constant is an ABI break in exactly the way it is in C: an already-compiled consumer keeps the old number and silently means something else. The verifier reads them back by reflection and also compiles a consumer against the jar, which catches the inlining case.",
+      "string_values": {
+        "ZLIB_VERSION": "1.3.1"
+      }
+    },
+    "design_note": "This contract is a deliverable of the task rather than a translation of one. C zlib's interface is zlib.h; there is no Java header to point at, so the shape below is specified rather than derived. Where a choice existed it went to whatever kept the C semantics checkable: init methods returning int rather than throwing constructors, because deflateInit2 reports Z_STREAM_ERROR for level 10 and a constructor cannot return; public mutable fields on ZStream rather than accessors, because next_in and total_out are read and written directly by every real caller; byte[] rather than String for gzip header fields, because the bytes need not be valid text. Where no choice existed -- an interior pointer becoming an (array, index) pair -- the note says so.",
+    "note": "The public Java surface, exactly. Verified by reflection from inside the graded JVM against the delivered jar: every class, field and method listed here must exist with the listed type and modifiers, and the public surface must contain nothing else. Both halves matter -- a missing member is an incomplete port, and an extra public member is an interface the submission invented and a consumer could come to depend on.",
+    "package": "org.zlib",
+    "state_a_symbol_count": 88,
+    "symbol_map": {
+      "adler32": "Zlib.adler32(long,byte[],int,int)",
+      "adler32_combine": "Zlib.adler32Combine(long,long,long)",
+      "adler32_combine64": "Zlib.adler32Combine(long,long,long)",
+      "adler32_z": "Zlib.adler32(long,byte[],int,int)",
+      "compress": "Zlib.compress(byte[],int[],byte[],int)",
+      "compress2": "Zlib.compress2(byte[],int[],byte[],int,int)",
+      "compressBound": "Zlib.compressBound(long)",
+      "crc32": "Zlib.crc32(long,byte[],int,int)",
+      "crc32_combine": "Zlib.crc32Combine(long,long,long)",
+      "crc32_combine64": "Zlib.crc32Combine(long,long,long)",
+      "crc32_combine_gen": "Zlib.crc32CombineGen(long)",
+      "crc32_combine_gen64": "Zlib.crc32CombineGen(long)",
+      "crc32_combine_op": "Zlib.crc32CombineOp(long,long,long)",
+      "crc32_z": "Zlib.crc32(long,byte[],int,int)",
+      "deflate": "Deflater.deflate(int)",
+      "deflateBound": "Deflater.bound(long)",
+      "deflateCopy": "Deflater.copy(org.zlib.Deflater)",
+      "deflateEnd": "Deflater.end()",
+      "deflateGetDictionary": "Deflater.getDictionary(byte[],int[])",
+      "deflateInit2_": "Deflater.init2(int,int,int,int,int)",
+      "deflateInit_": "Deflater.initRaw(int,java.lang.String,int)",
+      "deflateParams": "Deflater.params(int,int)",
+      "deflatePending": "Deflater.pending(int[],int[])",
+      "deflatePrime": "Deflater.prime(int,int)",
+      "deflateReset": "Deflater.reset()",
+      "deflateResetKeep": "Deflater.resetKeep()",
+      "deflateSetDictionary": "Deflater.setDictionary(byte[],int)",
+      "deflateSetHeader": "Deflater.setHeader(org.zlib.GzHeader)",
+      "deflateTune": "Deflater.tune(int,int,int,int)",
+      "get_crc_table": "Zlib.crcTable()",
+      "gzbuffer": "GzFile.buffer(int)",
+      "gzclearerr": "GzFile.clearerr()",
+      "gzclose": "GzFile.close()",
+      "gzclose_r": "GzFile.closeRead()",
+      "gzclose_w": "GzFile.closeWrite()",
+      "gzdirect": "GzFile.direct()",
+      "gzdopen": "GzFile.dopen(java.io.FileDescriptor,java.lang.String)",
+      "gzeof": "GzFile.eof()",
+      "gzerror": "GzFile.error(int[])",
+      "gzflush": "GzFile.flush(int)",
+      "gzfread": "GzFile.fread(byte[],long,long)",
+      "gzfwrite": "GzFile.fwrite(byte[],long,long)",
+      "gzgetc": "GzFile.getc()",
+      "gzgetc_": "GzFile.getc()",
+      "gzgets": "GzFile.gets(byte[],int)",
+      "gzoffset": "GzFile.offset()",
+      "gzoffset64": "GzFile.offset()",
+      "gzopen": "GzFile.open(java.lang.String,java.lang.String)",
+      "gzopen64": "GzFile.open(java.lang.String,java.lang.String)",
+      "gzprintf": "GzFile.printf(java.lang.String,java.lang.Object[])",
+      "gzputc": "GzFile.putc(int)",
+      "gzputs": "GzFile.puts(java.lang.String)",
+      "gzread": "GzFile.read(byte[],int,int)",
+      "gzrewind": "GzFile.rewind()",
+      "gzseek": "GzFile.seek(long,int)",
+      "gzseek64": "GzFile.seek(long,int)",
+      "gzsetparams": "GzFile.setParams(int,int)",
+      "gztell": "GzFile.tell()",
+      "gztell64": "GzFile.tell()",
+      "gzungetc": "GzFile.ungetc(int)",
+      "gzvprintf": "GzFile.printf(java.lang.String,java.lang.Object[])",
+      "gzwrite": "GzFile.write(byte[],int,int)",
+      "inflate": "Inflater.inflate(int)",
+      "inflateBack": "InflateBack.inflateBack(org.zlib.InflateBack$In,org.zlib.InflateBack$Out,java.lang.Object)",
+      "inflateBackEnd": "InflateBack.end()",
+      "inflateBackInit_": "InflateBack.init(int,byte[])",
+      "inflateCodesUsed": "Inflater.codesUsed()",
+      "inflateCopy": "Inflater.copy(org.zlib.Inflater)",
+      "inflateEnd": "Inflater.end()",
+      "inflateGetDictionary": "Inflater.getDictionary(byte[],int[])",
+      "inflateGetHeader": "Inflater.getHeader(org.zlib.GzHeader)",
+      "inflateInit2_": "Inflater.init2(int)",
+      "inflateInit_": "Inflater.initRaw(java.lang.String,int)",
+      "inflateMark": "Inflater.mark()",
+      "inflatePrime": "Inflater.prime(int,int)",
+      "inflateReset": "Inflater.reset()",
+      "inflateReset2": "Inflater.reset2(int)",
+      "inflateResetKeep": "Inflater.resetKeep()",
+      "inflateSetDictionary": "Inflater.setDictionary(byte[],int)",
+      "inflateSync": "Inflater.sync()",
+      "inflateSyncPoint": "Inflater.syncPoint()",
+      "inflateUndermine": "Inflater.undermine(int)",
+      "inflateValidate": "Inflater.validate(int)",
+      "uncompress": "Zlib.uncompress(byte[],int[],byte[],int)",
+      "uncompress2": "Zlib.uncompress2(byte[],int[],byte[],int[])",
+      "zError": "Zlib.errorString(int)",
+      "zlibCompileFlags": "Zlib.compileFlags()",
+      "zlibVersion": "Zlib.version()"
+    },
+    "symbol_map_note": "Every one of State A's 88 exported symbols, mapped to the Java member that answers for it. Nothing is dropped. Several C symbols share one Java target, and those collapses are forced rather than chosen: the _combine64 and _z and gzseek64 variants exist because C's uLong, z_off_t and z_size_t vary by platform, and on a JVM long is 64 bits everywhere, so the two spellings would be the same signature. gzvprintf collapses into printf because Java varargs already are the va_list case, and gzgetc_ collapses into getc because it exists only to give the gzgetc macro a real function to fall back to."
+  },
+  "behavioral_contract": {
+    "comparison": "byte-exact",
+    "not_graded": [
+      "Thread safety beyond what State A offers. C zlib is safe for distinct streams in distinct threads and offers nothing for a shared stream; the port owes the same and no more. No case runs two threads against one object.",
+      "Wall-clock performance, except that a case which does not finish inside its timeout fails. A port an order of magnitude slower than C is expected; one that is quadratic where the reference is linear will time out, and that is graded.",
+      "Heap footprint. memLevel must still be accepted and must still change the compressed output, because it changes the hash table size and therefore which matches are found -- but the number of bytes the JVM actually reserves is not compared.",
+      "The text of an errno-derived message.  C zlib sets Z_ERRNO and leaves the reason to the caller's strerror; the gz* layer's own I/O failures surface through the JVM's exception messages, which are not the C library's strings.  The return code Z_ERRNO is graded, the accompanying prose is not. The same applies to minigzip's perror-equivalent output on an unopenable file: the exit status and the fact that it reported a failure are compared, the JDK's wording is not.",
+      "The two array-bounds messages a Java port needs and C has no counterpart for -- \"request does not fit in the array\" and \"requested length does not fit in the array\".  C takes a pointer and a length and trusts the caller; Java takes an array and an offset and can detect the overrun.  A port must reject such a call rather than read out of bounds, and the return code it rejects with is graded wherever a case reaches one -- Z_STREAM_ERROR for a request that does not fit the caller's array, Z_DATA_ERROR for a length read out of a stream that does not.  The msg prose is the reference implementation's own and no case compares it."
+    ],
+    "note": "Where State A has quirks or arguably wrong behaviour, State B must reproduce the quirk. The reference is the specification. In particular, deflate's output is not merely 'a valid deflate stream': it is the specific stream zlib's lazy matching, hash chains, block splitting and tree construction produce. This is the whole weight of the task, and it does not get lighter for being on a JVM: the algorithm has no freedom left once the output must match, so every heuristic constant, every tie-break and every deferred decision has to be carried across.",
+    "pinned_constants": {
+      "ZLIB_VERNUM": "0x1310",
+      "ZLIB_VERSION": "1.3.1",
+      "adler32_of_123456789": "0x091e01de",
+      "crc32_of_123456789": "0xcbf43926",
+      "gzip_header_mtime": "zlib writes MTIME=0 when no header is supplied, so every gzip stream is byte-comparable without normalization. GzFile.open must not read the clock either.",
+      "os_byte": "0x03 (Unix) in every gzip header written without an explicit GzHeader, matching the reference build.",
+      "zlibCompileFlags": "0xa9",
+      "zlibCompileFlags_note": "State A computes this from sizeof(uInt), sizeof(uLong), sizeof(voidpf) and sizeof(z_off_t) on the build platform. A JVM has no such sizes, so the value is pinned to what the reference build reports: 0xa9, which decodes as uInt 4, uLong 8, voidpf 8, z_off_t 8. A consumer reading the flags is asking what ABI the library was built for, and the honest answer for a port that must be byte-compatible with that build is the same number."
+    },
+    "reference": "zlib 1.3.1 built from the pinned upstream C sources",
+    "surfaces": [
+      "in-process Java API: deflate and inflate across every level, strategy, windowBits and memLevel combination; the raw, zlib and gzip wrappers; dictionaries; flush modes; streaming with adversarial buffer splits; bound and compressBound; copy, reset, resetKeep, params, prime, tune, pending, getDictionary, setHeader; InflateBack, and inflate's copy, reset, reset2, prime, mark, sync, syncPoint, getHeader, getDictionary, codesUsed, validate, undermine",
+      "the compressed bytes themselves: every deflate stream must match the reference bit for bit, not merely decompress to the same input",
+      "checksums: crc32 and adler32, every combine and combine_gen entry point, and the crc table",
+      "one-shot helpers: compress, compress2, uncompress, uncompress2, including the in-out length semantics",
+      "the gz* file API: open, dopen, buffer, setParams, read, fread, write, fwrite, printf, puts, gets, putc, getc, ungetc, flush, seek, tell, offset, rewind, eof, direct, close, closeRead, closeWrite, error, clearerr",
+      "error surface: return codes, the msg strings zlib sets on the stream, and errorString text for malformed input, truncated input, buffer exhaustion and invalid parameters",
+      "the public shape itself: class and interface names, field names and types, method signatures, constant values, module exports and jar layout -- read back by reflection from inside the graded JVM, so a port that produces the right bytes through a different surface still fails",
+      "test/example and test/minigzip: the upstream test drivers, ported to Java, still built by the graded CMake and still producing their reference stdout and exit status"
+    ]
+  },
+  "build_contract": {
+    "cache_options": "ZLIB_BUILD_EXAMPLES stays a declared option(): it is upstream's only option() and declaring it is what puts ZLIB_BUILD_EXAMPLES:BOOL in CMakeCache.txt, which is what cmake -LH and packaging systems read to discover the switch exists. Reading the variable without declaring it builds the same thing and leaves the cache entry :UNINITIALIZED, which hides the switch from everything that enumerates options. The four SKIP_INSTALL_* switches are plain variables upstream tests with if(NOT ...), so they are not cache options and are graded by what they do instead. CMAKE_INSTALL_PREFIX must also survive as configured: a CMakeLists that overrides it breaks every packaging system there is.",
+    "configuration_note": "Both configurations are graded and both must produce the full install inventory. BUILD_SHARED_LIBS has no meaning for a jar, and that is the point: the option must still be accepted and must still yield a complete install, because a build that errors on an option it no longer needs has broken its interface. CMAKE_BUILD_TYPE likewise: Release must configure, and the jar it produces must be byte-identical in behaviour to the other configuration's.",
+    "configurations": [
+      {
+        "build": [
+          "cmake",
+          "--build",
+          "<build-dir>",
+          "--parallel",
+          "<jobs>"
+        ],
+        "configure": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "<build-dir>",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DBUILD_SHARED_LIBS=ON",
+          "-DZLIB_BUILD_EXAMPLES=ON",
+          "-DCMAKE_INSTALL_PREFIX=<prefix>"
+        ],
+        "id": "shared",
+        "install": [
+          "cmake",
+          "--install",
+          "<build-dir>"
+        ]
+      },
+      {
+        "build": [
+          "cmake",
+          "--build",
+          "<build-dir>",
+          "--parallel",
+          "<jobs>"
+        ],
+        "configure": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "<build-dir>",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DBUILD_SHARED_LIBS=OFF",
+          "-DZLIB_BUILD_EXAMPLES=ON",
+          "-DCMAKE_INSTALL_PREFIX=<prefix>"
+        ],
+        "id": "static",
+        "install": [
+          "cmake",
+          "--install",
+          "<build-dir>"
+        ]
+      }
+    ],
+    "driver": "cmake",
+    "environment_during_build": {
+      "CC": "a shim that fails on any compile action",
+      "CXX": "a shim that fails on any compile action",
+      "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+      "network": "none",
+      "note": "The C shim stays armed even though State B has no C: it is what makes 'the C is gone' a build-time fact rather than a promise. A submission that left one translation unit behind, or that quietly compiles a JNI stub, fails to build rather than failing a case."
+    },
+    "in_source_build_forbidden": true,
+    "min_cmake_version": "3.25",
+    "note": "CMake remains the build driver. It is not the natural choice for Java, and that is deliberate: switching to Maven or Gradle would need the network for plugin resolution, which the graded environment does not have, and would make this a build-system migration rather than a language port. CMake can drive javac and jar through add_custom_command, and the resulting build is still `cmake -S . -B build && cmake --build build && cmake --install build`.",
+    "target_names": [
+      "zlib",
+      "zlibstatic"
+    ],
+    "target_names_note": "A CMake target name is a public interface. Every downstream that builds zlib as a subdirectory writes target_link_libraries(app zlib), and these two names are what it writes, so renaming them is a breaking change no different in kind from renaming a function -- and it breaks at configure time in someone else's project rather than in this one. What the targets *are* changes completely: after the port there is no shared library and no static archive, and both become whatever CMake calls a thing that produces a jar. The names are the contract; the kind is not. BUILD_SHARED_LIBS therefore still has to be accepted and still has to yield a complete install, which is why both configurations are graded."
+  },
+  "classfile_contract": {
+    "forbidden_native_methods": true,
+    "forbidden_native_note": "No method may carry ACC_NATIVE. A native method means machine code, and machine code means the C is still there -- behind a JNI boundary instead of a header.",
+    "forbidden_note": "java.util.zip is the C zlib. The JDK implements Deflater, Inflater, CRC32 and Adler32 as JNI wrappers around the real libz, so a port that calls them has migrated the call site and nothing else -- and would pass every byte-exactness case while doing it. That is the single most attractive cheat available in this task, so it is checked in the one place it cannot hide: the constant pool of the delivered class files. java.util.jar is forbidden for the same reason at one remove, since JarFile inflates through the same code. java.lang.foreign and Unsafe are forbidden because they are the FFI route back to a system libz.",
+    "forbidden_prefixes": [
+      "java/util/zip/",
+      "java/util/jar/",
+      "sun/",
+      "com/sun/",
+      "jdk/internal/",
+      "java/lang/foreign/"
+    ],
+    "forbidden_string_constants": [
+      "java.util.zip.Deflater",
+      "java.util.zip.Inflater",
+      "java.util.zip.CRC32",
+      "java.util.zip.Adler32",
+      "java.util.zip.GZIPOutputStream",
+      "java.util.zip.GZIPInputStream"
+    ],
+    "forbidden_string_note": "The same names as string literals, which is what a reflective call to Class.forName looks like in the constant pool.",
+    "forbidden_type_references": [
+      "java/util/zip/Deflater",
+      "java/util/zip/Inflater",
+      "java/util/zip/DeflaterOutputStream",
+      "java/util/zip/InflaterInputStream",
+      "java/util/zip/DeflaterInputStream",
+      "java/util/zip/InflaterOutputStream",
+      "java/util/zip/GZIPOutputStream",
+      "java/util/zip/GZIPInputStream",
+      "java/util/zip/ZipOutputStream",
+      "java/util/zip/ZipInputStream",
+      "java/util/zip/ZipFile",
+      "java/util/zip/ZipEntry",
+      "java/util/zip/CRC32",
+      "java/util/zip/CRC32C",
+      "java/util/zip/Adler32",
+      "java/util/zip/Checksum",
+      "java/util/zip/CheckedInputStream",
+      "java/util/zip/CheckedOutputStream",
+      "java/util/zip/ZipException",
+      "java/util/jar/JarFile",
+      "java/util/jar/JarInputStream",
+      "java/util/jar/JarOutputStream",
+      "java/lang/Runtime",
+      "java/lang/ProcessBuilder",
+      "java/lang/Process",
+      "sun/misc/Unsafe",
+      "jdk/internal/misc/Unsafe",
+      "java/lang/foreign/Linker",
+      "java/lang/foreign/SymbolLookup",
+      "java/lang/foreign/FunctionDescriptor"
+    ],
+    "major_version": 61,
+    "major_version_note": "Java 17 bytecode. The graded JDK is 17; targeting 61 exactly means the delivered classes were compiled by this toolchain rather than shipped precompiled from elsewhere. A lower major version is a finding, not a courtesy.",
+    "minor_version": 0
+  },
+  "driver_contract": {
+    "classes_location": "Not in the delivered library jar. The drivers are test programs; shipping them inside the artifact would put test code in the library, and the jar contract forbids the entries.",
+    "ctest_registration": "State A's CMakeLists.txt calls enable_testing() and add_test(example example), so `ctest -N` in the build directory lists a test named `example`. The port keeps that registration: it is part of the build's interface, since `ctest` is how a consumer runs the suite without knowing what the test is. Registering `minigzip` as well is permitted and not required, matching State A.",
+    "drivers": [
+      {
+        "class": "org.zlib.test.Example",
+        "id": "example",
+        "note": "Upstream test/example.c: a self-checking exercise of compress, uncompress, deflate, inflate, dictionaries, sync and flush. It prints a fixed transcript and exits 0, or prints the failure and aborts.",
+        "script": "example"
+      },
+      {
+        "class": "org.zlib.test.MiniGzip",
+        "id": "minigzip",
+        "note": "Upstream test/minigzip.c: a gzip-compatible filter over the gz* API. Graded on the bytes it writes, which makes it a second, independent check on the gzip wrapper.",
+        "script": "minigzip"
+      }
+    ],
+    "form": "An executable file with no extension that the harness can exec directly. A shell wrapper invoking `java -p <jar> -m ...` or `java -cp` is the expected shape; a jar with a Main-Class is not, because the harness execs a path.",
+    "guarded_by": "ZLIB_BUILD_EXAMPLES, as in State A.",
+    "location": "<build-dir>",
+    "location_note": "Not installed: upstream does not install them either. The verifier runs them from the build directory."
+  },
+  "forbidden_paths": {
+    "c_sources_that_must_be_removed": [
+      "adler32.c",
+      "compress.c",
+      "crc32.c",
+      "deflate.c",
+      "gzclose.c",
+      "gzlib.c",
+      "gzread.c",
+      "gzwrite.c",
+      "infback.c",
+      "inffast.c",
+      "inflate.c",
+      "inftrees.c",
+      "test/example.c",
+      "test/infcover.c",
+      "test/minigzip.c",
+      "trees.c",
+      "uncompr.c",
+      "zutil.c"
+    ],
+    "description": "Paths matching these patterns must not exist anywhere under the submission root except where the allowlist permits.",
+    "extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cxx",
+      ".c++",
+      ".C",
+      ".m",
+      ".mm",
+      ".M",
+      ".s",
+      ".S",
+      ".asm",
+      ".inc",
+      ".ii",
+      ".i",
+      ".o",
+      ".obj",
+      ".a",
+      ".lo",
+      ".la",
+      ".so",
+      ".dylib",
+      ".dll",
+      ".jnilib",
+      ".class",
+      ".jar",
+      ".jmod"
+    ],
+    "extensions_note": ".class, .jar and .jmod are forbidden in the source tree for the reason the object-file extensions are: they are build output, and a submission that ships them is shipping something the graded build did not produce. The build directory is exempt; the source tree is not.",
+    "header_allowlist": [
+      "zlib.h"
+    ],
+    "header_allowlist_note": "zlib.h is retained as the behavioural specification -- it is the only complete statement of what each entry point promises, and the Java port owes the same promises. Nothing compiles it and it is not installed. zconf.h, zconf.h.in and zconf.h.cmakein are NOT allowlisted, unlike State A: they configure a C compiler's view of the library, and there is no C compiler.",
+    "internal_headers_that_must_be_removed": [
+      "crc32.h",
+      "deflate.h",
+      "gzguts.h",
+      "inffast.h",
+      "inffixed.h",
+      "inflate.h",
+      "inftrees.h",
+      "trees.h",
+      "zutil.h"
+    ]
+  },
+  "install_inventory": {
+    "common": [
+      {
+        "kind": "file",
+        "path": "share/java/zlib-1.3.1.jar",
+        "role": "the artifact"
+      },
+      {
+        "kind": "symlink",
+        "path": "share/java/zlib.jar",
+        "role": "the stable name, standing in for libz.so",
+        "target": "zlib-1.3.1.jar"
+      }
+    ],
+    "description": "Required entries under the install prefix. Both configurations must produce every entry.",
+    "forbidden_extra": {
+      "description": "The install tree must not contain a second implementation, a fallback engine, or a C ABI that no longer exists.",
+      "patterns": [
+        "**/*.c",
+        "**/*.h",
+        "**/*.so",
+        "**/*.so.*",
+        "**/*.a",
+        "**/*.dylib",
+        "**/*.dll",
+        "**/*.jnilib",
+        "**/*.pc",
+        "**/libz*",
+        "**/*.class"
+      ]
+    },
+    "removed_from_state_a": {
+      "include/zconf.h": "Same, and it is a generated configuration header for a compiler that is no longer involved.",
+      "include/zlib.h": "Installing a C header advertises a C ABI that no longer exists. The file stays in the source tree as the behavioural specification.",
+      "lib/libz.a": "Java has no static-link step. The jar is both linkage forms.",
+      "lib/libz.so.1.3.1": "Replaced by share/java/zlib-1.3.1.jar.",
+      "share/man/man3/zlib.3": "Documents C prototypes.",
+      "share/pkgconfig/zlib.pc": "Declares -I, -L and -lz. A Java consumer can use none of them; the jar manifest and module-info answer the same question."
+    }
+  },
+  "jar_contract": {
+    "artifact": "share/java/zlib-1.3.1.jar",
+    "compression_methods_allowed": [
+      "stored",
+      "deflated"
+    ],
+    "compression_note": "A jar is a zip file, and its entries are compressed with deflate. The jar delivering the port is therefore itself evidence, but not of the port: `jar` uses the JDK's own java.util.zip to write it, which is the C library. That is allowed and unavoidable -- the build tool is not the artifact -- and it is why the forbidden-reference scan reads the class files inside the jar rather than judging the jar itself.",
+    "forbidden_entries": {
+      "note": "META-INF/versions is forbidden because a multi-release jar can ship different bytecode per JDK, and only one JDK is graded -- the other copies would be ungraded code inside a graded artifact. A nested jar is forbidden for the same reason.",
+      "patterns": [
+        "**/*.java",
+        "**/*.c",
+        "**/*.h",
+        "**/*.so",
+        "**/*.dll",
+        "**/*.dylib",
+        "**/*.jnilib",
+        "META-INF/versions/**",
+        "META-INF/*.SF",
+        "META-INF/*.RSA",
+        "META-INF/*.DSA",
+        "**/*.jar"
+      ]
+    },
+    "manifest_attributes": {
+      "Automatic-Module-Name": null,
+      "Class-Path": null,
+      "Implementation-Title": "zlib",
+      "Implementation-Vendor": "zlib",
+      "Implementation-Version": "1.3.1",
+      "Main-Class": null,
+      "Manifest-Version": "1.0",
+      "Specification-Version": "1.3"
+    },
+    "manifest_note": "Attributes mapped to null must be absent. Automatic-Module-Name is forbidden because the jar is a real named module and the attribute is only for jars that are not: shipping both is contradictory, and the automatic name wins in some tool paths. Class-Path is forbidden because a delivered library must not reach outside its own archive. Main-Class is forbidden because the library jar is not a program; the drivers are separate.",
+    "packages_allowed": [
+      "org/zlib/"
+    ],
+    "packages_note": "Every class entry must live under org/zlib/. An implementation package is permitted -- org/zlib/internal/ for instance -- and must not be exported by module-info.",
+    "required_entries": [
+      {
+        "path": "META-INF/MANIFEST.MF",
+        "position": "first",
+        "position_note": "The manifest must be the first entry in the archive. This is what the jar tool produces and what every consumer that reads a manifest without a full central-directory scan assumes."
+      },
+      {
+        "path": "module-info.class"
+      },
+      {
+        "path": "org/zlib/Zlib.class"
+      },
+      {
+        "path": "org/zlib/ZStream.class"
+      },
+      {
+        "path": "org/zlib/ZStream$Allocator.class"
+      },
+      {
+        "path": "org/zlib/ZStream$Deallocator.class"
+      },
+      {
+        "path": "org/zlib/Deflater.class"
+      },
+      {
+        "path": "org/zlib/Inflater.class"
+      },
+      {
+        "path": "org/zlib/InflateBack.class"
+      },
+      {
+        "path": "org/zlib/InflateBack$In.class"
+      },
+      {
+        "path": "org/zlib/InflateBack$Out.class"
+      },
+      {
+        "path": "org/zlib/GzHeader.class"
+      },
+      {
+        "path": "org/zlib/GzFile.class"
+      }
+    ]
+  },
+  "jvm_code_policy": {
+    "allowed_dependencies": "java.base only. No Maven or Gradle dependency, no jar vendored into the tree, no downloaded artifact.",
+    "description": "Every byte the delivered jar executes must be Java compiled from sources in the submission, by the graded toolchain, during the graded build.",
+    "forbidden_build_actions": [
+      "compiling any C, C++, Objective-C, Objective-C++ or assembly translation unit",
+      "downloading source, binaries or build plugins during configure, build or install",
+      "invoking a system zlib, gzip, zcat, pigz or any other external compressor",
+      "loading a system libz at runtime by any means, including System.load, System.loadLibrary, the java.lang.foreign linker, or a JNI library bundled in the jar",
+      "declaring a native method, or shipping any .so, .dll, .dylib or .jnilib",
+      "calling into java.util.zip or java.util.jar, directly or reflectively",
+      "shipping a prebuilt .class file, .jar or any other compiled artifact instead of compiling it from source in the tree",
+      "reading the verifier's corpus or expectation files",
+      "spawning a process: no Runtime.exec, no ProcessBuilder"
+    ],
+    "forbidden_runtime_note": "A relevant subset of these is checked twice: statically in the constant pool before the jar is trusted, and dynamically by running the jar on a JVM whose java.library.path is empty.",
+    "java_release": "17",
+    "java_release_note": "javac --release 17. The graded image has openjdk-17-jdk and no other JDK; a submission that requires 21 does not build.",
+    "language": "Java",
+    "min_java_logic_lines": 3000,
+    "min_java_logic_note": "A floor, not a target. State A is 13,192 hand-written lines of C excluding the generated tables. A jar produced from materially less Java than this floor is not a port of zlib; it is a wrapper around something else, and the gate exists to say so before the behavioural cases are even read."
+  },
+  "jvm_semantics": {
+    "description": "Places where the C surface does not survive the language boundary unchanged, and the grader had to pick a convention.  Each of these is compared, so each is stated.",
+    "driver_prog_name": "C's minigzip reads argv[0] to decide what to call itself in usage and error text.  A Java main() does not receive argv[0], so the launcher script the build generates passes it as the system property `zlib.prog`, and MiniGzip reads it from there.  The graded stdout contains that name, so the launcher has to set it; a driver that hardcodes \"minigzip\" happens to produce the same text and is accepted.",
+    "gz_dopen_path": "C's gzdopen synthesises a path string of the form \"<fd:N>\" for its error messages, because it has an fd and no name.  The Java form has neither, so the pinned convention is the literal string \"<fd>\": GzFile.error() on a stream opened with dopen reports that path, with no number.  The number would be a JVM file-descriptor value, which is not the caller's fd and not reproducible between runs.",
+    "gz_header_string_fields": "GzHeader.name and GzHeader.comment are byte arrays, not Strings, and they are NUL-terminated in place exactly as C leaves them: the caller supplies the array and sets nameMax / commMax, and getHeader copies header bytes into it up to that bound, the terminating 0x00 included when there is room for it. There is no separate length field, and the array is not resized -- a name longer than nameMax is truncated, as in C.  Decoding these to a String would impose a charset the gzip format does not specify, and the compared bytes would then depend on the platform's default encoding."
+  },
+  "module_contract": {
+    "descriptor_location": "The module descriptor must be at the jar root, not under META-INF/versions: a multi-release jar would let the port ship different code per JDK, and only one JDK is graded.",
+    "descriptor_path": "module-info.class",
+    "exports": [
+      "org.zlib"
+    ],
+    "exports_note": "Exactly one package, unqualified. An implementation package is permitted and encouraged, and must not be exported: a consumer must not be able to reach the internals, which is what zlib.map enforced in State A.",
+    "forbidden_requires": [
+      "jdk.unsupported",
+      "java.desktop",
+      "java.logging",
+      "java.management",
+      "java.sql",
+      "java.naming"
+    ],
+    "name": "org.zlib",
+    "open": false,
+    "open_note": "The module must not be open, and must not `opens` any package. Opening it would let reflection reach the internals and would make the export list decorative.",
+    "requires": [
+      "java.base"
+    ],
+    "requires_note": "java.base only, and it is implicit. Any other requires is a finding: java.logging, java.desktop or jdk.unsupported in the descriptor all mean the port reached outside the language core."
+  },
+  "preserved_paths": {
+    "description": "These define the public contract or the build interface and must remain.",
+    "note": "CMakeLists.txt must remain the build driver and must keep installing the full inventory. LICENSE must remain byte-identical: the port is a derivative work and the licence travels with it. zlib.h stays as the behavioural specification. The three RFCs are the wire-format specification -- 1950 is the zlib stream, 1951 is deflate, 1952 is gzip -- and they are to the bytes what zlib.h is to the API: the only normative statement of what the implementation must produce. A rewrite that deletes the format specification has deleted the evidence that its output is correct on purpose rather than by imitation. README and ChangeLog are the project's own account of itself and of every release that came before; a change of implementation language does not start the history over, and a distribution ships both.",
+    "paths": [
+      "CMakeLists.txt",
+      "LICENSE",
+      "zlib.h",
+      "README",
+      "ChangeLog",
+      "doc/rfc1950.txt",
+      "doc/rfc1951.txt",
+      "doc/rfc1952.txt"
+    ]
+  },
+  "product": {
+    "name": "zlib",
+    "state_a_language": "C",
+    "state_b_language": "Java",
+    "upstream_version": "1.3.1"
+  },
+  "removable_paths": {
+    "description": "State A material whose purpose disappears with the C implementation. Removing these is expected.",
+    "note": "zlib.map is the version script: module-info replaces it. zlib.pc.cmakein is the pkg-config template: the jar manifest replaces it. zlib.3 documents C prototypes. INDEX is an annotated list of the C translation units, so after the port it can only be wrong; keeping it means rewriting it. doc/algorithm.txt describes this implementation's internal data structures rather than the format, so it belongs to the C and may go with it -- unlike the three RFCs, which are preserved. win32/zlib1.rc is referenced by CMakeLists.txt on non-MinGW platforms, so removing win32/ requires editing CMakeLists.txt to match -- either is acceptable, a dangling reference is not, because the build must configure.",
+    "paths": [
+      "Makefile",
+      "Makefile.in",
+      "configure",
+      "zconf.h",
+      "zconf.h.in",
+      "zconf.h.cmakein",
+      "zlib.map",
+      "zlib.pc.in",
+      "zlib.pc.cmakein",
+      "zlib.3",
+      "win32/",
+      "INDEX",
+      "FAQ",
+      "doc/algorithm.txt",
+      "doc/crc-doc.1.0.pdf",
+      "doc/txtvsbin.txt"
+    ]
+  },
+  "schema_version": "swerefactor-source-contract-v1",
+  "source_tree_facts": {
+    "c_source_count": 18,
+    "file_count": 58,
+    "hand_written_c_lines": 13192,
+    "hand_written_note": "Top-level *.c and *.h excluding the generated tables crc32.h and inffixed.h, plus test/*.c. The figure is the size of the thing being ported, and the reason min_java_logic_lines is a floor rather than a target.",
+    "internal_header_count": 9
+  },
+  "submission_root": "/workspace/repo",
+  "task": "lang02-zlib-c-to-java"
+}

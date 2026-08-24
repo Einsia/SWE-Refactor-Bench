@@ -1,0 +1,256 @@
+schema = "swerefactor.verification-probe/1"
+task = "pf01-sqlite-wasi-port"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file, run against one tree by the script below.  The
+# script builds that tree first: the pre-migration tree with gcc, the submission
+# with its own `./build-wasi.sh`, each once per stage and then reused.  What the
+# candidate is handed is a CLI it invokes through `srbsqlite` -- not a source
+# directory, not a build tree, and not the two commands side by side.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing.  This task is
+# where that matters most in the whole benchmark: the two things being compared are
+# an x86-64 ELF binary and a wasm32 module under an interpreter, and they differ in
+# ways that have nothing whatsoever to do with the quality of the port -- pointer
+# width, long double precision, argv[0], the runtime's own diagnostics, thread
+# support, whether `dlopen` can ever succeed.  Every one of those is a real,
+# reproducible divergence that an adversary can find in ten minutes, and none of
+# them is a defect.
+#
+# So `allow` is what instruction.md promised is preserved, and `deny` is what it
+# said the platform takes away.  The two lists are written against that document
+# and have to stay in step with it: a scope that forbids what the instruction
+# promised makes the task unwinnable, and a scope that permits what the instruction
+# excluded makes it unlosable.
+[scope]
+allow = [
+  "the SQL language as 3.31.1 implements it: expressions, operators, type affinity and coercion, collations, joins, subqueries, CTEs both plain and recursive, window functions, triggers, views, UPSERT, generated columns, ON CONFLICT, RETURNING's absence, and every built-in scalar and aggregate function including printf, the date and time functions, and their edge and error cases",
+  "the on-disk file format, exactly, at every page size and both text encodings: a database the port writes must be byte-identical to what native writes for the same operations where the format pins it, and native must read it and pass `pragma audit_check`",
+  "reading databases and journals that native wrote: an attached, opened or recovered file produced by the native build must be understood, including a hot journal left behind by an interrupted native write and a WAL file native checkpointed",
+  "WAL as a working journal mode: `journal_mode=wal` reports wal, all four checkpoint modes work, `pragma wal_checkpoint` returns what 3.31.1 returns, `wal_autocheckpoint` takes effect, and switching back to delete removes the -wal and -shm files",
+  "every other journal mode 3.31.1 supports -- delete, truncate, persist, memory, off -- their reported names, the files each leaves on disk, and rollback in each",
+  "transaction and savepoint semantics: nested savepoints, release, rollback to a savepoint, deferred and immediate transactions, statement-level rollback, and what is visible to a second connection inside one process",
+  "the temp-file path through the VFS: a query that spills to disk, a large sorter, `pragma temp_store` at its permitted values, temp tables, temp triggers, and that TMPDIR and SQLITE_TMPDIR are honoured",
+  "the extensions this release builds and the SQL and dot-command surfaces they expose: FTS3, FTS4, FTS5 with every tokenizer the release ships, RTREE, JSON1, dbstat, stmt, sqlar, zipfile, .archive, session and changeset, dbpage, deserialize",
+  "the CLI: every dot-command the release documents, every command-line flag, every output mode, .dump, .import, .output, .read, .backup, .restore, .clone, .schema, .tables, .indexes, .selftest, .recover, the exact text of the error messages, and the exit status in each case",
+  "`pragma` behaviour: the full pragma surface, the values it reports, what a write to a read-only pragma does, and what an unknown pragma does",
+  "SQLITE_VERSION and SQLITE_SOURCE_ID as public API, including that the id is still derived from the shipped `manifest` rather than hard-coded or regenerated",
+  "the VFS the port registers, through what the product publishes about it: that it is named `wasi`, that it is the default, that `.vfslist` reports it first, and that asking for a VFS that does not exist fails cleanly",
+  "file locking as it is observable through the product: two connections in one process, a shared cache, a read while a write transaction is open, `pragma locking_mode`, and the busy handler and its timeout",
+  "the mode bits and mtimes the product stores and restores, as writefile, readfile, lsmode, .archive, sqlar and zipfile expose them -- what a *later read through the same build* reports for something that build wrote",
+  "resource behaviour on verification input that native survives: deeply nested SQL, enormous blobs, very long strings, pathological LIKE and GLOB patterns, a corrupt database file, a truncated journal. A crash, a hang past a generous timeout, or a wrong answer is the finding.",
+]
+deny = [
+  "anything that is a consequence of the target rather than of the port. wasm32 is a 32-bit target with a 113-bit long double and no threads; the module runs under an interpreter. Pointer width and everything derived from it, `pragma cache_spill`'s reported value, `LDBL_MANT_DIG`, and the digits past the 17th of a real rendered by `quote()` or `.mode quote` are all genuinely different and none is a defect. srbsqlite canonicalises the last of these for you by default.",
+  "the platform features instruction.md required to be *removed*: extension loading (`.load`, `load_extension()`, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION and their appearance in .help and pragma function_list), mmap (`pragma mmap_size` cannot be raised), process spawn (.shell, .system, .edit, .excel and the |command forms of .import and .output), and threads (THREADSAFE=0). Native does these and the port must not; a candidate asserting native's answer here is asserting the thing the task forbade.",
+  "the compile option list as a whole, or any option whose presence the platform forces: THREADSAFE, OMIT_LOAD_EXTENSION, TEMP_STORE, and the counts and ordering of `pragma compile_options`. The required subset is stage 2's business and it is deliberately shorter than either build's flag set. An option a *correct* port could not avoid differing on is not a finding.",
+  "the four unix VFS names -- `unix`, `unix-none`, `unix-dotfile`, `unix-excl` -- and any assertion that the default VFS is called `unix`. They are registered by the layer the task required to be deleted; their absence is the migration, not a break.",
+  "argv[0] wherever the product prints it: the `Usage:` banner and the `%s: Error:` prefix. Whoever launches the process chooses it, and the two launches are necessarily different. srbsqlite normalises both.",
+  "wall-clock performance and any assertion of the form 'this must finish in N milliseconds'. A wasm32 module under wasmtime is slower than native x86-64 by a large constant factor and that is expected. A hang that outlives the run timeout is in scope, as above; being slow is not.",
+  "peak memory as a number, allocation counts, page-cache occupancy in bytes, and `pragma cache_size`'s effect measured as memory rather than as behaviour",
+  "anything printed by wasmtime rather than by the product: a trap message, a WASI errno's spelling in a runtime diagnostic, an exit status the engine synthesises for a trap rather than one the shell chose, and the contents of stderr on an otherwise successful run",
+  "the exact permission bits and directory sizes the *host runtime* reports rather than the ones the product stored: wasmtime's filesystem layer does not carry arbitrary Unix mode bits through, and a directory's st_size differs from ext4's. What the product stores and restores is in scope; what the engine reports about the host's inode is not.",
+  "the order entries come back from a directory: `fsdir()`, `.archive -c` and anything built on them yield the host's readdir order, which is a property of the filesystem the container happens to be on and is not stable between one and the next",
+  "temp file names and locations beyond the contract: that TMPDIR and SQLITE_TMPDIR are honoured and that temp files land in the /tmp preopen is in scope, the filename pattern is not",
+  "the internal structure of the submission: which files exist, what the platform layer is called, how the VFS methods are laid out, which macros the build defines, what the build script does, the module's byte size, its section list, its export names, and every other property of the artefact rather than of its behaviour. Stage 1 judged the tree by reading it; this stage judges what it does.",
+  "sqlite3_os_init/sqlite3_os_end, szOsFile, mxPathname, POWERSAFE_OVERWRITE, how the wal-index is backed, and any other VFS implementation detail the task explicitly left to the port",
+  "behaviour on input the pre-migration build also gets wrong. A candidate must PASS on the original: an upstream 3.31.1 bug reproduced faithfully is a correct port, and the corpus already requires one such bug to be reproduced rather than fixed.",
+  "the identity of the tree under test, however it is learned -- from the environment, from a path, from a timing difference, from a trap message, from anything that answers 'am I the wasm one?' without asking the product a question about SQLite. Such a candidate meets every mechanical condition for a break, and establishes nothing: the two trees differ by construction and both this prompt and instruction.md say how. It is rejected on sight rather than weighed.",
+]
+
+# Three runs, identically.  Higher stakes here than in most tasks: several of the
+# in-scope surfaces touch the clock (mtimes), the filesystem (temp files, readdir)
+# and a timeout (the pathological-input cases), and a flake that costs a submission
+# ten points is a bug in the benchmark rather than a finding.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# One candidate, one tree, worst case: the tree is not built yet, so this covers
+# `configure` + amalgamation + a 240k-line translation unit -- for the submission,
+# whatever its own build script does, which stage 2 allows 2400s for.  Only the
+# first candidate on each tree pays it; the rest run in seconds.
+candidate_timeout_sec = 3000.0
+run_timeout_sec = 300.0
+# The adversary reads both trees with the same read-only toolbox stage 1's reviewer
+# gets.  It has no shell: `try_test` is how anything gets executed here, which is
+# what keeps "it ran the product" and "it read the source" separable.
+allowed_commands = []
+about = """
+Six rounds, each an independent hour spent trying to find one SQL statement, one
+dot-command or one file the native 3.31.1 build handles correctly and the wasm port
+does not.  A round that finds nothing pays the submission 10 points; a round that
+errors pays nothing and is reported as an error rather than as either verdict.
+
+The two artefacts are not the same kind of thing -- native ELF against a wasm32
+module under wasmtime -- so the platform divergences are real, numerous and out of
+scope.  The deny list above is longer than most tasks' for that reason, and an
+adversary that ignores it will spend its budget on candidates that are upheld
+mechanically and thrown out on review.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not six vendors: what the stage measures is how much scrutiny
+# the submission survives, and an independent attempt is independent whether or not
+# it shares a model with another.  The id names the round.
+#
+# `focus` is metadata that the stage appends to the round's opening.  Six
+# unguided rounds all write FTS5 and JSON tests; six pointed ones cover the
+# platform surface, which is where a port of this kind actually fails.  It narrows
+# where to look and changes nothing about what counts.
+
+[[adversary]]
+id = "a01-vfs-io-and-wal"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the VFS's read and write path: a page write that crosses the end of the file,
+a truncate followed by a read, a database grown past a chunk boundary, `pragma
+page_size` at 512 and at 65536, both text encodings, and a file opened, closed
+and reopened repeatedly in one session. This is the layer the port had to
+write from nothing, and xRead's short-read contract -- zero-fill the tail and
+return SQLITE_IOERR_SHORT_READ -- is the single most commonly wrong thing in a
+VFS port.
+
+Then WAL: all four checkpoint modes and what each returns, wal_autocheckpoint,
+a WAL larger than the checkpoint threshold, switching wal->delete->wal,
+reading a database while a WAL is present, recovering from a WAL left behind
+by a previous session, and what the -wal and -shm files contain and whether
+they are removed. WASI has no shared memory and the wal-index had to be
+reimplemented; the mechanism is out of scope but every observable consequence
+is not.
+"""
+
+[[adversary]]
+id = "a02-journal-recovery-and-file-format"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+rollback journals and recovery: delete, truncate, persist, memory and off,
+what each leaves on disk, and hot-journal recovery -- open a database whose
+journal was left behind and check the rollback. Native's journal and the
+port's must be interchangeable, so a journal one build wrote and the other
+rolled back is the sharpest form of this. A truncated or corrupt journal is in
+scope too: 3.31.1 has specific answers there.
+
+Then byte-level file format: the same schema and rows written at every page
+size, both encodings, with and without auto_vacuum and incremental_vacuum,
+after a VACUUM, after freelist churn, with overflow pages, and with a large
+blob. The header's change counter, freelist and schema cookie are all in it.
+Compare the bytes the build wrote against what the other build produces for
+the same operations, and hand the file to the fixed native 3.31.1 srbsqlite
+gives you.
+"""
+
+[[adversary]]
+id = "a03-locking-and-temp-spill"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+locking and concurrency inside one process: two connections through ATTACH and
+through a shared cache, a read during an open write transaction, `pragma
+locking_mode=exclusive`, busy_timeout and the busy handler, a deferred
+transaction upgrading to write, and SQLITE_BUSY versus SQLITE_LOCKED where
+3.31.1 distinguishes them. WASI has no fcntl record locks; the port had to
+answer this some other way and the answers are observable.
+
+Then the temp-file path: a sort or a hash join large enough to spill, `pragma
+cache_size` small enough to force it, temp tables and temp triggers, `pragma
+temp_store` at 0 and 1, TMPDIR and SQLITE_TMPDIR pointing at the /tmp preopen
+and at somewhere unreachable, and a temp file that has to be deleted on close.
+TEMP_STORE=2/3 was forbidden precisely because it removes this path, so it
+exists in the submission and it is testable.
+"""
+
+[[adversary]]
+id = "a04-sandbox-paths-and-cli-surface"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+path resolution against a preopen: absolute paths inside /data and /tmp,
+relative paths, . and .. within a preopen, a path with a trailing slash, an
+empty filename, a name with a NUL or a newline in it, a very long path, a
+symlink inside the sandbox and one pointing out of it, and ATTACH and .open on
+each shape. Capability-based resolution is not relative-only, and the
+interesting cases are the ones where a path is legal and unusual rather than
+illegal.
+
+Then the shell as a program: every documented flag including -init, -batch,
+-bail, -cmd, -readonly, -nofollow, -A and the archive flags, flags given twice
+or in a strange order, an unknown flag, .read of a script that reads another
+script, .output to a file and back to stdout, .once, .dump of a schema with
+every object kind in it, .import with odd separators and quoting, .backup and
+.restore, and the exit status of each. This is a large surface and it is
+mostly untouched by the port, which is what makes an omission in it findable.
+"""
+
+[[adversary]]
+id = "a05-extensions-and-fts-rtree"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the built-in extensions where they touch the filesystem or the platform:
+.archive create/extract/list/update with directories, mtimes and modes,
+zipfile and sqlar round trips, dbpage writes, deserialize and serialize,
+session and changeset apply with conflicts, and .recover on a deliberately
+damaged file. zlib is linked into the wasm build and `pragma compile_options`
+never mentions it, so this is where a build that got zlib wrong shows up.
+
+Then FTS3, FTS4, FTS5 and RTREE as query engines: every tokenizer the release
+ships, prefix and phrase queries, NEAR, column filters, the auxiliary
+functions (highlight, snippet, bm25), the FTS5 vocab and audit-check
+surfaces, rebuilding and optimising an index, and RTREE with negative and
+floating-point coordinates. These have their own on-disk structures inside the
+database file, so a port that got page handling subtly wrong breaks here in a
+way ordinary tables hide.
+"""
+
+[[adversary]]
+id = "a06-pathological-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+verification input the native build survives: SQL nested past
+SQLITE_MAX_EXPR_DEPTH, a thousand-way join, an enormous IN list, a blob near
+SQLITE_MAX_LENGTH, a LIKE or GLOB pattern that backtracks, a recursive CTE
+that must hit its limit, a deliberately corrupted database page, a database
+truncated mid-page, and a journal whose header lies about its size. The
+finding is a crash, a hang, a trap, or a wrong answer -- not the time taken.
+
+Then, with whatever budget remains, nothing in particular. Read the pre-
+migration platform layer and the port's replacement side by side, decide for
+yourself where the port is thinnest, and go there. The other five rounds were
+told where to look, so this tail is where anything they were not told about
+has to be found.
+"""

@@ -1,0 +1,245 @@
+You are reviewing a whole-repository language migration. Two trees are on disk:
+
+  {{original}}
+      State A, read-only. jsonnet 0.20.0 as google/jsonnet ships it: a C++11
+      interpreter, a GNU make build with CMake and bazel alternates, two
+      command-line tools, a C ABI, a C++ binding and a CPython extension.
+
+  {{workspace}}
+      The submission. The same two tools, supposedly reimplemented in C#.
+
+The task set for the author of the submission was: reimplement jsonnet in C# on
+.NET 8 so that the C++ implementation is gone from the repository, while the two
+command-line programs -- `jsonnet` and `jsonnetfmt` -- keep producing byte-identical
+stdout, stderr and exit status. Both must be published from a project in the tree
+by `dotnet publish`, against the base class library alone, offline. The C ABI in
+include/, the C++ binding in cpp/ and the CPython extension in python/ are out of
+scope and were to be removed.
+
+Two things about this particular migration shape the review. `stdlib/std.jsonnet`
+is 1,713 lines of Jsonnet implementing most of `std`, and it must survive byte for
+byte *and be evaluated* -- it is data the interpreter runs, not source to be
+translated. And third_party/ is where `std.parseYaml` and `std.md5` came from, so a
+port had to answer those some other way.
+
+Your job is not to measure whether it behaves correctly. 2,602 behavioural cases
+across 18 families already do that, and they run after you. Your job is the question
+those cases cannot ask: is this a migration at all?
+
+A submission can pass every behavioural case while having done something other than
+what was asked -- kept the C++ and called into it, transliterated it into C# that is
+the same program in a different syntax, shipped a prebuilt binary, hand-translated
+the standard library into C# while leaving the file on disk as decoration, or
+arranged for the graded paths specifically to work. Those are what you are looking
+for, and they are why this review is a model reading code rather than a list of
+patterns: every one of them survives a search for the string "vm.cpp".
+
+--------------------------------------------------------------------------------
+THE GATES
+--------------------------------------------------------------------------------
+
+{{gates}}
+
+--------------------------------------------------------------------------------
+WHAT A MECHANICAL SCAN ALREADY NOTICED
+--------------------------------------------------------------------------------
+
+Before you were started, a read-only scan walked both trees: 179 checks in three
+modules. It hashed LICENSE and std.jsonnet against State A and against the digest
+the contract records; it checked the three conformance directories for changed,
+missing and added files; it looked at the preserved files and directories, and
+diffed any that moved. It read what the project files declare about restoring,
+fetching, package sources and publish settings, and looked for MSBuild properties
+that switch between two engines. It looked for compiled artefacts by extension, by
+ELF, PE and `ar` magic on files with no extension, and by magic on files named like
+data or like Jsonnet source; for long base64 and hex runs in C#; and for source that
+names the evaluation harness. Then, per file, it looked for each of State A's 21
+native translation units and 17 headers by name -- the names taken from
+{{original}} itself, not from a list written into the scan -- for the seven
+forbidden directories and nine forbidden files, and for bazel build files by
+basename at any depth. Its findings:
+
+{{findings}}
+
+These are leads, not verdicts. Nothing in that list can fail a gate by itself and
+nothing in it is scored -- you decide, and you have both trees open and can read
+what a pattern only matched. If the list is long, note that the per-unit inventory
+repeats one observation; the findings above it do not.
+
+Four kinds of report are closer to certainties, and they are worth being exact
+about. A file whose first bytes are \x7fELF, MZ or !<arch>, outside a build or
+publish directory, is a compiled artefact; there is no reading under which it is
+source. A 4,096-character base64 run in a .cs file is not a constant anybody typed.
+A source file that consults an SRB_* environment variable or names /logs/verifier is
+addressing the harness. And a sha256 mismatch on std.jsonnet or LICENSE is an edit,
+whatever the reason for it. Open each, confirm it, and report it under the gate it
+belongs to.
+
+Everything else needs you, because the same string means different things in
+different files:
+
+  * `Process.Start` in a test project that runs the CLI it just built is how an
+    end-to-end test works. The same call inside the evaluator, handing an
+    expression to something else and returning what came back, is the whole of what
+    `no-subprocess-oracle` forbids. Which file it is in decides.
+
+  * `MD5` is unavoidable in a correct submission, because `std.md5` is one of the
+    39 builtins. Its presence says nothing. What it is computed over might.
+
+  * an `EmbeddedResource` carrying std.jsonnet is the natural C# spelling of what
+    State A did with a generated C array. That is the arrangement the contract
+    asks for, not a way around it. What matters is whether anything parses and
+    evaluates those bytes.
+
+  * a project property or a conditional whose name contains `native`, `cpp`,
+    `legacy` or `interop` is a name. Read what it guards, not what it is called.
+
+  * a hash function and an `include`-like resource read in the same file might be a
+    table of stored answers keyed by input digest, or an entity table and an
+    unrelated checksum helper. Stage 2 settles the behavioural half on inputs
+    composed at grading time; this list is where to look when that fails.
+
+  * C++ under test_cmd/, case_studies/ or doc/ is not implementation. test_cmd/
+    holds golden *output* whose filenames end in .cpp because they record what the
+    C++ printed; case_studies/ holds an unrelated demo. The scan annotates these
+    rather than dropping them, so you can see them and dismiss them.
+
+And the reverse: a clean scan is not a pass. Every substitution that matters here
+survives a string match -- a transliteration of the C++ into C# that is the same
+program with different braces, a std.jsonnet left on disk beside 95 hand-translated
+C# methods, a second implementation behind a configuration only this build takes.
+The scan cannot see any of those. It exists so that you do not spend your
+first twenty minutes listing which of 21 files is present, and can spend them
+reading instead.
+
+--------------------------------------------------------------------------------
+HOW TO WORK
+--------------------------------------------------------------------------------
+
+You have shell access with the tools listed at the end. Start by orienting
+yourself: what did State A consist of, and what does the submission consist of?
+`tree`, `find`, `wc -l` on both trees, and a look at the project files, will tell
+you in a few minutes whether you are reading a rewrite, a wrapper, or something
+else.
+
+Then, for each gate, go and find out. Read the code. Follow the build. A gate is not
+answered by a grep count -- it is answered by understanding what the program does
+and reporting what you found.
+
+Three habits matter more than anything else here:
+
+  Follow the artifact, not the file names. The question "is the shipped `jsonnet`
+  C#?" is settled by what the build actually compiles and what the entry point
+  calls, which is in the project files and the code, not in the directory layout. A
+  repository can be 30,000 lines of C# and still ship a program whose real work
+  happens somewhere else.
+
+  Follow std.jsonnet specifically. It is the single most informative path in this
+  task. Find what reads those bytes and what consumes the result. State A lexes and
+  parses the file, then walks its 39 native builtins over the resulting object --
+  replacing 7 field bodies whose names already exist, appending 32 that do not, plus
+  `thisFile` -- and leaves the other 95 fields as Jsonnet code for its own evaluator
+  to run. A port that reproduces that arrangement, by whatever spelling, is doing
+  the exercise. A port where nothing evaluates the file, or where something only
+  hashes it, is not, and the behavioural cases will not tell the difference.
+
+  Compare against the original. You have State A. When something in the submission
+  looks suspiciously like a copy, open the corresponding file in {{original}} and
+  compare. When a method looks too close to the C++, read both. This is the
+  advantage you have over any static check, and it is the whole reason both trees
+  are mounted.
+
+--------------------------------------------------------------------------------
+WHAT IS AND IS NOT A FINDING
+--------------------------------------------------------------------------------
+
+This task's subject makes some things look wrong that are not. Be careful with all
+of these:
+
+  Unsafe C# is not a finding. The contract says in as many words that spans,
+  pointers and unsafe blocks are ordinary C#. A lexer that reaches for
+  `Span<char>` or `stackalloc` is a fast lexer, not a suspicious one. What matters
+  is whether the work is done by managed code in this repository -- a call into
+  libjsonnet is the finding, and `unsafe` is not evidence of one.
+
+  Resemblance to the C++ is not automatically a finding. Two implementations of
+  Jsonnet will have the same phases and often the same node kinds -- the language
+  defines them. A port that follows the original's structure because the algorithm
+  is the algorithm is a legitimate port. What is not legitimate is a
+  transliteration: C++ control flow preserved statement for statement, the same
+  pointer arithmetic on the same manually managed structs, C++ idioms carried over
+  wholesale where C# has no reason to produce them. The distinction is judgement,
+  which is why you are reading it. When you report one, quote both sides.
+
+  Names are not evidence, in either direction. Do not treat the presence or absence
+  of any particular class, method, field or variable name as a finding. A port that
+  renamed every AST node has broken nothing; a port that kept the C++ names has not
+  thereby confessed to anything. Read what the code does.
+
+  Data carried across is not a finding. std.jsonnet, the conformance suite's
+  inputs, the licence: preserving those is the contract. So is regenerating a
+  lookup table the C++ generated.
+
+  A native implementation of a stdlib function is not a finding. 39 of them are how
+  State A works, and a port is free to disagree about which few it does natively --
+  the behavioural cases decide that, not you. The gate asks whether the bulk of
+  `std` arrives by interpretation at all.
+
+  C++ in the repository is not automatically C++ in the product. A benchmark, an
+  example, a documentation asset, a golden output file. Say where the C++ you found
+  actually goes.
+
+  Absence of a string proves nothing. Do not report "the word DllImport does not
+  appear" as evidence of anything, and do not treat a mention of C++ in a comment,
+  a changelog or a design document as evidence of a C++ implementation.
+
+--------------------------------------------------------------------------------
+EVIDENCE
+--------------------------------------------------------------------------------
+
+Every `fail` you return must cite specific evidence: a path, a line number, and a
+quotation of what is there. Your citations are re-opened and checked. A `fail`
+whose quotation is not at the line you named, or whose quotation does not support
+the claim you made, is discarded -- it is counted as a `pass` rather than a finding,
+so a wrong citation costs the review nothing and gains it nothing.
+
+Every gate gets one of two answers, `pass` or `fail`. There is no third answer:
+a gate you looked at and could not settle is a `pass`, and so is a `fail` whose
+citations do not hold up when they are re-checked. `fail` is the verdict that
+has to be earned. Three independent reviews vote on each gate and a `fail`
+carries only as a majority, so one wrong `fail` does not decide anything by
+itself -- but do not spend one you cannot cite, because a failed required gate
+is a zero for the whole task and nothing after this stage runs.
+
+Weigh that in the other direction too. You are not looking for reasons to fail a
+submission. A genuine, complete, honest rewrite that happens to be organised
+differently from how you would have organised it passes every gate here.
+
+--------------------------------------------------------------------------------
+OUTPUT
+--------------------------------------------------------------------------------
+
+When you have finished, emit one JSON object and nothing else:
+
+{
+  "gates": [
+    {
+      "id": "<the gate id, exactly as given above>",
+      "verdict": "pass" | "fail",
+      "summary": "<one sentence: what you concluded>",
+      "evidence": [
+        {"path": "<repo-relative path>", "line": <int>,
+         "quote": "<the text at that line>",
+         "note": "<why this supports the verdict>"}
+      ]
+    }
+  ],
+  "notes": "<anything the next reader should know; optional>"
+}
+
+One entry per gate, every gate, in the order given. `pass` needs no evidence but
+benefits from it -- say what you followed. `fail` requires it.
+
+{{roots}}
+
+{{commands}}

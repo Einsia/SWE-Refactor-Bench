@@ -1,0 +1,338 @@
+{
+ "noaes": {
+  "observed": {
+   "aead_aes256gcm_aesni": {
+    "after": [
+     "-mavx",
+     "-msse2",
+     "-mssse3"
+    ],
+    "before": [
+     "-maes",
+     "-mavx",
+     "-mpclmul",
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-maes",
+     "-mpclmul"
+    ]
+   },
+   "aegis128l_aesni": {
+    "after": [
+     "-mavx",
+     "-msse2",
+     "-mssse3"
+    ],
+    "before": [
+     "-maes",
+     "-mavx",
+     "-mpclmul",
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-maes",
+     "-mpclmul"
+    ]
+   },
+   "aegis256_aesni": {
+    "after": [
+     "-mavx",
+     "-msse2",
+     "-mssse3"
+    ],
+    "before": [
+     "-maes",
+     "-mavx",
+     "-mpclmul",
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-maes",
+     "-mpclmul"
+    ]
+   }
+  },
+  "reject_flags": [
+   "-maes",
+   "-mpclmul"
+  ],
+  "sources_must_lose": {
+   "aead_aes256gcm_aesni": [
+    "-maes"
+   ],
+   "aegis128l_aesni": [
+    "-maes"
+   ],
+   "aegis256_aesni": [
+    "-maes"
+   ]
+  }
+ },
+ "noavx512": {
+  "observed": {
+   "argon2-fill-block-avx512f": {
+    "after": [
+     "-mavx",
+     "-mavx2",
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "before": [
+     "-mavx",
+     "-mavx2",
+     "-mavx512f",
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mavx512f"
+    ]
+   }
+  },
+  "reject_flags": [
+   "-mavx512f"
+  ],
+  "sources_must_lose": {
+   "argon2-fill-block-avx512f": [
+    "-mavx512f"
+   ]
+  }
+ },
+ "nosimd": {
+  "n_sources_affected": 12,
+  "observed": {
+   "aead_aes256gcm_aesni": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-maes",
+     "-mavx",
+     "-mpclmul",
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-maes",
+     "-mpclmul",
+     "-mssse3"
+    ]
+   },
+   "aegis128l_aesni": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-maes",
+     "-mavx",
+     "-mpclmul",
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-maes",
+     "-mpclmul",
+     "-mssse3"
+    ]
+   },
+   "aegis256_aesni": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-maes",
+     "-mavx",
+     "-mpclmul",
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-maes",
+     "-mpclmul",
+     "-mssse3"
+    ]
+   },
+   "argon2-fill-block-avx2": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-mavx",
+     "-mavx2",
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mavx2",
+     "-msse4.1",
+     "-mssse3"
+    ]
+   },
+   "argon2-fill-block-avx512f": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-mavx",
+     "-mavx2",
+     "-mavx512f",
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mavx2",
+     "-mavx512f",
+     "-msse4.1",
+     "-mssse3"
+    ]
+   },
+   "argon2-fill-block-ssse3": {
+    "after": [
+     "-msse2"
+    ],
+    "before": [
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mssse3"
+    ]
+   },
+   "blake2b-compress-avx2": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-mavx",
+     "-mavx2",
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mavx2",
+     "-msse4.1",
+     "-mssse3"
+    ]
+   },
+   "blake2b-compress-sse41": {
+    "after": [
+     "-msse2"
+    ],
+    "before": [
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "lost": [
+     "-msse4.1",
+     "-mssse3"
+    ]
+   },
+   "blake2b-compress-ssse3": {
+    "after": [
+     "-msse2"
+    ],
+    "before": [
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mssse3"
+    ]
+   },
+   "chacha20_dolbeau-avx2": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-mavx",
+     "-mavx2",
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mavx2",
+     "-msse4.1",
+     "-mssse3"
+    ]
+   },
+   "chacha20_dolbeau-ssse3": {
+    "after": [
+     "-msse2"
+    ],
+    "before": [
+     "-msse2",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mssse3"
+    ]
+   },
+   "salsa20_xmm6int-avx2": {
+    "after": [
+     "-mavx",
+     "-msse2"
+    ],
+    "before": [
+     "-mavx",
+     "-mavx2",
+     "-msse2",
+     "-msse4.1",
+     "-mssse3"
+    ],
+    "lost": [
+     "-mavx2",
+     "-msse4.1",
+     "-mssse3"
+    ]
+   }
+  },
+  "reject_flags": [
+   "-mavx2",
+   "-mavx512f",
+   "-maes",
+   "-mpclmul",
+   "-mssse3",
+   "-msse4.1",
+   "-msse3"
+  ]
+ },
+ "nosysrandom": {
+  "hide_headers": [
+   "sys/random.h"
+  ],
+  "macros_must_drop": [
+   "HAVE_SYS_RANDOM_H",
+   "HAVE_GETRANDOM"
+  ],
+  "macros_must_keep": [
+   "CONFIGURED",
+   "HAVE_STDIO_H",
+   "HAVE_STDLIB_H",
+   "NATIVE_LITTLE_ENDIAN",
+   "HAVE_AMD64_ASM"
+  ],
+  "macros_observed_drop": [
+   "HAVE_GETENTROPY",
+   "HAVE_GETRANDOM",
+   "HAVE_SYS_RANDOM_H"
+  ]
+ }
+}

@@ -1,0 +1,51 @@
+# The config the CLI invocations are handed.
+#
+# One difference from every other file in this directory, and it is the reason this
+# file exists separately: `graph.location` is RELATIVE.  The cli harness copies this
+# file into a fresh directory per invocation and runs the jar with that directory as
+# its working directory, so `graph-cache-cli` resolves inside a directory the
+# invocation owns.  That is what makes "did `import` produce a graph cache" an
+# observation about one invocation rather than about whatever ran before it.
+#
+# `datareader.file` stays absolute — it points at the fixture in the side's own tree,
+# which is not under the run directory.
+#
+# One profile and a short encoded-value list, because `import` builds the graph from
+# scratch for every side and the point is whether it builds one at all, not how
+# thoroughly. A small graph keeps the invocation inside its timeout with margin.
+
+graphhopper:
+  datareader.file: @REPO_ROOT@/core/files/andorra.osm.pbf
+  graph.location: graph-cache-cli
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+  profiles_ch:
+    - profile: car
+  graph.encoded_values: car_access, car_average_speed, roundabout, road_class, road_environment, road_access, max_speed, road_class_link, lanes, country
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 1
+  import.osm.ignored_highways: ""
+  # MMAP_STORE rather than RAM_STORE here, deliberately: `import` exists to leave a
+  # graph cache on disk, and a store that only ever lived in memory would write
+  # less of one.  The check is on the directory appearing and being non-empty, not
+  # on its contents.
+  graph.dataaccess.default_type: MMAP_STORE
+
+server:
+  application_connectors:
+    - type: http
+      port: 18995
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: 18996
+      bind_host: 0.0.0.0
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

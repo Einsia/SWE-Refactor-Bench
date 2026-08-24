@@ -1,0 +1,221 @@
+schema = "swerefactor.verification-probe/1"
+task = "fw04-chartmuseum-gin-to-chi"
+prompt = "prompt.txt"
+
+# One candidate test is a pytest file run against a target that this script
+# compiles and boots.  Both trees are built by the same command and started with
+# the same flags -- the only difference is which module mirror the compile reads,
+# because the original requires Gin and the delivery mirror carries no Gin zip.
+# So a candidate is a black-box HTTP test and cannot tell which tree it is
+# hitting except by the answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two HTTP
+# servers differ somewhere, and two Go servers built from different routers
+# differ in ways that have nothing to do with charts.  The allow list is
+# ChartMuseum's own public contract, the deny list is what instruction.md told
+# the agent is explicitly not compared -- and, item for item, what stage 2's
+# normalizer masks or drops before comparing anything.  They have to agree: a
+# scope that forbids what the instruction promised would make the task
+# unwinnable, and a scope that permits what the instruction excluded would make
+# it unlosable.
+[scope]
+allow = [
+  "the status code of any request to any of the server's routes, and of any request to a path that matches none of them",
+  "response bodies byte for byte: the JSON the API returns, the YAML of an index, the bytes of a stored chart or provenance file, and the error bodies for every failure mode",
+  "index.yaml as a document: which entries it contains, the order of versions inside an entry, each entry's digest, urls, created timestamp format, and the apiVersion/generated envelope",
+  "semantic headers: Content-Type with its exact spelling, Content-Length where the original sets it, Content-Disposition on a download, Cache-Control, ETag if the original emits one, WWW-Authenticate on a challenge, Location on any redirect, Allow on a 405, and the presence and UUID shape of X-Request-Id",
+  "CORS behaviour on every route when --cors-alloworigin is in effect, including the preflight",
+  "route matching itself: trailing slashes, a doubled slash, a percent-encoded separator inside a path segment, an empty path parameter, a parameter containing a dot or a plus, and a path that is a prefix of a real route",
+  "method dispatch: which methods each route accepts, what the server answers for a method it does not accept, and whether HEAD on a GET route returns the GET's headers with no body",
+  "the chart upload path: multipart and raw bodies, the form field names the flags configure, a body that is not a valid chart archive, a chart whose metadata disagrees with its filename, an upload that collides with an existing version, and the provenance endpoint",
+  "the API's read surface: the chart list, one chart, one version, a version's templates and values, and HEAD on each of those",
+  "deletion: the status and body for deleting a version that exists, one that does not, and the effect on the index afterwards",
+  "authentication: basic auth on push and on pull, the anonymous-get flag, and the bearer-token challenge including the realm and service parameters",
+  "the /metrics exposition: which metric families and label sets appear, and in particular the value of the route-template label on request metrics -- the retired framework supplied the matched template and a port has to recover it",
+  "multi-tenancy: the same chart name in two repositories, a repository name that collides with a static path, and the depth the server was started with",
+  "server info routes: /, /health, /info, and the artifacthub file when its flag is set",
+  "self-consistency between endpoints: a chart the API lists must be downloadable at the URL the index advertises, and a digest the index publishes must match the bytes served",
+]
+deny = [
+  "the Date header, and Connection or Keep-Alive",
+  "whether a response arrives with Content-Length or with chunked transfer encoding, on any response the original does not set a length for",
+  "header name casing, and the order of distinct header names",
+  "the order of tokens inside a set-valued header: Vary, Allow, Cache-Control, and the Access-Control-Allow-* family are sets, not sequences",
+  "the value of X-Request-Id -- its presence and UUID shape are in scope, the UUID itself is per-request",
+  "any timestamp value: an index's created field, a chart's stored mtime, and the numeric value of a metrics counter or histogram bucket",
+  "any absolute address the server echoes: the host and port it was started on appear in chart urls and in a metrics label, and both are chosen per launch",
+  "temporary and workspace paths that appear in a body or a log",
+  "HTTP reason phrases, and the exact wording of a log line",
+  "anything requiring the retired stack to be installed, importable or nameable in the submission",
+  "the internal structure of the submission: package layout, type names, function signatures, which router library it chose",
+  "behaviour under a request the original also mishandles -- a candidate must pass on the original",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the presence of a file only one of the two trees can have, the build log, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Some of this surface is genuinely
+# order- and clock-adjacent -- an index regenerated between two requests, a
+# metrics counter that moves as the candidate itself makes requests, storage
+# mtimes -- and a flake that costs a submission ten points is a bug in the
+# benchmark, not a finding.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Compile + boot + pytest, for one candidate, on one tree.  The binary is built
+# once per tree and cached, so only the first candidate pays the Go linker; the
+# server and its storage are fresh per run, because a candidate that uploads a
+# chart would otherwise change what the next candidate sees.
+candidate_timeout_sec = 900.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a
+# candidate that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one request the original
+answers correctly and the submission does not. A round that finds nothing pays
+the submission 10 points; a round that errors pays nothing and is reported as an
+error rather than as either verdict.
+
+This is the only stage that builds both programs, so it is the only one carrying
+two module mirrors: a complete one that can resolve Gin, used exclusively to
+build the original, and the pruned delivery mirror stage 2 uses, which builds the
+submission. The role that selects between them arrives in argv, never in the
+environment, so it cannot reach a candidate by being forgotten about.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name
+# the round, so two rounds on one model with different briefs stay distinguishable
+# in the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds
+# converge on the same three endpoints; six pointed ones cover the server.  It
+# is a hint about where to look, never a list of tests to write.
+#
+# The split across the six follows where a router swap actually does damage.  The
+# first two rounds go to path matching, parameter decoding and method dispatch,
+# because that is what was replaced and the two routers disagree about it in ways
+# neither author chose. The metrics label shares a round with the index document,
+# because the retired framework handed the old server its matched route template
+# for free and nothing in the new stack does. The rest spread over the surfaces
+# that are easy to port almost correctly: uploads, auth, deletion, multi-tenancy.
+
+[[adversary]]
+id = "a01-path-matching-and-param-decoding"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+route matching: trailing slashes, doubled slashes, a path that is a prefix of
+a real route, a segment that is empty, and how deep a repository name may nest
+before a route stops matching.
+
+Then what a path parameter may contain: a percent-encoded separator, a dot, a
+plus, a space, a non-ASCII byte, and whether the value the handler sees is the
+raw or the decoded form.
+"""
+
+[[adversary]]
+id = "a02-method-dispatch-and-upload"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+method dispatch: what the server answers for a method a route does not take,
+whether it says so with 404 or 405, what Allow it sets, and whether HEAD on
+each GET route matches the GET's headers with no body.
+
+Then the upload path: multipart against raw bodies, the configured form field
+names, a body that is not a chart, metadata that disagrees with the filename,
+a version that already exists, and the size limit.
+"""
+
+[[adversary]]
+id = "a03-index-document-and-metrics-label"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+index.yaml as a document: entry and version ordering, digests, the urls it
+advertises, the envelope fields, and whether it stays consistent with the
+API's own view after a write.
+
+Then the /metrics exposition, and above all the route-template label on
+request metrics: the retired framework supplied the matched template, so a
+port has to reconstruct it -- check what label a request to a parameterised
+route produces, and what an unmatched path produces.
+"""
+
+[[adversary]]
+id = "a04-auth-and-errors"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+authentication: basic auth on push and on pull, the anonymous-get flag, the
+bearer challenge and its realm/service parameters, and which routes are
+covered when a route is added conditionally.
+
+Then error paths: the body and status for a chart that does not exist, a
+version that does not, a malformed request, a request to no route at all, and
+whether the error envelope is the same shape everywhere.
+"""
+
+[[adversary]]
+id = "a05-tenancy-and-download-bytes"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+multi-tenancy: the same chart name in two repositories, a repository name that
+collides with a reserved path segment, a nested repository name, and whether
+one tenant's write is visible to another.
+
+Then serving stored objects: the exact bytes of a chart and a provenance file,
+the Content-Type and Content-Disposition on each, a filename that needs
+escaping, and the templates and values sub-resources.
+"""
+
+[[adversary]]
+id = "a06-deletion-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+deletion and the state it leaves: deleting a version that exists and one that
+does not, what the index and the API report immediately afterwards, and re-
+uploading what was deleted.
+
+Then, with whatever budget remains, nothing in particular -- read the original
+and follow what looks weakest. The other five rounds were told where to look,
+so this tail is where anything they were not told about has to be found.
+"""

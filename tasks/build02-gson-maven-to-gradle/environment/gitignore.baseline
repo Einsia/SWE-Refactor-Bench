@@ -1,0 +1,29 @@
+# Build output of either build system. Committed here so `git status` in the
+# trial container stays readable; the verifier discards these directories
+# regardless of what the submission committed.
+target/
+build/
+out/
+
+# Gradle local state
+.gradle/
+gradle-app.setting
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+*~
+*.swp
+*.swo

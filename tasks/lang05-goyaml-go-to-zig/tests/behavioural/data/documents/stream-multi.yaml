@@ -1,0 +1,87 @@
+# Many documents, each with its own directives and end markers.  The stream ops
+# see all of them; the single-document ops see only the first, which is itself
+# worth grading because "the first document of a long stream" is a different
+# code path from "the only document".
+---
+document: 1
+kind: plain start marker, no directives
+---
+document: 2
+kind: ends with an explicit end marker
+...
+%YAML 1.1
+---
+document: 3
+kind: has its own version directive
+...
+%TAG !x! tag:example.com,2024:
+---
+document: 4
+kind: has its own tag directive
+tagged: !x!thing value
+...
+---
+document: 5
+kind: the tag handle from document 4 is gone again
+# !x!thing here would be an error; a directive is per-document.
+---
+# A document whose content is a single scalar.
+just a scalar
+---
+# A document whose content is empty (comment only).
+---
+~
+---
+""
+---
+[]
+---
+{}
+--- 6
+--- "7"
+--- !!int 8
+--- &nine 9
+--- !!seq [10]
+---
+- 11
+- 12
+---
+? 13
+: fourteen
+---
+%YAML 1.1
+---
+document: 15
+kind: two directive sections in a row are fine when separated by markers
+...
+...
+---
+document: 16
+kind: consecutive end markers above are empty documents, not errors
+---
+document: 17
+nested:
+  a:
+    b:
+      c: deep enough that the emitter has to re-indent it
+---
+document: 18
+block: |
+  A literal scalar in the middle of a stream.
+  Its content includes a line that looks like a document marker:
+  --- not a marker, because it is inside the block
+  ...neither is this
+---
+document: 19
+folded: >-
+  A folded scalar whose text wraps across
+  several source lines and must be re-folded
+  by the emitter at its own width.
+---
+document: 20
+anchors_do_not_cross_documents: &local 1
+alias_in_same_document: *local
+---
+document: 21
+kind: the last document, with no trailing end marker
+final: true

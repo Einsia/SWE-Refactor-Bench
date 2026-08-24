@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The verifier's metadata reader.  Built into the verifier image at image-build
+    time and never shipped to the agent.
+
+    No PackageReference on purpose: System.Reflection.Metadata and
+    System.Reflection.PortableExecutable are part of the Microsoft.NETCore.App
+    shared framework in .NET 8, so this project restores and builds with nothing
+    but the SDK.  That matters because the verifier runs offline.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AsmInspect</AssemblyName>
+    <RootNamespace>AsmInspect</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Treat warnings as errors: a verifier tool that compiles with warnings is
+         a verifier tool nobody read. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

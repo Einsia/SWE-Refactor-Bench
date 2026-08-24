@@ -1,0 +1,152 @@
+openapi: 3.0.3
+info:
+  title: Inventory API
+  version: 1.4.2
+  description: >
+    A small API used as a parser fixture.  The prose in this field is
+    folded across several source lines, which means the emitter has to
+    decide where to break it again, and the description below uses a
+    literal block so that its line structure survives.
+
+    A blank line inside a folded scalar is a paragraph break and must
+    be preserved as a newline.
+  contact:
+    name: Platform Team
+    email: platform@example.com
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: https://api.example.com/v1
+    description: production
+  - url: https://staging.api.example.com/v1
+    description: staging
+    variables:
+      port:
+        default: "443"
+        enum: ["443", "8443"]
+tags:
+  - name: items
+    description: Item lifecycle
+  - name: reports
+paths:
+  /items:
+    get:
+      tags: [items]
+      operationId: listItems
+      summary: List items
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 1000
+            default: 50
+        - name: cursor
+          in: query
+          schema: {type: string}
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        "200":
+          description: A page of items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Item"
+                  next:
+                    type: string
+                    nullable: true
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "429":
+          description: Too many requests
+          headers:
+            Retry-After:
+              schema: {type: integer}
+    post:
+      tags: [items]
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Item"
+      responses:
+        "201":
+          description: Created
+        "409":
+          description: |
+            The item already exists.  The response body names the
+            conflicting field:
+
+                {"conflict": "sku"}
+  /items/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}-[0-9]{6}$
+    get:
+      operationId: getItem
+      responses:
+        "200":
+          description: OK
+        "404": {$ref: "#/components/responses/NotFound"}
+    delete:
+      operationId: deleteItem
+      responses:
+        "204": {description: Gone}
+components:
+  responses:
+    BadRequest:
+      description: Malformed request
+    NotFound:
+      description: No such item
+  schemas:
+    Item:
+      type: object
+      required: [sku, name, price]
+      properties:
+        sku:
+          type: string
+          example: ABC-000123
+        name:
+          type: string
+          maxLength: 200
+        price:
+          type: number
+          format: double
+          example: 19.99
+        weightKg:
+          type: number
+          example: 0.5
+        quantity:
+          type: integer
+          example: 0
+        tags:
+          type: array
+          items: {type: string}
+          example: [seasonal, clearance]
+        active:
+          type: boolean
+          default: true
+        createdAt:
+          type: string
+          format: date-time
+          example: 2024-03-17T09:41:00Z

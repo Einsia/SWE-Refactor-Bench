@@ -1,0 +1,237 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "build03-pycryptodome-setuptools-to-meson"
+
+# Twelve modules, one process each. `build` runs first because the other eleven read
+# the trees it left behind and never build anything themselves.
+#
+# Every module here grades an artifact -- a wheel, an installed tree, a compiled
+# object, a test result. None of them opens a file the agent wrote. That division is
+# the whole reason this stage exists separately from stage 1: "is there a
+# meson.build that shells out to setup.py" is a question about text and needs a
+# reader, and "does the wheel contain 41 loadable objects exporting 277 symbols" is
+# a question about a build and needs a build.
+#
+# The retired suite decided the entire score from checks like these, which is the
+# other half of the split. A submission that migrated the build system and got
+# Requires-Python wrong should lose a few points, not all of them.
+default_timeout_sec = 1200
+lib_dir = "lib"
+
+# No [env] block. Every module gets SRB_REPO, SRB_ORIGINAL, SRB_MODULE_DIR,
+# SRB_MODULE_ID, SRB_SUITE_DIR, SRB_WORK, SRB_SUITE_WORK and SRB_RESULT from the
+# runner, plus PYTHONHASHSEED=0, PYTHONDONTWRITEBYTECODE=1 and TZ=UTC. Anything
+# this file added would be a variable a module could read instead of measuring
+# something, and `builder.base_env()` strips every SRB_* name out of the
+# environment each build runs in for the same reason.
+
+[metadata]
+front_end = "python -m build --wheel --no-isolation"
+configurations = "default, repeat, no-aesni, no-clmul, no-isa"
+state_a_record = "data/{wheel,build,elf,probe_honesty,stubs,metadata}.json, data/selftest.json.gz"
+about = """
+Neither `meson` nor `ninja` is ever invoked directly and `compile_commands.json` is
+never read. The front end is the one PEP 517 command both states answer, because a
+harness that drives Meson could not build the setuptools original -- and a harness
+that cannot build State A cannot be the thing that compares the two. Where State A's
+answer is needed it comes from `data/`, measured once from a real setuptools build in
+an image that had distutils.
+
+The four crippled configurations are how the ~11 toolchain probes are measured
+without reading them. `compiler_opt.py` in State A decides at build time whether the
+compiler supports `-maes`, `-mpclmul` and `-mssse3`, and drops
+`Crypto/Cipher/_raw_aesni.abi3.so` and `Crypto/Hash/_ghash_clmul.abi3.so` when it
+does not. So the build runs against wrappers that reject those flags, and the
+question becomes which artifacts came out -- 41, 40, 40, 39 -- which a build system
+that hardcoded the answers cannot fake.
+"""
+
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "the submission builds, four more times under a crippled compiler"
+weight = 3.0
+timeout_sec = 9000
+command = ["python3", "run.py"]
+about = """
+First, and scored rather than treated as setup: "the default configuration produces a
+wheel that installs" is a measurement, and when it fails the right place for that news
+is the report with the build log attached.
+
+Takes a manifest of the delivered tree before anything is built, copies the tree once
+per configuration, builds all four through the same front end, installs each into its
+own `--target` directory, then publishes `builds.json` and runs pycryptodome's own
+suite once. A configuration that fails is recorded as a failure naming its log; the
+eleven modules after this one fail rather than skip when the build they needed is
+missing, because a skip scores the same as a pass.
+"""
+
+[[module]]
+id = "wheel"
+title = "the wheel's name, payload and RECORD agree with each other and with State A"
+weight = 1.0
+about = """
+PEP 427 filename, PEP 425 tags, the 330-member payload as a set, and RECORD verified
+digest by digest.
+
+The tag check is on the ABI component, not the whole triple. These 41 objects use no
+Python C API -- no `PyInit_`, no libpython -- so State A's `cp35-abi3` means one build
+serves every CPython from 3.5 up, and a wheel tagged for the building interpreter
+alone makes every other version compile from source. The interpreter component may
+differ, because meson-python takes it from whatever built the wheel.
+"""
+
+[[module]]
+id = "install"
+title = "the installed library encrypts, hashes, signs and rejects tampering"
+weight = 2.0
+timeout_sec = 2400
+about = """
+The only module that runs the library rather than reading it. Every probe starts in an
+empty directory under `python -I`, so the import can only resolve inside the install
+tree -- inside a checkout, `import Crypto` succeeds whether or not anything was built
+and fails later, deep in a cipher.
+
+The values are known answers from outside this project: AES-128-CBC cross-checked
+against `openssl enc`, SHA-256 of the empty string and of `b"abc"`, a GCM tag that
+must reject a flipped bit, an RSA signature that must not verify against a different
+message, and a modular exponentiation compared with Python's own `pow`. A cipher that
+is wrong in both directions round-trips perfectly.
+"""
+
+[[module]]
+id = "payload"
+title = "192 modules, 96 stubs, py.typed and 20 packages all shipped"
+weight = 1.0
+about = """
+The pure-Python half, as exact sets in both directions. `py.typed` is checked on its
+own because without it a type checker ignores all 96 stubs, and the 20 packages are
+parametrised so a failure names the one that is missing rather than a count.
+"""
+
+[[module]]
+id = "artifacts"
+title = "41 shared objects, at their paths, loadable by the project's own loader"
+weight = 2.0
+about = """
+The 41 names are necessary and not sufficient, so the real check hands all 41 to
+`Crypto.Util._raw_api.load_pycryptodome_raw_lib` -- the function the library itself
+uses -- in a subprocess. That is the check a file listing cannot replace: it fails on
+an object that is present, correctly named, and not loadable.
+"""
+
+[[module]]
+id = "symbols"
+title = "277 exported symbols, per object, and nothing linked against libpython"
+weight = 2.0
+about = """
+Per-object exact match of the defined dynamic symbol set. Missing means the ctypes
+lookup fails at runtime; extra means the ABI got wider than State A's, which is what
+default visibility instead of `-fvisibility=hidden` looks like.
+
+Also: no `PyInit_*` anywhere (these are ctypes libraries, not extension modules), no
+`libpython` in DT_NEEDED, and DT_NEEDED confined to libc, libm, libgcc_s and the
+loader. Three of State A's objects have no DT_NEEDED at all, so this is a subset
+check rather than an exact one.
+"""
+
+[[module]]
+id = "isa"
+title = "the ISA elevation stayed confined to the two objects licensed for it"
+weight = 2.0
+about = """
+Disassembles every installed object and asks which instruction families are actually
+present. `-maes`, `-mpclmul` and `-mssse3` reach exactly two of State A's 47
+translation units; the other 45 get `-msse2` only. An AES-NI instruction in a
+general-purpose object is a SIGILL on hardware that lacks it.
+
+The reverse mistake is checked too: the two carriers must still contain their
+accelerated instructions. A build that dropped the elevation everywhere produces
+correct answers slowly, and no behavioural test would notice.
+"""
+
+[[module]]
+id = "probes"
+title = "the toolchain probes are real probes, measured by crippling the compiler"
+weight = 2.0
+about = """
+Four configurations, four artifact counts. `no-aesni` must drop `_raw_aesni` and keep
+`_ghash_clmul`; `no-clmul` the reverse; `no-isa` must produce exactly State A's 39.
+A build that hardcodes 41 artifacts fails all three, and a build that fails outright
+under a crippled compiler is reported as exactly that, with its log.
+
+Whether a `meson.build` calls `cc.has_argument` is a question about text and is
+answerable by writing the string in a comment. The wheel's member list is not.
+"""
+
+[[module]]
+id = "selftest"
+title = "pycryptodome's own suite: 39,245 ids, grouped by test module"
+weight = 3.0
+timeout_sec = 3600
+about = """
+The library's own 39,245 test ids, run once against the default install by the `build`
+module and graded here in 71 groups -- one per test module, because `test_GCM` alone
+holds 31,535 of them and a single pass/fail would tell a submission nothing about
+where it broke.
+
+The groups are parametrised from `data/selftest.json.gz`, which is State A's frozen
+result. Parametrising over the submission's own output instead would let an install
+that produced nothing collect zero checks and score them all as passed.
+"""
+
+[[module]]
+id = "metadata"
+title = "the distribution metadata means the same thing State A's did"
+weight = 1.0
+about = """
+Compared semantically, never as strings: `Requires-Python` as a parsed specifier set,
+the author as an extracted address, the URLs as a set across `Home-page` and
+`Project-URL`, the 20 classifiers as a set.
+
+Two of State A's fields are not requirable and the module says so in its docstring
+rather than quietly checking them anyway. `Platform: Posix; MacOS X; Windows` has no
+PEP 621 spelling at all, and `License-File` is a `bdist_wheel` convention rather than
+core metadata. The version is additionally compared against `Crypto.__version__` read
+from the install, which catches a version hardcoded in the build files -- `__init__.py`
+is frozen, so the two cannot disagree in a correct migration.
+"""
+
+[[module]]
+id = "determinism"
+title = "the same sources, built twice, produce the same library"
+weight = 1.0
+about = """
+`repeat` builds the delivered sources a second time in a separate tree, and this
+compares the two: the payload as a set, the text files byte for byte, the exported
+symbols per object, the metadata field by field, and the wheel's name.
+
+This is what makes every other module's single build meaningful. A file list that
+depends on directory iteration order, a header generated from a dict, or a version
+stamped from the clock produces a build that passes today and a different one
+tomorrow, and a suite that builds once cannot see any of it. Byte-identical objects
+are deliberately not required -- that needs `-ffile-prefix-map` and a fixed build path,
+neither of which is part of migrating a build system.
+"""
+
+[[module]]
+id = "cleanliness"
+title = "what the build did to the tree, and what it shipped besides a wheel"
+weight = 1.0
+about = """
+The ways a build misbehaves whoever wrote it: it modified or deleted one of the
+files it was handed, it wrote its scratch work somewhere that is not a build
+directory, an installed object carries an RPATH or RUNPATH into the build directory,
+something shipped names the path it was built in, a symlink leaves the install tree,
+or an `.egg-info` rode along into the payload. State A does none of these, so all of
+them are scored.
+
+Two checks here have the migration itself as their subject -- which backend the
+`WHEEL` file names as its `Generator`, and whether the build put anything in the
+tree at all, which `setup.py bdist_wheel` cannot avoid. Neither carries weight,
+because the reference build that defines every other number in this stage cannot pass
+them: they run, their evidence stays in this module's own log, and a check worth
+nothing is deleted at collection rather than reported as worth nothing -- so they do
+not reach `behavioural.json` or this module's counts. `setuptools_retired` in stage 1
+owns that judgement, over both trees, with a reviewer.
+"""

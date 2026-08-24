@@ -1,0 +1,37 @@
+{
+ "exempt_header_names": [
+  "Bnd-LastModified",
+  "Build-Jdk",
+  "Build-Jdk-Spec",
+  "Built-By",
+  "Created-By",
+  "Tool"
+ ],
+ "exempt_observed": {
+  "Bnd-LastModified": "1785398608879",
+  "Build-Jdk-Spec": "17",
+  "Created-By": "17.0.15 (Eclipse Adoptium)",
+  "Tool": "Bnd-6.4.0.202211291949"
+ },
+ "provenance": {
+  "Bundle-Developers": "google;organization=Google;organizationUrl=\"https://www.google.com\"",
+  "Bundle-DocURL": "https://github.com/google/gson/gson",
+  "Bundle-License": "\"Apache-2.0\";link=\"https://www.apache.org/licenses/LICENSE-2.0.txt\"",
+  "Bundle-SCM": "url=\"https://github.com/google/gson/gson/\",connection=\"scm:git:https://github.com/google/gson.git/gson\",developer-connection=\"scm:git:git@github.com:google/gson.git/gson\",tag=\"gson-parent-2.10.1\""
+ },
+ "required": {
+  "Bundle-ContactAddress": "https://github.com/google/gson",
+  "Bundle-Description": "Gson JSON library",
+  "Bundle-ManifestVersion": "2",
+  "Bundle-Name": "Gson",
+  "Bundle-RequiredExecutionEnvironment": "JavaSE-1.7, JavaSE-1.8",
+  "Bundle-SymbolicName": "com.google.gson",
+  "Bundle-Vendor": "Google Gson Project",
+  "Bundle-Version": "2.10.1",
+  "Export-Package": "com.google.gson;uses:=\"com.google.gson.reflect,com.google.gson.stream\";version=\"2.10.1\",com.google.gson.annotations;version=\"2.10.1\",com.google.gson.reflect;version=\"2.10.1\",com.google.gson.stream;version=\"2.10.1\"",
+  "Import-Package": "sun.misc;resolution:=optional,com.google.gson.annotations",
+  "Manifest-Version": "1.0",
+  "Multi-Release": "true",
+  "Require-Capability": "osgi.ee;filter:=\"(&(osgi.ee=JavaSE)(version=1.7))\""
+ }
+}

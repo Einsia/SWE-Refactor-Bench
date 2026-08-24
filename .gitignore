@@ -1,0 +1,27 @@
+# Authoring intermediates, upstream checkouts, oracle builds, calibration
+# fixtures and validation logs. Never part of a release.
+/_work/
+
+# By-hand ladder runs: the collected submission, per-stage result trees, container
+# logs, scan snapshots, graded stage outputs, and the measurement scripts a run
+# needed once. Reproducible from the images and the task, large, and specific to
+# one run. Anything that outlives a run is stated where it is used, so nothing
+# tracked here depends on this directory.
+/_run/
+
+# Local run logs.
+/_private-agent-runs/
+
+# Interpreter / tooling caches.
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+
+# Editor / OS noise.
+.DS_Store
+*.swp

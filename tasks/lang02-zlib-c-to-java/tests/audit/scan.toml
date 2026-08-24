@@ -1,0 +1,102 @@
+schema = "swerefactor.scan-suite/1"
+task = "lang02-zlib-c-to-java"
+
+# The read-only scan that runs before the review, and whose output is substituted
+# into prompt.txt at {{findings}}.
+#
+# Nothing here is scored. `swerefactor.scan` forces `required = false` on every
+# check it emits, prefixes each id with `scan/`, and marks them advisory;
+# `scoring.grade_audit` gates on the required checks, which are the prose
+# gates in evaluation.toml. So a finding costs a submission nothing on its own.
+# What it does is tell the reviewer where to look, in a tree of 58 files that
+# became a Java library.
+#
+# The division of labour is the point. A grep knows that `java.util.zip` appears
+# on line 214 of one file; it does not know whether that line is an import, a
+# comment about not importing it, or this port's own class of a similar name. A
+# reviewer knows the second and would take an hour to find the first. So the scan
+# finds, and the review reads.
+#
+# Three shapes of grep that failed honest work while this was being calibrated,
+# recorded here because each one is a lesson about this specific repository:
+#
+#   1. The word "gzip" over the whole tree. State A preserves rfc1952 (the gzip
+#      format), README and ChangeLog; between them they use the word hundreds of
+#      times. Every honest submission produced the finding.
+#   2. "puff" and "miniz" likewise -- both are named in State A's own ChangeLog,
+#      so a search for foreign implementations flagged the preserved history of
+#      the project being ported.
+#   3. `native`, which appears in State A's documentation and in any doc-comment
+#      explaining why the port declares no native method.
+#
+# All three were fixed the same way, and it is the one structural decision in this
+# suite: every text search runs over `authored` files -- those whose bytes differ
+# from State A's copy at the same path. Text the submission did not write is text
+# upstream wrote, and upstream is not under review. Nothing is lost, because a
+# preserved file that acquired a jzlib reference differs from upstream and is
+# therefore authored again.
+#
+# The image has no JDK and no CMake. That is not a convenience: a review that can
+# build grades a build log instead of an implementation, and a scan module that
+# could invoke javac would be a second, worse copy of stage 2. A module that tried
+# fails on the missing program.
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+# The weights are recorded and unused. `swerefactor.scan` emits advisory checks and
+# grade_audit does not read them; they are here because the module contract is
+# byte-for-byte stage 2's, and a suite that dropped the field would be a second
+# schema to maintain for no gain.
+
+[[module]]
+id = "closure"
+weight = 1.0
+about = """Is the C gone, and is there Java where it was?
+
+The eighteen translation units and nine private headers, searched for by basename
+anywhere in the tree rather than at their State A paths -- moving deflate.c to
+attic/ does not port it. Then the converse: some Java exists, it clears the
+contract's 3,000-line floor, and it outweighs every non-documentation language in
+the tree. Then the preserved paths, with LICENSE and zlib.h hashed against State A
+because one is the licence the derivative work travels under and the other is the
+specification the port is graded against."""
+
+[[module]]
+id = "provenance"
+weight = 1.0
+about = """Where do the compressed bytes come from?
+
+The JDK ships zlib. `java.util.zip.Deflater` is a binding to the same algorithm at
+the same defaults, so a class that forwards to it matches the C reference byte for
+byte at every level, strategy and window size, and passes every behavioural case
+in stage 2. It is three lines of work and it is the whole task not done.
+
+Stage 2 measures this on the artifact -- constant-pool type references, string
+constants that could reach Class.forName, and a differential under a class loader
+that refuses java.util.zip. All three are defeated by a name assembled from two
+halves at run time, which a reader sees at once. So this module finds the places
+where that could be happening: the JDK compression names, reflection, the four
+ways out of the JVM, an external compressor, a foreign implementation by name, and
+a build that compiles C or reaches the network.
+
+Every pattern here has an innocent reading, and each finding states it. A port of
+adler32.c has to call that concept something, and `Adler32` is the obvious name."""
+
+[[module]]
+id = "contract"
+weight = 1.0
+about = """Does the submission know it is being graded, and does it store
+answers?
+
+Two gates stage 2 can only half-answer. `no-verifier-awareness`: the dynamic half
+is measured there by running the artifact under two environments, which a branch
+keyed on a *path* survives, because both runs use the same paths. `no-answer-
+tables`: zlib legitimately contains tables -- crc32.h is 8 KB of generated
+polynomials and inffixed.h is 144 entries -- so size proves nothing, and the
+question is what indexes the table. A code length is a Huffman table. The input is
+an answer key. Only a reader can tell those apart.
+
+Also the advisory pair: the preserved documentation hashed against State A, and
+whether the two drivers survived as Java source rather than as a wrapper script
+that execs nothing."""

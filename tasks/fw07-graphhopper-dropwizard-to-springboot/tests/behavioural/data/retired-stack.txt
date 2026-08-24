@@ -1,0 +1,68 @@
+# SWERefactorBench fw07 -- the retired web stack, named once for every consumer.
+#
+# Three consumers read this file and they need two different kinds of name, so
+# both are declared here rather than half here and half in someone's constant:
+#
+#   group    a Maven groupId PREFIX.  environment/prune-m2.sh deletes the .jar of
+#            every artifact whose group matches, leaving the .pom in place.  The
+#            stage images that must build State A keep the complete closure and
+#            read this file only to report on it.
+#   package  a Java package PREFIX.  Stage 1 scans both source trees for imports
+#            under it; the behavioural stage never reads source at all.
+#
+# Why the .pom stays.  `dropwizard-dependencies` is imported as a BOM by State A's
+# root pom, and a BOM whose pom is missing is not a missing dependency -- it is an
+# unresolvable model, and Maven refuses to build the reactor at all with an error
+# about the parent rather than about the jar.  A submission mid-migration, which
+# has removed the imports and not yet the BOM import, would then be unable to run
+# any Maven command while doing the work.  Keeping the .pom means the honest path
+# stays workable and the failure, when it comes, is the accurate one: a compile
+# error naming the type that is no longer on the classpath.
+#
+# Why the groups are prefixes.  Dropwizard publishes under io.dropwizard,
+# io.dropwizard.metrics, io.dropwizard.logback and io.dropwizard.modules, and
+# Jersey under a dozen org.glassfish.jersey.* groups.  A list of exact groupIds
+# was tried and was wrong within one version bump; a prefix cannot be defeated by
+# a new sub-group.
+#
+# What is deliberately NOT here, and why each absence is a decision:
+#
+#   org.eclipse.jetty        A servlet container, not the framework.  Spring Boot
+#                            supports Jetty, Tomcat and Undertow; which one runs
+#                            is not part of the contract, and banning one would
+#                            be arbitrary.
+#   net.sourceforge.argparse4j  State A's CLI argument parser.  It has nothing to
+#                            do with HTTP and the CLI's shape is part of the
+#                            contract, so retiring it would be extra work with no
+#                            connection to the migration.
+#   jakarta.validation, jakarta.inject, jakarta.servlet, jakarta.annotation
+#                            Specification APIs both stacks sit on.  Spring Boot
+#                            uses all four.
+#   com.fasterxml.jackson.core, .databind, .dataformat, .datatype
+#                            Jackson itself survives the migration; only its
+#                            JAX-RS providers go, and those live under the
+#                            com.fasterxml.jackson.jakarta.rs group below.
+
+# --- the framework, its DI container, and its own build-time BOMs -------------
+group    io.dropwizard
+package  io.dropwizard
+
+# Dropwizard's metrics library is published under io.dropwizard.metrics and its
+# classes live under com.codahale.metrics -- the group prefix above already covers
+# the artifacts, and this is the package half.
+package  com.codahale.metrics
+
+# --- the JAX-RS implementation and the specification it implements ------------
+group    org.glassfish.jersey
+package  org.glassfish.jersey
+
+group    org.glassfish.hk2
+package  org.glassfish.hk2
+package  org.jvnet.hk2
+
+group    jakarta.ws.rs
+package  jakarta.ws.rs
+
+# --- Jackson's JAX-RS entity providers ----------------------------------------
+group    com.fasterxml.jackson.jakarta.rs
+package  com.fasterxml.jackson.jakarta.rs

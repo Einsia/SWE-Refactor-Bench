@@ -1,0 +1,307 @@
+# =============================================================================
+# SWERefactorBench -- framework rewrite
+#
+#   State A : helm/chartmuseum v0.15.0 (commit 460d8ec9, 2022-06-30) with its
+#             HTTP layer on Gin, plus the two Gin-coupled satellites it depends
+#             on: gin-contrib/size for the request body limit and
+#             zsais/go-gin-prometheus for the /metrics surface.
+#   State B : the same server with that ecosystem removed entirely -- routing,
+#             middleware chain, request context, body limit and instrumentation
+#             rebuilt on chi v5 and/or net/http.  Observable behaviour, the CLI
+#             surface and the release artifacts unchanged.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# What makes this harder than a router swap is that the old framework is not
+# load-bearing as a router here.  This project registers almost nothing with it
+# and dispatches through its own matcher, because multitenancy depth is dynamic
+# and a repository name may contain slashes.  What the old framework actually
+# supplies is the context object, the middleware chain, the JSON serialisation
+# style, the panic response, the matched-route template that the metrics labels
+# are built from, and a set of routing defaults this server deliberately turned
+# off -- and every one of those is visible in the bytes on the wire.  The
+# replacement stack restores some of those defaults unless the port notices.
+#
+# The dependency boundary is enforced by inspection, in stage 1, and omission is
+# only the condition the agent works under.  The offline module proxy the agent
+# builds against has no archive for any retired module, so the resolver fails and
+# names them and there is no registry to reach past -- which makes the local build
+# a fast signal, not the exam.  It cannot be the enforcement: stage 2 grades
+# against a complete mirror, by necessity, because State A is the oracle every
+# expectation was recorded from and a mirror that cannot compile Gin could never
+# have recorded them.  A tree that still imports Gin therefore compiles in the
+# graded build and is measured for behaviour like any other; State A itself takes
+# full marks there.  What retires the stack is the `gin_retired` gate below, whose
+# failure zeroes the submission.  Their .mod files are retained deliberately --
+# dropping those too would break `go mod tidy` even for a correct migration.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, five gates, all required.  Failing one is a zero and nothing
+#      after it runs.
+#   2. fifteen behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the original passes
+#      and this one fails.  60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has no
+# Go toolchain, because a review that can build grades a build log instead of an
+# implementation -- and because it removes the only way a read-only scan could
+# accidentally become an execution.  Stage 2 carries both module mirrors and
+# builds against the complete one, for the reason above; it keeps a pruned copy at
+# /opt/goproxy-pruned only so the build module can record, without scoring it,
+# whether the tree needed an archive the agent was never given.  Stage 3 is the
+# only image that can build both trees, because "the original passes this test" is
+# a claim that has to be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# What Harbor collects from the agent container after the trial.
+#
+# Build output and dependency state are excluded where they can be named without
+# ambiguity: the verifier re-materialises the repo and resolves from its own
+# mirror, so an agent's downloaded modules, vendor tree or compiled binaries never
+# influence the score.  vendor/ is excluded for a second reason -- `make bootstrap`
+# runs `go mod download && go mod vendor`, so a vendored copy of a retired module
+# would otherwise be a way to carry it past a proxy that does not serve it.
+#
+# Solutions must therefore live in tracked source files, never inside these
+# paths.  instruction.md states that rule explicitly.
+#
+# Two things this list deliberately does NOT do, both because a pattern here is
+# matched against a name and cannot be assumed to be matched against a path:
+#
+#   * It does not exclude a binary left in the repository root.  `go build
+#     ./cmd/chartmuseum` writes ./chartmuseum, which an agent verifying its own
+#     work by hand will produce -- measured: a 95 MB one, in this task's own
+#     trial run.  The pattern that would remove it is the bare name
+#     `chartmuseum`, and under name matching that same pattern also matches
+#     pkg/chartmuseum/ and cmd/chartmuseum/, which are the implementation.
+#     Deleting a stray build is worth less than the risk of deleting the
+#     submission, so the stage is hardened instead of the manifest: the stage-1
+#     scan sniffs for NUL and refuses to read a binary as text
+#     (srbscan.looks_binary).  Without that, a Gin-linked stray manufactures
+#     "the retired framework is still here" findings against a *required* gate,
+#     cited to offsets in an executable.
+#
+#   * It does not exclude packaged charts by suffix.  `*.tgz` and `*.tgz.prov`
+#     were here and had to be removed: they match
+#     testdata/badcharts/mybadchart/mybadchart-1.0.0.tgz{,.prov}, which State A
+#     *commits*, because helm refuses to build them -- that chart's name is
+#     "../../../../charts/org2/repo2/evil", a path-traversal payload, and the
+#     fixture's own Chart.yaml says it "was crafted outside of helm and needs to
+#     be stored here".  setup-test-environment.sh cannot regenerate them (its
+#     badcharts loop has no --sign, so the .prov is unobtainable), and
+#     server_test.go reads both with suite.Nil(err) inside TestBadChartUpload, a
+#     method of TestMultiTenantServerTestSuite, which the graded baseline records
+#     as passing.  Excluding them charged every submission for a fixture the
+#     harness itself deleted.  The generated packages live one directory over, at
+#     testdata/charts/<chart>/, so they are named by path below; under name
+#     matching those entries are inert and a handful of regenerable archives ride
+#     along, which costs nothing -- `helm package` overwrites them, and the scan
+#     exempts both the suffix and testdata/ entirely.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "vendor",
+    "bin",
+    "_dist",
+    "testbin",
+    ".cover",
+    ".test",
+    ".helm",
+    ".chartstorage",
+    ".acceptance",
+    ".robot",
+    ".chartmuseum.log",
+    "*.tar.gz",
+    # Path-shaped on purpose -- see the note above.  The committed traversal
+    # fixture is under testdata/badcharts/ and must survive collection.
+    "testdata/charts/*/*.tgz",
+    "testdata/charts/*/*.tgz.prov",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".git",
+    ".venv",
+]
+
+[task]
+name = "swerefactor/fw04-chartmuseum-gin-to-chi"
+description = """
+Remove the Gin ecosystem from ChartMuseum v0.15.0 -- Gin itself, gin-contrib/size
+and zsais/go-gin-prometheus -- and rebuild the HTTP layer on chi v5 and/or
+net/http, across the whole repository, without changing observable behaviour, the
+CLI surface, or the release artifacts.
+"""
+authors = []
+keywords = [
+    "swe-refactor",
+    "framework-migration",
+    "go",
+    "gin",
+    "chi",
+    "net/http",
+    "helm",
+    "chartmuseum",
+    "http-middleware",
+    "prometheus",
+    "offline",
+]
+
+[metadata]
+category = "framework-rewrite"
+difficulty = "frontier"
+license = "Apache-2.0"
+source_repository = "https://github.com/helm/chartmuseum"
+source_commit = "460d8ec9ad8818859794f0bcd580685bc7e61900"
+source_version = "v0.15.0"
+state_a = "gin-gonic/gin 1.8.1 + gin-contrib/size + zsais/go-gin-prometheus 0.1.0"
+state_b = "go-chi/chi v5.3.1 on net/http, no gin-compatibility layer"
+language = "go"
+tags = [
+    "whole-repository",
+    "framework-rewrite",
+    "http-contract",
+    "middleware-rewrite",
+    "release-closure",
+    "offline-module-proxy",
+    "differential-oracle",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 12h wall clock.  Every file that touches the framework has to be rewritten, the
+# hand-written dispatcher has to be re-hosted on a router with different opinions
+# about paths, two middlewares with no drop-in equivalent have to be rebuilt, and
+# the release closure -- Makefile, container image, CI workflow, the project's own
+# test files -- has to follow.  The State A oracle is in the image and serving, so
+# the time is spent on engineering rather than on guessing what the old
+# framework did.
+#
+# no-network: the only module source is the pruned offline proxy at /opt/goproxy.
+# Offline is what makes "the retired stack left the dependency graph" a mechanical
+# fact rather than a code-review opinion.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 43200.0
+network_mode = "no-network"
+
+[environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+CGO_ENABLED = "1"
+GOTOOLCHAIN = "local"
+GOFLAGS = "-mod=mod"
+GOPROXY = "file:///opt/goproxy"
+GOSUMDB = "off"
+GONOSUMDB = ""
+GOPRIVATE = ""
+GOPATH = "/opt/go"
+GOMODCACHE = "/opt/go/pkg/mod"
+GOCACHE = "/opt/gocache"
+CM_ORACLE_BIN = "/opt/oracle/chartmuseum"
+CM_ORACLE_CHARTS = "/opt/testdata"
+SRB_GOPROXY_ROOT = "/opt/goproxy"
+SRB_RETIRED_MODULES = "/opt/srb/retired-modules.txt"
+HELM_BIN = "/opt/helm/helm"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier image and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.  A run that does reach it spends most of its
+# day there -- six adversaries with an hour each, sequentially, so a candidate
+# cannot be broken by what the previous one did to the server.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota to
+# be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+
+[verifier.environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+PYTHONDONTWRITEBYTECODE = "1"
+CGO_ENABLED = "0"
+GOTOOLCHAIN = "local"
+GOFLAGS = "-mod=mod"
+GOPROXY = "file:///opt/goproxy"
+GOSUMDB = "off"
+GONOSUMDB = ""
+GOPRIVATE = ""
+GOPATH = "/opt/go"
+GOMODCACHE = "/opt/go/pkg/mod"
+GOCACHE = "/opt/gocache"
+REPO_DIR = "/workspace/repo"
+VERIFIER_LOG_DIR = "/logs/verifier"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+# No CM_ORACLE_BIN in stages 1 and 2, unlike the agent environment above, and
+# that asymmetry is the point of the ladder.  Stage 1 reads and does not execute.
+# Stage 2 grades against the frozen capture, so it never needs a reference
+# implementation -- and shipping one would put a working Gin binary inside the
+# container whose job is to establish that Gin is gone.  Stage 3 does build the
+# original, from its own complete mirror, because a candidate's claim is only
+# worth points if the original demonstrably passes it.
+#
+# CM_ORACLE_CHARTS stays everywhere: that is the frozen fixture set, and the
+# harness reads it in every stage that pushes a chart.
+CM_ORACLE_CHARTS = "/opt/testdata"
+CM_WEB_TEMPLATES = "/opt/webtemplate"
+SRB_GOPROXY_ROOT = "/opt/goproxy"
+SRB_RETIRED_MODULES = "/opt/srb/retired-modules.txt"
+HELM_BIN = "/opt/helm/helm"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a smoke
+# test that the suite can be passed at all.  The suite's own gate answers that:
+# stage 3 is asked only of a submission that scored stage 2 in full, so a tree
+# that reaches it has already passed every recorded check.  What six models add is
+# the other half -- an hour each spent hunting for a behaviour nobody thought to
+# record.

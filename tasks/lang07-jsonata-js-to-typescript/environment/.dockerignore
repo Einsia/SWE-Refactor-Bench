@@ -1,0 +1,64 @@
+# Four directories in this task are Docker build contexts -- `environment/` and the
+# three under `tests/` -- and this same list ships in all four, byte for byte.
+# Nothing below is a file any of them needs: it is the debris that accumulates from
+# running the suite locally, plus editor backups.
+#
+# The three stage Dockerfiles copy the whole of their context (`COPY . /tests/…`),
+# so anything left lying about in one of those gets baked in. `environment/` is the
+# asymmetric one -- it names each of the files it copies, so this list filters
+# nothing there today. It ships there anyway, and identical rather than trimmed to
+# what that context could plausibly collect: four copies of one file is a property
+# `check-task.py` can check, and the alternative is a build context whose exclusions
+# nothing compares against the other three.
+#
+# Every pattern carries a `**/` prefix, and that is not decoration. Docker matches a
+# .dockerignore pattern against the whole context-relative path and does *not*
+# re-apply it at each directory level the way .gitignore does, so a bare
+# `__pycache__/` excludes a __pycache__ at the context root and nothing else -- not
+# `lib/__pycache__`, which is the one that actually appears here, because every
+# check in this suite imports `catalog` and `gen`. The pattern is deliberately not a
+# list of the directories where bytecode has been seen: a list goes stale while
+# `**/` keeps working.
+#
+# PYTHONDONTWRITEBYTECODE in the Dockerfile does not cover this. That stops the
+# *image* writing bytecode and has no effect on COPY bringing the author's bytecode
+# in. The two failures are indistinguishable from inside the Dockerfile and differ
+# only by the interpreter tag on the filename -- the author's is `cpython-310`, the
+# image's would be `cpython-311`.
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*~
+**/*.orig
+**/*.rej
+**/.DS_Store
+
+# JavaScript and TypeScript debris, and this pair is why the list matters more here
+# than in the tasks that came before it.
+#
+# `dist/` is the delivered surface of this repository: State A's build writes it,
+# `build` grades it, and `structure` asks whether it is self-contained. An author
+# who ran `npm run build` inside a stage directory to check something by hand would
+# otherwise ship that output into a grading image -- and unlike a stray `obj/`, a
+# stray `dist/` here would be *a working JavaScript implementation of jsonata*
+# sitting in the image whose whole design is that no such thing is present. The
+# final stage of `tests/behavioural/Dockerfile` sweeps for exactly these filenames
+# and would fail the build, which is the intended outcome; this list is what stops
+# it happening in the first place.
+#
+# `node_modules` for the same reason one step removed: the repository has no
+# dependencies, so a `node_modules` in a context is either a hand-installed tsc or
+# a hand-installed jsonata, and the second is the reference by another name.
+**/dist
+**/node_modules
+**/*.tsbuildinfo
+**/npm-debug.log
+**/.npm
+
+# Work directories. `identity.py` and `freeze.py` both take a `--work` and both are
+# run by hand during authoring; the trees they leave behind hold a built copy of
+# State A. Excluded by name rather than trusted to live outside the context.
+**/work
+**/identity

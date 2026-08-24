@@ -1,0 +1,283 @@
+# =============================================================================
+# SWERefactorBench -- language rewrite
+#
+#   State A : sqlparse 0.5.3, 4,024 lines of Python across 21 modules under
+#             sqlparse/, a hatchling project installing one console script,
+#             sqlformat = sqlparse.__main__:main.  A lexer built from a compiled
+#             regex table, six
+#             grouping passes over the token tree, a formatter assembled from
+#             composable filters, and a CLI.
+#   State B : the same library and the same sqlformat, as a Go module whose
+#             import closure is the standard library and nothing else, shipping
+#             one static binary.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs a binary builds
+# one from the submitted source with the published argv.  That is what makes "go
+# build found no Go" a fact about the repository rather than a claim about a
+# directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in
+# tests/evaluation.toml and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission.  Eight gates, all required; failing one is a zero and nothing
+#      after it runs.
+#   2. fifteen behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the Python passes and
+#      this Go fails.  60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures, and for this
+# task the interesting axis is not the compiler but the interpreter.
+#
+# Stage 1 has no Go toolchain and, unlike every other task in the suite, no
+# importable sqlparse either -- a reviewer who can run the reference will compare
+# outputs, and the question there is whether 4,000 lines of Python were
+# reimplemented or mechanically transliterated, which is not a question outputs
+# answer.  Stage 2 freezes the reference's answers at image build time and then
+# locks the reference out: `import sqlparse` fails there by construction, so a
+# submission that still needs a Python cannot be graded as if it did not.  Stage
+# 3 is the only image where the reference runs, because "the Python does this
+# instead" is a claim that has to be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop build output only.  A Go tree cannot smuggle a working
+# implementation past the verifier the way a C tree can -- there is no prebuilt
+# .so to link against, and every stage runs `go build` from source -- but bin/
+# and obj/ can still carry object files from a build this benchmark never ran,
+# and the tree under test should be the tree that was submitted.  The Python
+# entries are here because State A is a Python project: a submission that leaves
+# __pycache__ or an .egg-info behind is leaving a build artifact of the thing it
+# was supposed to replace.
+#
+# Solutions must live in tracked source files and never inside these paths, a
+# rule instruction.md states outright.
+#
+# `.git` is excluded because this task creates it: the environment image runs
+# `git init` and commits State A, instruction.md offers `git log` as a reading aid
+# and tells the agent "Commit or don't".  Collecting it would ship a complete,
+# recoverable copy of the Python implementation the task requires to be gone --
+# `.git/logs/HEAD` names it in plain text, without needing git to read it -- and
+# `no-embedded-reference`, a required gate, asks whether the submission carries
+# one.  A tree that is faulted for residue the task planted and invited is faulted
+# for the task's own choice.  Stage 2 already strips `.git` before it builds
+# (behavioural/lib/build.py, behavioural/lib/driver.py); this makes stage 1, which
+# reads the tree exactly as collected, see the same tree, and makes
+# instruction.md's "only the working tree is collected" true as written.
+# Only `.git`: the other VCS names in the scan's forbidden list are not created
+# here, so one appearing is the submission's own doing and should still be found.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    ".git",
+    "bin",
+    "obj",
+    "_build",
+    "build",
+    "dist",
+    "vendor",
+    "*.exe",
+    "*.test",
+    "*.a",
+    "*.o",
+    "*.so",
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    "*.egg-info",
+    ".eggs",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "venv",
+]
+
+[task]
+name = "swerefactor/lang03-sqlparse-python-to-go"
+description = "Reimplement the complete sqlparse 0.5.3 SQL parsing library in Go with no dependencies outside the standard library, preserving the lexer's token stream, the grouped parse tree, byte-identical formatter output and the sqlformat(1) command line -- in a language whose regexp package has none of the four features the reference's pattern table is built on."
+authors = []
+keywords = [
+    "swe-refactor",
+    "language-migration",
+    "python",
+    "go",
+    "sqlparse",
+    "sql",
+    "lexer",
+    "parser",
+    "offline",
+]
+
+[metadata]
+category = "language-rewrite"
+difficulty = "frontier"
+license = "BSD-3-Clause"
+upstream = "https://github.com/andialbrecht/sqlparse"
+upstream_version = "0.5.3"
+source_repository = "https://github.com/andialbrecht/sqlparse"
+source_version = "0.5.3"
+# Two archives, and they are not interchangeable.
+#
+# snapshot_* is environment/original.tar.gz: the curated State A tree the solver
+# receives, and what "unchanged" and "rewritten" are measured against.  It is
+# pinned by environment/Dockerfile, by environment/original.sha256, and again by
+# tests/behavioural/Dockerfile -- which carries its own copy, so the reference it
+# grades against cannot be the submitted one.
+#
+# upstream_* is the PyPI sdist the expectations are frozen from.  State A is
+# derived from it but is not it: State A has no packaging metadata, no CI config
+# and no upstream test suite, so it cannot be installed and cannot answer a case.
+# Nothing is downloaded at any point -- the sdist is vendored into the behavioural
+# stage's build context as data/sqlparse-0.5.3.tar.gz -- but it is a real upstream
+# release artifact and its digest is checked, so it is recorded here rather than
+# left implicit.  Both digests are asserted at image build time; neither is
+# advisory.
+snapshot_sha256 = "1e1873b15c03f7984badb9c1a52a15cd416e4c8d21371bd3e2e5c906362b1b1f"
+snapshot_bytes = 73963
+upstream_artifact = "sqlparse-0.5.3.tar.gz"
+upstream_sha256 = "09f67787f56a0b16ecdbde1bfc7f5d9c3371ca683cfeaa8e6ff60b4807ec9272"
+upstream_bytes = 84999
+state_a = "sqlparse 0.5.3: 73 files, 21 modules and 4024 lines of Python under sqlparse/, a hatchling project, a sqlformat console script"
+state_b = "a Go module whose closure is the standard library, installing one static sqlformat, with the same lexer, grouper, formatter and CLI behaviour"
+scale = "~4k lines of Python, whose four load-bearing regex features -- lookbehind, lookahead, backreferences, Unicode classes -- Go's regexp package does not have"
+tags = [
+    "whole-repository",
+    "language-rewrite",
+    "dynamic-to-static",
+    "regex-dialect-gap",
+    "differential-testing",
+    "offline",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 15h wall clock.  Less than lang01's 30h and more than a straight line count
+# would suggest, because the cost here is not volume.  It is that four of the
+# reference's regex features -- lookbehind, lookahead, backreferences and
+# Unicode property classes -- have no equivalent in Go's RE2-based regexp
+# package, so the pattern table cannot be ported pattern by pattern; the parts
+# that use them have to be rewritten as code that produces the same tokens.  On
+# top of that sit six grouping passes whose order is load-bearing, a formatter
+# whose reindenting is defined by what the reference happens to emit, and a
+# Python-specific encoding path (UTF-8, then unicode-escape) that has to be
+# reproduced rather than replaced with what Go would naturally do.
+#
+# The State A sources stay in the image as the oracle, so the time goes on
+# reimplementation rather than on reverse-engineering behaviour.
+#
+# no-network with GOPROXY=off and GOFLAGS=-mod=mod: there is no module cache and
+# no proxy to reach, so "standard library only" is enforced by the environment.
+# A submission that adds a dependency does not fail to download it -- it fails to
+# build, which is the closure being enforced by the toolchain rather than audited
+# by a grep afterwards.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 54000.0
+network_mode = "no-network"
+user = "agent"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+CGO_ENABLED = "0"
+GOFLAGS = "-mod=mod"
+GOPROXY = "off"
+GOSUMDB = "off"
+GOTOOLCHAIN = "local"
+PYTHONDONTWRITEBYTECODE = "1"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building the
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.
+#
+# The behavioural image's build budget is the largest of the three by a wide
+# margin, and not because Go is slow.  That image installs the pinned reference
+# and freezes every expectation the stage grades against, which means running the
+# Python over the whole corpus at build time -- once, so that grading never has
+# to.  Stage 3's build then depends on that image having been built, because the
+# operation table it hands an adversary is derived from the same catalog.
+#
+# Stage 3's own budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota
+# to be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+CGO_ENABLED = "0"
+GOFLAGS = "-mod=mod"
+GOPROXY = "off"
+GOSUMDB = "off"
+GOTOOLCHAIN = "local"
+PYTHONDONTWRITEBYTECODE = "1"
+PYTHONHASHSEED = "0"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation would be a second implementation to keep correct against every
+# future change to the suite, and its only real consumer would be a smoke test
+# that the suite can be passed at all.  The suite's own gate answers that: stage 3
+# is asked only of a submission that scored stage 2 in full, so a tree that
+# reaches it has already passed every recorded check.  What six models add is the
+# other half -- an hour each spent hunting for a behaviour nobody thought to
+# record.  What stands in for a solution during authoring is the generated API
+# skeleton -- a tree with the whole public surface and a panic in every body,
+# which the behavioural image builds and grades at zero, proving the stage runs end
+# to end without shipping an answer.

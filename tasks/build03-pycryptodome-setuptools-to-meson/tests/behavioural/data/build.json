@@ -1,0 +1,2341 @@
+{
+ "all_macros": [
+  "HAVE_CPUID_H",
+  "HAVE_POSIX_MEMALIGN",
+  "HAVE_STDINT_H",
+  "HAVE_TMMINTRIN_H",
+  "HAVE_UINT128",
+  "HAVE_WMMINTRIN_H",
+  "HAVE_X86INTRIN_H",
+  "LTC_NO_ASM",
+  "NDEBUG",
+  "PYCRYPTO_LITTLE_ENDIAN",
+  "SYS_BITS=64",
+  "USE_SSE2"
+ ],
+ "compiles": [
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/MD2.o",
+   "source": "src/MD2.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/MD4.o",
+   "source": "src/MD4.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/MD5.o",
+   "source": "src/MD5.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/SHA1.o",
+   "source": "src/SHA1.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/SHA256.o",
+   "source": "src/SHA256.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/SHA224.o",
+   "source": "src/SHA224.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/SHA384.o",
+   "source": "src/SHA384.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/SHA512.o",
+   "source": "src/SHA512.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/RIPEMD160.o",
+   "source": "src/RIPEMD160.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/keccak.o",
+   "source": "src/keccak.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/blake2b.o",
+   "source": "src/blake2b.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/blake2s.o",
+   "source": "src/blake2s.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/ghash_portable.o",
+   "source": "src/ghash_portable.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-mpclmul",
+    "-msse2",
+    "-mssse3"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_TMMINTRIN_H",
+    "HAVE_UINT128",
+    "HAVE_WMMINTRIN_H",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/ghash_clmul.o",
+   "source": "src/ghash_clmul.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/poly1305.o",
+   "source": "src/poly1305.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/AES.o",
+   "source": "src/AES.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-maes",
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/AESNI.o",
+   "source": "src/AESNI.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/ARC2.o",
+   "source": "src/ARC2.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/blowfish.o",
+   "source": "src/blowfish.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/blowfish_eks.o",
+   "source": "src/blowfish_eks.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/CAST.o",
+   "source": "src/CAST.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/",
+    "src/libtom/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/DES.o",
+   "source": "src/DES.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/",
+    "src/libtom/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/DES3.o",
+   "source": "src/DES3.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/cpuid.o",
+   "source": "src/cpuid.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/pkcs1_decode.o",
+   "source": "src/pkcs1_decode.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/raw_ecb.o",
+   "source": "src/raw_ecb.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/raw_cbc.o",
+   "source": "src/raw_cbc.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/raw_cfb.o",
+   "source": "src/raw_cfb.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/raw_ofb.o",
+   "source": "src/raw_ofb.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/raw_ctr.o",
+   "source": "src/raw_ctr.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/raw_ocb.o",
+   "source": "src/raw_ocb.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/ARC4.o",
+   "source": "src/ARC4.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/",
+    "src/libtom/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/Salsa20.o",
+   "source": "src/Salsa20.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/chacha20.o",
+   "source": "src/chacha20.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/scrypt.o",
+   "source": "src/scrypt.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/strxor.o",
+   "source": "src/strxor.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/ec_ws.o",
+   "source": "src/ec_ws.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/mont.o",
+   "source": "src/mont.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/p256_table.o",
+   "source": "src/p256_table.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/p384_table.o",
+   "source": "src/p384_table.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/p521_table.o",
+   "source": "src/p521_table.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/x25519.o",
+   "source": "src/x25519.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/ed25519.o",
+   "source": "src/ed25519.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/ed448.o",
+   "source": "src/ed448.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/mont1.o",
+   "source": "src/mont1.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/modexp.o",
+   "source": "src/modexp.c"
+  },
+  {
+   "has_fPIC": true,
+   "includes": [
+    "src/"
+   ],
+   "isa_flags": [
+    "-msse2"
+   ],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "object": "build/temp.linux-x86_64-cpython-312/src/mont2.o",
+   "source": "src/mont2.c"
+  }
+ ],
+ "extensions": {
+  "Crypto.Cipher._ARC4": {
+   "filename": "_ARC4.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/ARC4.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._Salsa20": {
+   "filename": "_Salsa20.abi3.so",
+   "includes": [
+    "src/",
+    "src/libtom/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/Salsa20.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._chacha20": {
+   "filename": "_chacha20.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/chacha20.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._pkcs1_decode": {
+   "filename": "_pkcs1_decode.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/pkcs1_decode.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_aes": {
+   "filename": "_raw_aes.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/AES.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_aesni": {
+   "filename": "_raw_aesni.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-maes",
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/AESNI.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_arc2": {
+   "filename": "_raw_arc2.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/ARC2.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_blowfish": {
+   "filename": "_raw_blowfish.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/blowfish.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_cast": {
+   "filename": "_raw_cast.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/CAST.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_cbc": {
+   "filename": "_raw_cbc.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/raw_cbc.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_cfb": {
+   "filename": "_raw_cfb.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/raw_cfb.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_ctr": {
+   "filename": "_raw_ctr.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/raw_ctr.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_des": {
+   "filename": "_raw_des.abi3.so",
+   "includes": [
+    "src/",
+    "src/libtom/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/DES.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_des3": {
+   "filename": "_raw_des3.abi3.so",
+   "includes": [
+    "src/",
+    "src/libtom/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/DES3.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_ecb": {
+   "filename": "_raw_ecb.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/raw_ecb.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_eksblowfish": {
+   "filename": "_raw_eksblowfish.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/blowfish_eks.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_ocb": {
+   "filename": "_raw_ocb.abi3.so",
+   "includes": [],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/raw_ocb.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Cipher._raw_ofb": {
+   "filename": "_raw_ofb.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Cipher",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/raw_ofb.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._BLAKE2b": {
+   "filename": "_BLAKE2b.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/blake2b.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._BLAKE2s": {
+   "filename": "_BLAKE2s.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/blake2s.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._MD2": {
+   "filename": "_MD2.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/MD2.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._MD4": {
+   "filename": "_MD4.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/MD4.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._MD5": {
+   "filename": "_MD5.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/MD5.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._RIPEMD160": {
+   "filename": "_RIPEMD160.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/RIPEMD160.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._SHA1": {
+   "filename": "_SHA1.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/SHA1.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._SHA224": {
+   "filename": "_SHA224.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/SHA224.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._SHA256": {
+   "filename": "_SHA256.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/SHA256.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._SHA384": {
+   "filename": "_SHA384.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/SHA384.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._SHA512": {
+   "filename": "_SHA512.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/SHA512.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._ghash_clmul": {
+   "filename": "_ghash_clmul.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-mpclmul",
+    "-msse2",
+    "-mssse3"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_TMMINTRIN_H",
+    "HAVE_UINT128",
+    "HAVE_WMMINTRIN_H",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/ghash_clmul.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._ghash_portable": {
+   "filename": "_ghash_portable.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/ghash_portable.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._keccak": {
+   "filename": "_keccak.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/keccak.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Hash._poly1305": {
+   "filename": "_poly1305.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Hash",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/poly1305.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Math._modexp": {
+   "filename": "_modexp.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Math",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 2,
+   "sources": [
+    "src/modexp.c",
+    "src/mont2.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Protocol._scrypt": {
+   "filename": "_scrypt.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Protocol",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/scrypt.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.PublicKey._ec_ws": {
+   "filename": "_ec_ws.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "PublicKey",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 5,
+   "sources": [
+    "src/ec_ws.c",
+    "src/mont.c",
+    "src/p256_table.c",
+    "src/p384_table.c",
+    "src/p521_table.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.PublicKey._ed25519": {
+   "filename": "_ed25519.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "PublicKey",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/ed25519.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.PublicKey._ed448": {
+   "filename": "_ed448.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "PublicKey",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 2,
+   "sources": [
+    "src/ed448.c",
+    "src/mont1.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.PublicKey._x25519": {
+   "filename": "_x25519.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "PublicKey",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/x25519.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Util._cpuid_c": {
+   "filename": "_cpuid_c.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Util",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/cpuid.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  },
+  "Crypto.Util._strxor": {
+   "filename": "_strxor.abi3.so",
+   "includes": [
+    "src/"
+   ],
+   "install_dir": "Util",
+   "isa_flags": [
+    "-msse2"
+   ],
+   "link_libraries": [],
+   "macros": [
+    "HAVE_CPUID_H",
+    "HAVE_POSIX_MEMALIGN",
+    "HAVE_STDINT_H",
+    "HAVE_UINT128",
+    "HAVE_X86INTRIN_H",
+    "LTC_NO_ASM",
+    "NDEBUG",
+    "PYCRYPTO_LITTLE_ENDIAN",
+    "SYS_BITS=64",
+    "USE_SSE2"
+   ],
+   "n_units": 1,
+   "sources": [
+    "src/strxor.c"
+   ],
+   "uniform_isa": true,
+   "uniform_macros": true
+  }
+ },
+ "global_isa_flags": [
+  "-msse2"
+ ],
+ "global_macros": [
+  "HAVE_CPUID_H",
+  "HAVE_POSIX_MEMALIGN",
+  "HAVE_STDINT_H",
+  "HAVE_UINT128",
+  "HAVE_X86INTRIN_H",
+  "LTC_NO_ASM",
+  "NDEBUG",
+  "PYCRYPTO_LITTLE_ENDIAN",
+  "SYS_BITS=64",
+  "USE_SSE2"
+ ],
+ "isa_elevated": {
+  "Crypto.Cipher._raw_aesni": [
+   "-maes",
+   "-msse2"
+  ],
+  "Crypto.Hash._ghash_clmul": [
+   "-mpclmul",
+   "-msse2",
+   "-mssse3"
+  ]
+ },
+ "module_specific_macros": [
+  "HAVE_TMMINTRIN_H",
+  "HAVE_WMMINTRIN_H"
+ ],
+ "n_compiles": 47,
+ "n_extensions": 41,
+ "n_links": 41
+}

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SWERefactorBench fw07 — Maven's side of the offline plumbing.
+
+  The trial container has no network.  The local repository is pre-populated at
+  image-build time with State A's measured closure and the declared State B
+  closure, so every resolution must be satisfied from it.
+
+  `<offline>true</offline>` is the load-bearing line: it makes Maven refuse to
+  contact a remote instead of attempting one and waiting out the timeout.  The
+  difference matters when it is an agent debugging a build — an immediate
+  "artifact not found in local repository" is actionable, and a five-minute hang
+  on an unreachable Central is not.
+
+  Central is additionally mirrored to an unusable URL, which is belt and braces:
+  a command run with `-U` or with `-o` explicitly negated cannot silently reach
+  the network from inside the offline repository's shadow.
+
+  This is infrastructure, exactly like a toolchain on PATH.  It contains no
+  scoring rule and names nothing about the migration; the same file is installed
+  in the environment image and in the stage images that build, and
+  `swerefactor validate` compares the copies byte-for-byte.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <localRepository>/root/.m2/repository</localRepository>
+  <interactiveMode>false</interactiveMode>
+  <offline>true</offline>
+
+  <mirrors>
+    <mirror>
+      <!-- The id is `central` on purpose, even though the URL is not.  Maven
+           writes per-repository files into the local repository and then looks
+           them up by repository id: `maven-metadata-central.xml` is where the
+           version list for a range lives, and State A's web-bundle resolves
+           several org.webjars.npm dependencies through ranges like [1.1.0,2).
+           A mirror under any other id makes Maven look for a metadata file that
+           the warm never wrote, and every one of those ranges fails offline with
+           "No versions available" — a message that points at the repository
+           rather than at anything a submission can fix. -->
+      <id>central</id>
+      <name>Central is not reachable from a trial container</name>
+      <url>http://127.0.0.1:1/offline</url>
+      <!-- external:* rather than central: State A's root pom also declares a
+           `github` distribution repository, and a submission is free to add a
+           <repository> of its own.  Mirroring every non-local repository to one
+           dead URL means no arrangement of poms reaches the network, and the
+           message an agent gets says so in one line instead of hanging on a
+           connect timeout. -->
+      <mirrorOf>external:*</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>

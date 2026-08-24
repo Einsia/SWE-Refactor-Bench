@@ -1,0 +1,281 @@
+schema = "swerefactor.verification-probe/1"
+task = "lang05-goyaml-go-to-zig"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file, run against a tree this script turns into one
+# executable.  Both trees end up as `yaml-probe` at a path named after an opaque
+# token, so a candidate sees an NDJSON process and cannot tell which side it is
+# on except by the answers it gets back.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two
+# implementations of YAML 1.1-with-1.2-resolution differ somewhere, and go-yaml
+# has corners its own maintainers describe as accidents.  The allow list is the
+# graded surface -- the seven operations instruction.md defines, over the parts of
+# the library `source-contract.json` marks graded.  The deny list is that file's
+# `not_graded` table, verbatim in substance, plus the things that are about the
+# harness rather than about YAML.
+#
+# The two have to agree with the instruction.  A scope that forbade what the
+# instruction promised would make the task unwinnable; a scope that permitted what
+# the instruction excluded would make it unlosable.  `tests/check-task.py` checks
+# the second half mechanically: every `not_graded` surface must appear here.
+[scope]
+allow = [
+  "response bytes, compared byte for byte, for any request the protocol defines: id, ok, result and error in that order, no whitespace outside string literals, and the escaping rule that makes every response pure ASCII -- literal 0x20-0x7E except quote and backslash, the five short escapes, and \\uXXXX in lowercase hex with surrogate pairs above U+FFFF for everything else",
+  "the parser and scanner over any input: block and flow collections, indentation, tabs, line endings including a lone CR and a CRLF, the document markers --- and ..., directives %YAML and %TAG, and every construct YAML 1.1 defines",
+  "error strings, which are graded in full: 'yaml: ' then 'line N: ' when a mark has a line, then the problem text; the line comes from the context mark if there is one and the problem mark otherwise, scanner errors report one line higher than they record, and the envelope is absent entirely when neither mark has a line",
+  "the error kind attached to each failure -- YamlError for the library's own errors, ProtocolError for a malformed request, Panic for a crash the probe caught -- and which inputs produce which",
+  "tag resolution: the null, bool, int and float patterns as v3.0.1 resolves them, including the underscore separators, the 0o and 0x forms, base-60, .inf and .NaN in each spelling, the empty scalar, and every case where the resolver disagrees with YAML 1.1 or with 1.2",
+  "the resolved tag on a !!timestamp scalar, and on verbatim !!str, local ! tags, and unresolvable ones",
+  "anchors and aliases: an alias to an anchor defined later, a duplicate anchor name, an anchor on a document root, an anchor that is never referenced, a recursive structure, and the error text for an unknown anchor",
+  "block scalars: literal and folded, explicit indentation indicators, all three chomping modes, leading and trailing empty lines, a more-indented first line, tabs inside the block, and what the emitter writes back for each",
+  "quoting and escapes: the scanner's 21-entry escape table and the escapes it does not have, single-quote doubling, \\x \\u \\U with their length rules, an escape at a line break, and the style the resulting node carries",
+  "the node shape as instruction.md specifies it: the twelve keys in order, the style bitfield as a sum of TAGGED=1 DOUBLE_QUOTED=2 SINGLE_QUOTED=4 LITERAL=8 FOLDED=16 FLOW=32, line and column, the l and c fields, content ordering, and the difference between an absent field and an empty one",
+  "comments as structure: head, line and foot attachment for every node kind, a comment between two mapping entries, a comment before a document marker, a comment on the last entry of a block, and comments preserved through a roundtrip",
+  "the emitter: style selection for a node that has none, when a scalar needs quoting, key ordering as the node gives it, flow versus block for a node marked FLOW, and that no graded output is ever line-folded regardless of length",
+  "emit_indent's two composing clamps: no indent means 4, 0 means 4 because zero is the encoder's unset marker, and anything below 2 or above 9 clamps to 2 -- so 1, 10 and 99 all indent by 2",
+  "stream and emit_stream over zero, one and many documents, including that an input parsing to zero documents is an emit error with an empty out rather than empty output",
+  "roundtrip: parse then emit, and whether a second roundtrip of the output is stable, for any input the parser accepts",
+  "the depth caps: flow level and indent stack each stop at 10,000, depth 10,000 parses and 10,001 fails with the documented text, and the failure must be that error rather than a crash or a stack overflow",
+  "resource behaviour on verification input: deep nesting, enormous keys, very long lines, many anchors, a document that is one long alias chain -- none may crash, hang past the run timeout, or exhaust memory where the reference does not",
+  "the protocol envelope itself: one response per request in order, ids echoed as given, an empty line skipped and left unanswered, a malformed line, an unknown op, a missing or wrongly typed key, a missing indent on emit_indent, unexpected extra keys, an enormous line, and exit 0 on EOF",
+  "the hello handshake's exact result object, including its key order",
+]
+deny = [
+  # --- the seven surfaces source-contract.json marks not graded ---------------
+  "typed Marshal and Unmarshal for anything other than *yaml.Node. Reproducing them means reproducing Go's reflect type lattice and struct-tag rules, which is a Go runtime port rather than a YAML port, and no operation in the protocol reaches them.",
+  "Node.Decode into typed values, and Marshal of typed values -- the Node-to-Node paths are graded instead",
+  "sorter.go and the map-key ordering it implements, which is reachable only from the typed encoder",
+  "the Go time.Time value a !!timestamp decodes to, and anything about Go's calendar library. The resolved tag is graded, as above; the value is not.",
+  "the 'document contains excessive aliasing' guard. It is unreachable through the graded surface -- unmarshal() returns early for *yaml.Node, so the decoder's alias budget is never charged -- and it is a Go resource heuristic rather than YAML behaviour.",
+  "yaml.IsZeroer, yaml.ObsoleteUnmarshaler and the yaml.v2 compatibility shims, all part of the typed surface",
+  "isOldBool and isBase60Float quoting in encode.go, reached only from the typed encoder's stringv(); the node emit path takes its style from the parsed node instead",
+
+  # --- about the harness rather than about YAML -------------------------------
+  "wall-clock performance: the Zig may be slower or faster than the Go, and any assertion of the form 'this must complete in N milliseconds' is out of scope. A hang that outlives the run timeout is in scope, as above; a constant factor is not.",
+  "peak memory as a number, and allocation counts, sizes or ordering",
+  "the internal structure of the submission: file names, module and function names, struct layout, and whether any given piece of the port lives where the Go did. A candidate may only send requests and read responses, which is why it is given a binary and not a tree.",
+  "text written to stderr, and anything about the probe's own diagnostics. Error responses are graded in full, as above; stderr is not part of the protocol.",
+  "the presence, absence or content of Go source, which stage 1 judges",
+  "anything requiring a Go toolchain, or the Go implementation, to be present in the submission",
+  "behaviour on input the reference also gets wrong. A candidate must pass on the original, which is what makes a break a migration defect rather than an upstream bug -- and this library has upstream bugs the instruction explicitly tells the agent to reproduce, %YAML 1.2 being rejected among them.",
+  "the identity of the tree under test, however it is learned: the harness environment, the path the probe was handed at, the presence of a file only one tree can have, the binary's own bytes, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Almost nothing here is timing
+# adjacent -- the protocol is deterministic by construction and PYTHONHASHSEED is
+# fixed -- but a flake that costs a submission ten points is a bug in the
+# benchmark rather than a finding, and the depth and long-line cases are exactly
+# where a borderline timeout could produce one.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# One candidate, one tree: the build, then pytest.  The probe is produced once per
+# tree and cached, so only the first candidate of the six rounds pays for a
+# cold Zig build; 1500s is the ceiling for that one.
+candidate_timeout_sec = 1500.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It has no shell: `try_test` is how it runs anything, so a candidate that
+# would need to be executed some other way is out of scope by construction.
+#
+# Recorded here because it is easy to assume otherwise: the harness parses
+# `scope.deny_commands` and does not enforce it anywhere -- grep for it and the
+# only hit is the config dataclass.  So this stage does not have one.  What limits
+# a candidate mechanically is `screen-candidate.py`, which refuses an import that
+# could reach a shell, and the fact that `Probe()` takes no argument naming the
+# executable to run.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one YAML document, one
+operation, or one malformed protocol line that the Go answers one way and the Zig
+another. A round that finds nothing pays the submission 10 points; a round that
+errors pays nothing and is reported as an error rather than as either verdict.
+
+A candidate is a pytest file whose only import beyond the standard library is
+`srbyaml`, which starts one probe process and exchanges NDJSON with it. It is
+given the binary and nothing else -- no tree, no build directory, no install
+prefix -- because the question the stage asks is what the port does, and a
+candidate that reads the tree can answer a different question convincingly.
+
+The two trees are produced differently and that asymmetry is deliberate. The
+submission is built here with the published argv. The reference was built into the
+image from the pinned upstream tarball and verified there, because a reference that
+failed to build at grading time would make every candidate INVALID, every round
+SURVIVED, and the submission richer by 60 points for a broken verifier.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what the stage measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds all
+# find the same three obvious scalars; six pointed ones cover the library.  It
+# is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-scanner-errors-and-anchors"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+error strings, which are graded in full and are the most-produced output in
+the whole surface. The envelope: 'yaml: ' plus 'line N: ' when a mark has a
+line, the context mark preferred over the problem mark, scanner errors
+reported one line higher than recorded, and the envelope absent when neither
+mark has a line. Read scannerc.go's yaml_parser_set_scanner_error calls and
+parserc.go's, find inputs that reach the less-travelled ones, and check both
+the text and the line number.
+
+Then anchors and aliases through the node surface: an alias to an anchor
+defined later in the document, the same anchor name twice, an anchor on a
+document root, an anchor on a key rather than a value, an anchor with no
+reference, a recursive structure, an alias inside a flow collection, and an
+alias whose anchor is in a previous document of the same stream. Check the
+node shape each produces -- the anchor and alias fields, and what content an
+alias node has -- as well as the error text for an unknown anchor.
+"""
+
+[[adversary]]
+id = "a02-tag-resolution-and-block-scalars"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+resolve.go, which is a table of regular expressions and a pile of special
+cases. The int forms with underscores, 0o and 0x and a leading plus, base-60
+sexagesimals, floats with .inf and .NaN in every spelling and case, the bool
+set v3 narrowed relative to v2, the null spellings, the empty scalar, a scalar
+that looks numeric but overflows int64, and the boundary between a resolved
+tag and !!str. Also the verbatim forms: !!str on something numeric, a local !
+tag, an unknown !! tag, and %TAG directives that rewrite a prefix.
+
+Then literal and folded block scalars in both directions. Explicit indentation
+indicators including one smaller than the content, all three chomping modes
+against a block whose last line is blank, leading blank lines, a first line
+more indented than the rest, tabs inside the block, a block scalar as a
+mapping value on the same line as the key, and a block at the very end of a
+document with no trailing newline. Then emit each parsed node back and compare
+what the emitter chooses to write.
+"""
+
+[[adversary]]
+id = "a03-quoting-escapes-and-comments"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the scanner's escape table, which has 21 entries, and the emitter's inverse.
+Every escape it does have, several it does not -- \\/ is rejected even though
+JSON and YAML 1.2 allow it -- \\x \\u and \\U with too few and too many digits, a
+surrogate half, an escaped line break inside a double-quoted scalar, doubled
+quotes inside a single-quoted one, and a plain scalar containing every
+character that would force quoting on the way out.
+
+Then comment attachment, which the instruction admits is not obvious and which
+go-yaml v3 made structural. Which of head, line and foot a comment lands in,
+for a comment between two mapping entries, before and after a sequence item,
+on the line of a key versus the line of its value, before the first document
+marker, after the last node in a stream, indented deeper or shallower than the
+node it precedes, and several blank lines between a comment and what follows.
+Read decode_test.go and node_test.go first -- they encode the rules more
+precisely than any prose.
+"""
+
+[[adversary]]
+id = "a04-emit-indent-and-streams"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+emit_indent, where two clamps compose in a way that is easy to implement as
+one. Absent means 4; 0 also means 4, because zero is the encoder's unset
+marker; then anything below 2 or above 9 clamps to 2, so 1, 10 and 99 all give
+2. Check every value from -1 to 12, then check what each indent does to a
+sequence nested in a mapping, a mapping nested in a sequence, a flow
+collection inside a block one, and a block scalar's own indentation. Nothing
+is ever line-folded: a 200-column value stays on one line at any indent.
+
+Then multi-document handling through stream and emit_stream. Explicit and
+implicit document boundaries, ... with and without a following ---, a
+directive before the second document, %YAML 1.1 accepted and %YAML 1.2
+rejected with 'found incompatible YAML document', a %TAG whose scope ends at
+the document, an empty document between two real ones, content after a bare
+..., and the input that parses to zero documents -- which is an emit error
+with an empty out rather than empty output.
+"""
+
+[[adversary]]
+id = "a05-node-shape-and-protocol"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the node JSON as an object rather than as YAML semantics: the twelve keys in
+the declared order, the style bitfield as a sum where several bits can be set
+at once, line and column for a node whose token spans lines, the l and c
+fields, an empty content array against an absent one, the document node's own
+shape and its single child, and what a node carries when its tag was implicit.
+Two structurally identical documents written differently must differ here in
+exactly the fields that describe how they were written.
+
+Then the envelope rather than the YAML. One response per request in the order
+received, ids echoed exactly including a negative or very large one, an empty
+line skipped and left unanswered, a line that is not JSON, a line that is JSON
+but not an object, an unknown op, a missing source, a source that is a number,
+an unknown key, a missing indent on emit_indent versus an indent of 0, a
+request line several megabytes long, several requests in one write, and exit 0
+when stdin closes. Also the escaping rule: any op whose result contains a non-
+ASCII character, an astral one, a lone surrogate, a NUL, or the characters
+Go's encoding/json escapes and this protocol does not.
+"""
+
+[[adversary]]
+id = "a06-limits-unicode-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the edges where a Zig port most plausibly diverges from a Go one. Both depth
+caps at exactly 10,000 and 10,001, for flow and for block nesting, where the
+graded answer is an error and a stack overflow is not one. Then the byte
+level: a BOM at the start of a stream and in the middle, invalid UTF-8 in a
+scalar and in a key, an overlong encoding, a lone surrogate, a NUL byte, C1
+controls, a scalar of several megabytes, a mapping with many thousands of
+keys, and an alias chain long enough to matter.
+
+Then, with whatever budget remains, nothing in particular -- read the Go, read
+the Zig, and follow whatever looks weakest. The other five rounds were told
+where to look, and their briefs were written by someone who has not seen this
+submission.
+"""

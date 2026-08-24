@@ -1,0 +1,30 @@
+# Build products of the current (Autotools) build system.
+# Present so that `git status` is meaningful after an in-tree State A build.
+.deps/
+.dirstamp
+.libs/
+*.la
+*.lo
+*.o
+*.a
+*.so
+*.so.*
+*.log
+*.trs
+aclocal.m4
+autom4te.cache/
+build-aux/ar-lib
+config.log
+config.status
+configure
+configure~
+libtool
+Makefile
+Makefile.in
+stamp-h1
+src/libsodium/include/sodium/version.h
+libsodium.pc
+libsodium-uninstalled.pc
+libsodium-*.tar.gz
+libsodium-*.tar.bz2
+test/default/*.res

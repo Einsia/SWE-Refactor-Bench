@@ -1,0 +1,241 @@
+TASK {{task}} -- find what this port got wrong.
+
+QuickJS is a small embeddable JavaScript engine: about 75,000 lines of C, an
+interpreter (`qjs`), an ahead-of-time bytecode compiler (`qjsc`), a static library
+other programs link, and a handful of example binaries. It was written for
+little-endian machines and, in several places, says so -- some of them marked, some
+of them not.
+
+The submission is supposed to be the same engine, still correct on x86-64, and now
+correct on a big-endian target as well. Nothing about the language, the library or
+the command line was meant to change.
+
+It has already been checked that the port is real, and 458 recorded behavioural
+cases across three targets still get the right answer. Your job is the part those
+cases cannot do: find a program, a C API call, or a compile-and-run sequence that
+nobody thought to record, where the original is right and this tree is not.
+
+THE TWO TREES
+
+  {{original}}     upstream QuickJS, before the port
+  {{submission}}   the submission, which claims to work on both byte orders
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are read-only to you: you attack what they build, not what they
+contain. Read the C as much as you like -- it is the definition of the right
+answer, and it is the most productive thing you can do with the first part of your
+budget.
+
+Commands you may run directly: {{commands}}
+
+THREE TARGETS, AND WHY
+
+Everything is built three ways before your first candidate runs:
+
+  x86_64   native. Little-endian, 64-bit. The platform the original already
+           worked on, so it is where "did the port break something that used to
+           work" gets answered.
+  s390x    cross-compiled, run under qemu. BIG-endian, 64-bit. The platform the
+           port is about.
+  armhf    cross-compiled, run under qemu. Little-endian, 32-bit. A second
+           little-endian target, which is what separates a change that is really
+           about byte order from one that is about word size. A port that
+           conflated the two passes on s390x and breaks here.
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner builds it
+for all three targets with the published argv, then runs your file against the
+binaries. You are told the outcome on each tree separately. The builds happen once
+and are reused, so only your first candidate waits for them.
+
+Your file may import `srbqjs` and the standard library, and nothing else:
+
+    import srbqjs
+
+    def test_dataview_is_explicit():
+        src = 'var b=new ArrayBuffer(8),d=new DataView(b);' \
+              'd.setUint32(0,0x01020304,true);print(d.getUint32(0,false));'
+        want = srbqjs.reference(src)
+        assert want.ok, want
+        for target in srbqjs.TARGETS:
+            got = srbqjs.run_js(src, target)
+            assert got.ok, got
+            assert got.stdout == want.stdout, (target, got, want)
+
+`srbqjs` gives you:
+
+    run_js(source, target, args=..., stdin=..., module=..., cwd=...) -> Output
+        a JS source string on one target's `qjs`. Output has .returncode,
+        .stdout, .stderr (bytes), .ok, .timed_out and .text. A timeout returns
+        rather than raising, so "it hung" is something you can assert.
+    eval_js(expr, target)      `qjs -e`. Note this never loads a compiled blob.
+    run_all(source)            all three targets, as {target: Output}
+    agree(source)              the three targets plus the reference, and whether
+                               they all match
+
+    reference(source) / reference_eval(expr)
+        upstream QuickJS, built for x86-64 at image build time. The ground truth
+        for what an expression is worth. It takes NO target argument -- read WHAT
+        NOT TO CLAIM below, it is the most important paragraph here.
+
+    compiled(source, target, qjsc_args=("-e",), bswap=None) -> Output
+        source through the blob boundary: this build's HOST bytecode compiler
+        writes the bytecode, the TARGET's interpreter reads it, exactly as
+        `examples/hello` is built. Step one runs on x86-64 and step three on the
+        target. This is the mechanism of the whole task.
+
+        On a target whose byte order differs from the host it does NOT pick a
+        blob convention for you: it builds both with and without the writer's
+        swap flag and returns the run the target's own reader accepted. Which
+        convention a tree needs is a decision its port made, so it is out of
+        scope as a claim -- assert on what the program printed. Pass
+        bswap=True/False to pin it and compare the two yourself.
+    target_compiled(source, target)
+        the same, with the bytecode written by the qjsc built FOR the target, so
+        writer and reader share an order. Comparing the two tells you which half
+        of a partial port is missing.
+    artifact(name, target, args=...)
+        one of the binaries the build produced, run as shipped: "qjs", "qjsc",
+        "examples/hello", "examples/test_fib".
+    suite("tests/test_bignum.js", target) / reference_suite(...)
+        one of the repository's own test files, run the way its Makefile runs it,
+        with the flags that suite needs. Two of them fail in BOTH trees for
+        upstream reasons -- check with reference_suite before spending a candidate.
+    bjson(source, target)      source as a module with the tree's bjson.so beside
+                               it, so `import * as bjson from "./bjson.so"`
+                               resolves. That is how JS reaches JS_WriteObject
+                               directly. (`cwd=` on run_js will not do this: a
+                               relative import resolves against the importing
+                               file, not the working directory.)
+
+    CProgram(source, target).build() / .run()
+        a C program of yours, linked against that target's libquickjs.a. The only
+        route to the C API, and the API is where the serialiser lives. .build()
+        returns the compiler's output rather than raising, because "this compiles
+        against the original and not against the submission" is itself a finding.
+
+    TARGETS, BIG_ENDIAN, WORD_BITS   facts about each ABI, from its triple
+
+Do not read the tree under test from inside a test. What is graded is what the
+submission computes.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first is where most attempts die. Run every idea -- one call tells you which of
+the four outcomes you got, and you have budget for many.
+
+Then it has to assert on something that was promised. Two shapes are sound here,
+and everything in `srbqjs` is arranged to make them the easy ones:
+
+  1. The specification fixes this answer, so all three targets must agree.
+     `DataView.getUint32(0, true)` is little-endian on every machine ECMA-262
+     runs on. A JSON round trip, a typed array's element values, `String`
+     iteration over astral characters, the bit pattern `Math.fround` produces:
+     the standard says what these are, and the machine does not get a vote.
+
+  2. The original computes this on x86-64, so the submission must too. Use
+     `reference()`. Anything the standard leaves open -- how a number formats at
+     the seventeenth digit, what a particular error message says, `qjsc`'s output
+     for some flag -- upstream's x86-64 answer is the contract.
+
+WHAT NOT TO CLAIM
+
+The original is WRONG on s390x. That is the defect this task exists to remove. So
+a claim of the form "on s390x the submission should print what the original's own
+s390x build prints", or "these two targets must DISAGREE", passes on the original,
+fails on every correct submission, and reproduces every time -- it meets every
+mechanical condition for an upheld break while asserting the bug. It is out of
+scope, it will be thrown out on review, and the round will have been spent for
+nothing. This is the single most likely way to waste your budget on this task.
+
+`reference()` therefore takes no target argument. There is deliberately no way to
+ask upstream what it does on a cross target, because the answer is not evidence of
+anything.
+
+The same reasoning rules out two more:
+
+  * The bytes of a compiled blob. A port may fix the transport by making the
+    writer emit the target's order, or by making the reader accept either order.
+    Those ship different bytes and both are correct. What is answerable is
+    whether the binary runs and computes the right answer.
+  * Which tree you are looking at. The two trees are handed to you under opaque
+    per-run labels for a reason. A test that works out which one it has is not a
+    test.
+
+WHERE PORTS OF THIS KIND ACTUALLY FAIL
+
+Not in the interpreter's arithmetic, which is written in C and byte-order clean by
+construction. What gets left out:
+
+  * The compiled-bytecode boundary. `qjsc` on the host writes a blob; the target
+    reads it. Every width the format carries has to survive: string contents at
+    16 bits per unit, function headers, source-position tables, the constant pool,
+    RegExp compiled programs, and the atom table. A port that fixed the obvious
+    32-bit fields and left the 16-bit or 64-bit ones is the single most common
+    shape here. `compiled()` is the way in; `examples/hello`, `examples/test_fib`
+    and `qjs`'s own linked repl are the shipped instances of it.
+
+  * Bignum limbs. Arbitrary-precision integers are arrays of machine words, and
+    the serialiser writes some limbs through a shift loop and others through a
+    raw memory put. Only a wide BigInt *literal* in source reaches that path, and
+    only some values expose it. Read how the writer walks its limbs, work out
+    which values it puts raw, and pick one.
+
+  * Over-swapping. The other failure direction, and it shows up on x86-64 and
+    armhf rather than s390x: a port that byte-swaps unconditionally, or swaps a
+    field the format never asked to be swapped, breaks the platform that used to
+    work. `DataView` with an explicit `littleEndian` argument, typed arrays, and
+    `Atomics` are where a careless fix reaches too far.
+
+  * 32-bit versus big-endian. armhf is little-endian, so anything the port changed
+    that is really about word size fails there. A `#if` on the wrong macro, a limb
+    written at 64 bits on a 32-bit target, a pointer-sized field in a format.
+
+  * The C API's flags. `JS_WriteObject`, `JS_ReadObject`, `JS_WRITE_OBJ_BSWAP`,
+    the bytecode reader's own validation of a truncated or hostile input. Nothing
+    in the recorded cases calls any of them. `CProgram` does.
+
+  * The cross build itself. On a cross build upstream builds a second bytecode
+    compiler with the host compiler, because the target's cannot run here. A port
+    that broke that arrangement, or made the two disagree, is visible by comparing
+    `compiled()` with `target_compiled()`.
+
+  * The parts that are not the engine. `tests/bjson.so`, the shipped test files,
+    `qjsc` reading a bytecode file back, a truncated blob, an interpreter fed its
+    own output. Also: a crash, an abort, or a hang IS the finding on this task --
+    a misread length aborts far more often than it prints a wrong number.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. No
+clock, no randomness without a fixed seed, no dependence on the order two things
+happen in, and no wall-clock threshold -- qemu is roughly an order of magnitude
+slower than native and a timing assertion says nothing about correctness. The
+scratch directory is emptied between trees, so a file you leave behind cannot
+change the answer the other half of your own comparison gets; but a test that
+writes into a build tree can, so do not.
+
+HOW TO SPEND THE BUDGET
+
+Read first, but read with a question in mind, and run each candidate the
+moment it is written: a wrong attempt costs one call and tells you more than
+another hour of reading. There is no turn limit; the wall clock is the only
+budget. Search the original for what it says about byte order -- the honest
+markers, and then the places that assume it silently and say nothing. The
+second kind is where the port had to think, and where it may not have.
+
+Work in this order: pick one field the bytecode format carries, read how the
+writer emits it and how the reader takes it back, find the width or the path where
+the two could disagree across an order boundary, and write the smallest program
+whose answer depends on it. Then check it passes on the original -- on x86-64,
+where the original is right.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

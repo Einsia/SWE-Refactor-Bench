@@ -1,0 +1,53 @@
+# The `pt` profile: a road network with a timetable on top of it.
+#
+# A second configuration and a second launch, because the transit resources are
+# registered ONLY when the configuration names a GTFS file.  Under `config-base.yml`
+# the paths /route-pt, /isochrone-pt and /pt-mvt do not exist at all — not as 404s
+# from an unbound handler, but as routes that were never registered.  That
+# conditional registration is itself part of what has to be ported, and it cannot
+# be observed from a single configuration.
+#
+# Placeholders are the same four as config-base.yml, substituted the same way.
+#
+# The fixtures are the repository's own test data: the beatty OSM extract and the
+# two sample GTFS feeds that reader-gtfs tests against.  Two feeds rather than one,
+# because the configuration key is a comma-separated list and a port that treated
+# it as a single path would load the first and silently ignore the second.
+#
+# `prepare.min_network_size: 0` is upstream's value for this fixture and is
+# necessary rather than decorative: beatty is small enough that the subnetwork
+# pruning a road-only graph wants would remove most of it, and the walk legs of a
+# transit itinerary depend on what survives.
+
+graphhopper:
+  datareader.file: @REPO_ROOT@/reader-gtfs/files/beatty.osm
+  gtfs.file: @REPO_ROOT@/reader-gtfs/files/sample-feed,@REPO_ROOT@/reader-gtfs/files/another-sample-feed
+  graph.location: @GRAPH_DIR@
+  profiles:
+    - name: foot
+      custom_model_files: [foot.json]
+    - name: car
+      custom_model_files: [car.json]
+  graph.encoded_values: car_access, car_average_speed, foot_access, foot_priority, foot_average_speed, roundabout, road_class, road_environment, road_access, foot_road_access, hike_rating, foot_network, smoothness, surface, track_type, max_speed, road_class_link, lanes, average_slope, max_slope, country, mtb_rating
+  prepare.min_network_size: 0
+  prepare.subnetworks.threads: 1
+  graph.dataaccess.default_type: RAM_STORE
+  import.osm.ignored_highways: ""
+
+server:
+  application_connectors:
+    - type: http
+      port: @APP_PORT@
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: @ADMIN_PORT@
+      bind_host: 0.0.0.0
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

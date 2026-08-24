@@ -1,0 +1,228 @@
+TASK {{task}} -- find what the migration got wrong.
+
+go-yaml is the YAML library nearly every Go program uses: a scanner and parser
+descended from libyaml, a tag resolver, an emitter, and a document model that
+keeps anchors, styles and comments as structure. The original is about 8,700 lines
+of Go. The submission is supposed to be the same library reimplemented in Zig --
+same parse results, same emitted bytes, same error strings -- with the Go gone.
+
+Same answers means byte for byte. It has already been checked that the migration
+is real, and that several thousand recorded cases over the scanner, the resolver,
+the emitter, the node model and the protocol still get the right bytes back. Your
+job is the part those cases cannot do: find an input that nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original library, Go
+  {{submission}}   the submission, which claims to be the same library in Zig
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack the built artifact, not the source. Read the Go as much as you like -- it is
+the specification of what the answer should be, and reading it is the most
+productive thing you can do here. `scannerc.go`, `parserc.go`, `resolve.go`,
+`emitterc.go` and `decode.go` are where the answers live.
+
+Commands you may run directly: {{commands}}
+
+WHAT THE ARTIFACT IS
+
+Both trees build one executable, `yaml-probe`, which speaks NDJSON on stdin and
+stdout: one JSON object per line in, one per line out, in order, flushed per line,
+exit 0 on EOF. That is the whole interface, and it is the entire graded surface.
+
+    {"id":1,"op":"node","source":"a: 1\n"}
+    {"id":1,"ok":true,"result":{...}}
+
+The operations are `hello`, `node`, `stream`, `emit`, `emit_indent`, `emit_stream`
+and `roundtrip`. A failure comes back as
+`{"id":N,"ok":false,"error":{"kind":...,"message":...}}` with `kind` one of
+`YamlError`, `ProtocolError` or `Panic`.
+
+Responses are compared byte for byte, and the encoding is part of the contract: no
+whitespace outside string literals, keys in the declared order and never sorted,
+0x20-0x7E literal except quote and backslash, the five short escapes, and every
+other code point as lowercase `\uXXXX` with surrogate pairs above U+FFFF. Every
+response is therefore pure ASCII. The submission's own instruction spells this out,
+so a submission that gets it wrong got it wrong having been told.
+
+Error strings are graded in full: `yaml: ` then `line N: ` when a mark has a line,
+then the problem text, where the line comes from the context mark if there is one
+and the problem mark otherwise -- and scanner errors report one line higher than
+they record. This is the largest and least-loved part of the surface.
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner produces
+that tree's `yaml-probe` and runs your file against it, and you are told the
+outcome on each tree separately. The build happens once per tree and is reused, so
+only your first candidate waits for it.
+
+You are given the executable and nothing else -- no tree, no build directory, no
+source. That is deliberate, and the rules below are mechanical rather than
+advisory, because a candidate that reads its surroundings can tell which side it is
+on and simply say so: it passes on the original, fails on the submission,
+reproduces perfectly, and establishes nothing at all.
+
+So, before your file runs, it is checked. It may import `srbyaml`, `pytest`, and a
+list of standard-library modules covering text, bytes, numbers, JSON, hashing,
+dates and Unicode. It may not import `os`, `subprocess`, `pathlib`, `socket` or
+`importlib`, may not call `open`, `eval`, `exec` or `__import__`, may not name a
+harness path or variable, and may not ask pytest where it was started. A file that
+does is refused on *both* trees with the reason on stderr, so a refusal costs you
+one attempt and tells you exactly which line to change.
+
+String literals are exempt: your YAML is your data, and `"path: /opt/thing"` is an
+ordinary thing to feed a parser. The check only looks at code.
+
+Your file may import `srbyaml` and the standard library, and nothing else:
+
+    import srbyaml
+    from srbyaml import probe, doc_root, at
+
+    def test_merge_key_is_not_resolved():
+        r = probe().node("<<: {a: 1}\nb: 2\n")
+        assert r.ok, r
+        assert at(doc_root(r), 0)["value"] == "<<", r
+
+`srbyaml` gives you:
+
+    probe()                     the shared process for this file; restarts it if
+                                a previous request killed it
+    probe().hello()             the handshake
+    probe().node(source)        parse one document -> a node tree
+    probe().stream(source)      parse a stream -> a list of document nodes
+    probe().emit(source)        parse then emit, default indent
+    probe().emit_indent(s, n)   parse then emit at indent n; n is required and
+                                positional, because absent and 0 differ
+    probe().emit_stream(source) parse a stream then emit all of it
+    probe().roundtrip(source)   parse, emit, and report both
+
+    probe().ask(op, source, id=..., **extra)   any op, by name
+    probe().send({...})         an arbitrary request object, for a missing key,
+                                a wrong type, an unknown op
+    probe().send_raw(b"...")    a line that is not JSON at all
+
+    Probe()                     your own process, if you need to control the
+                                boundary -- several requests down one session,
+                                or a session you watch exit:
+
+                                    with srbyaml.Probe() as p:
+                                        p.ask("node", "a: 1")
+                                    assert p.exit_code == 0
+
+Every call returns a `Response`: `.ok`, `.id`, `.result`, `.error`, `.kind`,
+`.message`, `.raw` (the exact bytes of the line, for the encoding assertions), and
+the per-operation shortcuts `.node`, `.docs`, `.out`, `.stream_error`. The
+shortcuts return an empty value rather than raising on an error response, so
+`assert r.out == "..."` fails with the whole response in the message instead of a
+KeyError three frames down. Put the response in your assertion message -- `assert
+r.ok, r` -- and the report will contain what actually came back.
+
+For reading node trees: `doc_root(r)`, `kids(n)`, `walk(n)`, `at(n, *path)`,
+`mapping(n)`, `pairs(n)`, `summarize(n)`, and the style bits `TAGGED`,
+`DOUBLE_QUOTED`, `SINGLE_QUOTED`, `LITERAL`, `FOLDED`, `FLOW`.
+
+A probe that dies mid-session raises `srbyaml.ProbeDied`. That is assertable with
+`pytest.raises` and it is a legitimate finding: the protocol says the process reads
+until EOF, so one that exits early or crashes has diverged, and a crash on the Zig
+where the Go answers is one of the more likely things you will find here.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first is where most attempts die: a test that fails on both trees has found a
+bug in your test, or a behaviour go-yaml v3.0.1 never had. Run every idea -- you
+have budget for many, and one call tells you which of the four outcomes you got.
+
+Do not guess at what the Go does. Run it. `try_test` gives you the original's
+result on every attempt, so the cheapest way to learn v3.0.1's behaviour on some
+horrible input is to write the assertion you expect, run it, and read which way it
+went. A candidate built on a guess about the Go usually fails on both trees.
+
+Then it has to assert on something that was promised. The scope below is the graded
+surface; a divergence outside it is thrown out on review no matter how real it is,
+and you will have spent the budget for nothing. In particular this library's typed
+`Marshal`/`Unmarshal` surface -- anything involving Go's `reflect` -- is explicitly
+not part of the migration, is not reachable through any operation, and is not worth
+a candidate.
+
+WHERE REWRITES OF THIS KIND ACTUALLY FAIL
+
+Not on `a: 1`. Every submission parses a mapping. What gets left out:
+
+  * Error strings and their line numbers. The single largest surface, and the one
+    most often approximated. Every `yaml_parser_set_scanner_error` call in
+    `scannerc.go` has exact text and an exact mark, the context mark wins over the
+    problem mark, and scanner errors are reported one line higher than they are
+    recorded. A rewrite that invents its own messages, or that picks the wrong mark,
+    fails on inputs nobody recorded.
+
+  * The resolver's accidents. `resolve.go` is a table plus special cases, and it
+    resolves YAML 1.1 forms with 1.2 semantics because that is how the library
+    grew. Base-60 integers. Underscores in numbers. The bool set v3 narrowed from
+    v2. `.inf` in each spelling. A value that keeps its original lexeme -- `1.00`
+    stays `1.00` -- while resolving to `!!float`. A rewrite that reaches for its
+    language's own number parser diverges here immediately.
+
+  * Comment attachment. v3 made comments structural, as head, line and foot, and
+    the rules are genuinely unobvious: a comment between two mapping entries can
+    belong to either, and which one it lands on depends on indentation and blank
+    lines. `decode_test.go` and `node_test.go` encode the rules more precisely than
+    any prose.
+
+  * The emitter's choices. Which scalars get quoted and with which quote, when a
+    block scalar is written back as a block scalar, the two composing indent
+    clamps -- absent means 4, 0 also means 4, and anything below 2 or above 9
+    clamps to 2 -- and the fact that nothing is ever line-folded no matter how long
+    the line, because the default width is effectively infinite.
+
+  * The two depth caps, at 10,000 each, for flow level and indent stack. Depth
+    10,000 must parse and 10,001 must fail with the exact message. Go grows its
+    stacks; a recursive-descent Zig parser on a default stack does not, and a
+    segfault at depth 900 is not the graded answer. This is one of the most
+    reliable places to find a real divergence.
+
+  * The protocol envelope, which is not YAML at all. An id echoed exactly. An empty
+    line skipped without a response. A line that is not JSON. An unknown op. A
+    missing key against a key of the wrong type. A missing `indent` against an
+    `indent` of 0. Several requests written at once. A line several megabytes long.
+    And the escaping rule, which is where a submission that reached for a
+    general-purpose JSON encoder shows it: `<`, `>`, `&`, U+2028, a lone surrogate,
+    invalid UTF-8, a NUL.
+
+  * The byte level. A BOM at the start and in the middle of a stream. Invalid UTF-8
+    in a key. An overlong encoding. A lone CR as a line ending. Tabs where the
+    scanner's rules about them are subtle. C1 controls in a plain scalar.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run three times and has to give the same answer every
+time. Write deterministic tests: no clock, no randomness without a fixed seed, no
+dependence on the order two things happen in, no assertion about how long something
+took. A flaky candidate is discarded even when the divergence it found is real.
+
+The probe process is shared across the tests in one file, so a test that leaves the
+process in a strange state affects the next one. Use `srbyaml.reset()` if that
+matters to you, or `Probe()` for a session of your own.
+
+HOW TO SPEND THE BUDGET
+
+Read first, but read with a question in mind. `scannerc.go` is right there,
+and it is the definition of the answer -- but run each candidate the moment it
+is written: a wrong attempt costs one call and tells you more than another hour
+of reading. There is no turn limit; the wall clock is the only budget.
+
+Work in this order: pick a mechanism, read how the Go implements it, find the case
+where its behaviour is incidental rather than specified -- a mark chosen one way
+rather than another, a table entry with a special case, a clamp applied twice, a
+lexeme preserved instead of reformatted -- and write the assertion that pins it.
+That is the kind of thing a reimplementation does not reproduce by accident.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

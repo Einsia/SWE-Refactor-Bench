@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" creator="SWERefactorBench" version="1.1">
+<metadata>
+<name>fw07 map-matching fixture: Carretera General, Andorra</name>
+<desc>Fourteen points along a 2366 m highway=primary way, taken from the node
+coordinates of core/files/andorra.osm.gz itself and thinned to every seventh
+point. Derived from the graph's own input rather than hand-typed so the trace is
+guaranteed to lie on a road the car profile can traverse: an invented trace would
+map-match to something on both sides and the differential would still pass, while
+quietly grading the error path instead of the matcher. Timestamps are fixed at
+8 s spacing from a constant instant, not generated, because this file is committed
+and both sides must be asked about identical bytes.</desc>
+<copyright author="OpenStreetMap contributors"/>
+</metadata>
+<trk><name>fw07 andorra car trace</name><trkseg>
+<trkpt lat="42.622749" lon="1.534685"><time>2024-01-01T08:00:00Z</time></trkpt>
+<trkpt lat="42.624281" lon="1.531010"><time>2024-01-01T08:00:08Z</time></trkpt>
+<trkpt lat="42.624654" lon="1.528730"><time>2024-01-01T08:00:16Z</time></trkpt>
+<trkpt lat="42.625841" lon="1.527244"><time>2024-01-01T08:00:24Z</time></trkpt>
+<trkpt lat="42.626395" lon="1.526015"><time>2024-01-01T08:00:32Z</time></trkpt>
+<trkpt lat="42.626891" lon="1.524582"><time>2024-01-01T08:00:40Z</time></trkpt>
+<trkpt lat="42.627499" lon="1.523942"><time>2024-01-01T08:00:48Z</time></trkpt>
+<trkpt lat="42.628681" lon="1.523537"><time>2024-01-01T08:00:56Z</time></trkpt>
+<trkpt lat="42.629560" lon="1.522644"><time>2024-01-01T08:01:04Z</time></trkpt>
+<trkpt lat="42.630326" lon="1.521024"><time>2024-01-01T08:01:12Z</time></trkpt>
+<trkpt lat="42.631042" lon="1.518270"><time>2024-01-01T08:01:20Z</time></trkpt>
+<trkpt lat="42.631591" lon="1.515820"><time>2024-01-01T08:01:28Z</time></trkpt>
+<trkpt lat="42.632130" lon="1.513707"><time>2024-01-01T08:01:36Z</time></trkpt>
+<trkpt lat="42.631681" lon="1.512676"><time>2024-01-01T08:01:44Z</time></trkpt>
+</trkseg></trk></gpx>

@@ -1,0 +1,52 @@
+// SWERefactorBench build02 — offline plumbing for Gradle.
+//
+// Supplied by the environment, not by the submission. Both the trial container
+// and the verifier container have this file at ~/.gradle/init.d/, identically.
+// It exists because the containers have no network:
+//
+//   1. every repository resolves against the pre-populated local Maven
+//      repository (~/.m2/repository), which is also where Maven itself looks;
+//   2. the Gradle Plugin Portal is unreachable, so the plugin ids this build
+//      needs are mapped to the vendored plugin modules by hand.
+//
+// It does not configure the build. It supplies no plugins, no tasks, no
+// conventions — only where artifacts come from.
+
+def PLUGIN_MODULES = [
+    // bnd — OSGi manifest generation
+    'biz.aQute.bnd'            : 'biz.aQute.bnd:biz.aQute.bnd.gradle:6.4.0',
+    'biz.aQute.bnd.builder'    : 'biz.aQute.bnd:biz.aQute.bnd.gradle:6.4.0',
+    // protobuf — protoc codegen
+    'com.google.protobuf'      : 'com.google.protobuf:protobuf-gradle-plugin:0.9.4',
+    // ProGuard — obfuscation.  Both ids resolve and NEITHER can apply: the jar
+    // registers one descriptor, com.guardsquare.proguard, whose plugin requires
+    // the Android plugin, and nothing registers the bare `proguard` id at all.
+    // A mapping here only means the module is fetchable, not that the plugin
+    // works -- `apply false` will not tell you the difference, because Gradle
+    // defers the descriptor lookup to apply time.  They are kept mapped so a build
+    // that requests one fails at apply with Gradle's own message rather than as an
+    // unresolvable module.
+    'com.guardsquare.proguard' : 'com.guardsquare:proguard-gradle:7.2.2',
+    'proguard'                 : 'com.guardsquare:proguard-gradle:7.2.2',
+]
+
+gradle.beforeSettings { settings ->
+    settings.pluginManagement.repositories {
+        mavenLocal()
+    }
+    settings.pluginManagement.resolutionStrategy.eachPlugin { details ->
+        def coords = PLUGIN_MODULES[details.requested.id.id]
+        if (coords != null) {
+            details.useModule(coords)
+        }
+    }
+}
+
+gradle.allprojects { p ->
+    p.repositories {
+        mavenLocal()
+    }
+    p.buildscript.repositories {
+        mavenLocal()
+    }
+}

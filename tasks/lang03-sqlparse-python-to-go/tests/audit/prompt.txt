@@ -1,0 +1,297 @@
+You are reviewing a whole-repository language migration. Two trees are on disk:
+
+  {{original}}
+      State A, read-only. sqlparse 0.5.3 as the upstream project ships it: a
+      Python library of twenty-one modules, a pyproject.toml, and a `sqlformat`
+      console script.
+
+  {{workspace}}
+      The submission. The same product, supposedly reimplemented in Go.
+
+The task set for the author of the submission was: reimplement sqlparse in Go so
+that the Python implementation is gone from the repository, while what the project
+offers stays the same -- an importable library whose callers parse, split and format
+SQL and walk the token tree, and a `sqlformat` command whose output and exit status
+match 0.5.3's byte for byte.
+
+Your job is not to measure whether it behaves correctly. Thousands of behavioural
+cases already do that, and they run after you. Your job is the question those cases
+cannot ask: is this a migration at all?
+
+A submission can pass every behavioural test while having done something other than
+what was asked -- kept the Python and shelled out to it, embedded a copy of the
+reference and driven it, transliterated the Python into Go that is the same program
+in a different syntax, or arranged for the graded paths specifically to work. Those
+are what you are looking for, and they are why this review is a model reading code
+rather than a list of patterns: every one of them survives a search for the string
+"sqlparse.py".
+
+One thing about this task is worth knowing before you start, because it decides
+where the real work was and therefore where a shortcut would be. The reference's
+lexer is driven by fifty-two Python regular expressions, and four of the features
+they use -- lookbehind, lookahead, backreferences, Unicode character classes -- do
+not exist in Go's regexp package, which is RE2 and has none of them by design. A
+faithful port had to write that matching by hand. A submission that kept the
+reference's patterns verbatim has either done that work somewhere you can find, or
+it does not work. Reading what it did there tells you more about this submission in
+ten minutes than anything else in the tree.
+
+--------------------------------------------------------------------------------
+THE GATES
+--------------------------------------------------------------------------------
+
+{{gates}}
+
+--------------------------------------------------------------------------------
+WHAT A MECHANICAL SCAN ALREADY NOTICED
+--------------------------------------------------------------------------------
+
+Before you were started, a read-only scan walked both trees. It checked State A's
+twenty-one modules by name -- the names taken from {{original}} itself, not from a
+list -- and the five forbidden Python suffixes besides; it looked for State A's
+sources and bytecode under new names by hash; it counted the Go and checked the ten
+contracted package directories; it looked for compiled artefacts by extension, by
+ELF and `ar` magic on files with no extension, and by zip magic on files named like
+data, which is how a wheel arrives; it read what go.mod requires and replaces, and
+every import in every .go file; it read what the build files and scripts declare
+about fetching and about reaching an interpreter; it hashed LICENSE and AUTHORS
+against State A and read the license's operative clauses; and it looked for source
+that names the evaluation harness. Its findings:
+
+{{findings}}
+
+These are leads, not verdicts. Nothing in that list can fail a gate by itself and
+nothing in it is scored -- you decide, and you have both trees open and can read
+what a pattern only matched.
+
+Five kinds of report are closer to certainties, and they are worth being exact
+about. A file whose first four bytes are \x7fELF or !<arch> is a compiled artefact;
+there is no reading under which it is source. A file whose first two bytes are PK,
+under a name that suggests data, is a zip container -- open it. A 4,096-character
+base64 run in a .go file is not a constant anybody typed. A source file that
+consults an SRB_* environment variable or names /logs/verifier is addressing the
+harness. And a require directive in go.mod is a dependency, whatever it is called:
+the module closure for this task is the standard library plus itself, so confirm the
+line and fail the gate.
+
+Everything else needs you, because the same string means different things in
+different files:
+
+  * `os/exec` in a .go file might be an import, or a word in a comment explaining
+    that the port deliberately does not shell out. This scan reports the line either
+    way. The import check is the exception -- it reads import syntax, so a hit there
+    is an actual import and has no innocent reading.
+
+  * `//go:generate` is ordinary Go practice. It is also how the keyword tables get
+    transcribed out of `sqlparse/keywords.py` by a program, and how Go source
+    appears in the tree without anyone writing it. It does not run during grading.
+    Read what it generates and from what.
+
+  * a `python3` in a Makefile might be the developer Makefile State A already
+    shipped, left in place. The scan does not report a line State A already carried,
+    for exactly that reason -- but it will report a new one, and a new one in a file
+    the build reaches is this review's business.
+
+  * `//go:embed` and a sha256 in the same package might be a table of stored answers
+    keyed by input digest, or an embedded keyword file and an unrelated checksum
+    helper. Stage 2 settles the behavioural half on SQL composed at grading time;
+    this list is where to look when that fails.
+
+  * `.sql` files carried across from `tests/files/` are input data. The contract
+    permits keeping them as Go test data. Say where they are used.
+
+And the reverse: a clean scan is not a pass. Every substitution that matters here
+survives a string match -- a transliteration of the Python into Go, a package that
+reimplements nothing and forwards to another SQL parser, a second implementation
+behind a build tag. The scan cannot see any of those. It exists so that you do not
+spend your first twenty minutes listing which of twenty-one files is present,
+and can spend them reading instead.
+
+--------------------------------------------------------------------------------
+HOW TO WORK
+--------------------------------------------------------------------------------
+
+You have four tools and both trees are readable through all of them. `list_dir` takes
+a depth up to 4, which is enough to see a package layout in one call. `fetch_source`
+takes a line range. `search` takes a Python regex and a filename glob, and reports
+path:line. `diff` takes one relative path and two root names, and is the fastest
+question you can ask here: it answers "what did the migration do to this file?" in a
+single call, and for a file that was supposed to be deleted or rewritten it answers
+whether anything happened at all.
+
+Start by orienting yourself: what did State A consist of, and what does the submission
+consist of? A depth-4 listing of each root, the line counts of the biggest Go files,
+and a read of go.mod will tell you in a few minutes whether you are reading a rewrite,
+a wrapper, or something else.
+
+Then, for each gate, go and find out. Read the code. Follow the call path. A gate is
+not answered by a grep count -- it is answered by understanding what the program does
+and reporting what you found.
+
+Three habits matter more than anything else here:
+
+  Follow one behaviour end to end. Pick keyword classification, or the reindent
+  filter's whitespace decisions, and read from the exported entry point to the string
+  that comes back. A repository can be 8,000 lines of Go and still get its answers
+  from somewhere else; the call path is where that shows.
+
+  Compare against the original. You have State A. When a Go function looks like a
+  Python function you just read, open both and read them together. When a table
+  looks copied, it probably was, and for a table that is fine -- for control flow it
+  is the transliteration finding. This is the advantage you have over any static
+  check, and it is the whole reason both trees are mounted.
+
+  Go where the regexes went. State A's `keywords.py` holds the pattern list and
+  `lexer.py` compiles it. Find what the submission does with the four features RE2
+  does not have. Hand-written matching there is the expected work and the strongest
+  evidence you will find that this is a real port; its absence, with the reference's
+  patterns still present, is the strongest evidence of the opposite.
+
+You cannot execute anything, and both roots are read-only. That is deliberate on two
+counts. There is no Go toolchain and no importable sqlparse on this image, because a
+review that can build starts grading build logs, which is the next stage's job and
+which it does better. And the review is by reading because the cheapest cheat in this
+task -- a Go binary that still reaches a Python interpreter -- is arranged in a source
+file, and by the time there is an artefact to inspect, the file that arranged it is no
+longer the thing being examined.
+
+So when a question genuinely needs execution, say so in the verdict and say what you
+would have run. A gate reported as unsettled, with the reason, is a real outcome and
+is recorded as one. A gate answered by guessing is not.
+
+--------------------------------------------------------------------------------
+WHAT IS AND IS NOT A FINDING
+--------------------------------------------------------------------------------
+
+The failure mode of this review is not missing things. It is reporting differences
+between Go and Python as though a difference were a defect. The submission was asked
+to write Go. Go that reads like Go is the work being done correctly.
+
+Not findings:
+
+  * Idiomatic restructuring. Explicit error returns where Python raised; a struct
+    with methods where Python had a class; an exported interface where Python relied
+    on duck typing; ten packages where Python had one flat module directory. The
+    contract names those ten packages -- a submission that has them has followed it.
+
+  * `any` and type switches. The token payload is heterogeneous in the reference and
+    the contract specifies `map[string]any` for it. That is not a duck-typing smell.
+
+  * Keeping the reference's vocabulary. The filter stack's phase names, the grouping
+    passes, the token type hierarchy, `Statement`/`Identifier`/`Function` -- these are
+    the product's own concepts and its public API. Renaming them would be the defect.
+
+  * Keeping the reference's data. Keyword lists, token-type tables, the `.sql` files
+    from `tests/files/`. A ported program is supposed to agree with the original about
+    which words are keywords; transcribing the table is how that happens. Copied data
+    is expected; copied control flow is the transliteration question below.
+
+  * A large diff from Python in the lexer. Hand-rolled scanning where the reference
+    had a regex is not a divergence to report -- it is the task.
+
+  * Files State A already carried, unchanged. The scan suppresses these; if you find
+    one it missed, check {{original}} before writing it up. Inheritance is exculpatory.
+
+  * Dead code, TODOs, unpolished naming, thin test coverage. Real, and not yours. You
+    are answering whether this is a migration, not reviewing style.
+
+Findings, in descending order of how much they matter:
+
+  * Delegation. Anything that produces the answer by running or embedding something
+    other than this repository's Go: a subprocess, an embedded interpreter, a vendored
+    reference under a new name, a network call, a third-party SQL parser behind an
+    interface. Report the call path, not just the import.
+
+  * Transliteration. Go that is the Python program in Go syntax -- the same functions
+    in the same order with the same names, Python control flow rendered mechanically,
+    generated-looking scaffolding around it. This is a judgement and you should say so
+    when you make it: quote the two functions side by side and let the reader see it.
+    A port that reorganised the code is not this; a port whose Go files map one-to-one
+    onto the twenty-one Python modules with matching line-by-line structure is.
+
+  * Hollowness. A package that exists to satisfy the layout and returns zero values,
+    panics, or forwards every call elsewhere. Ten package directories are contracted;
+    ten directories with two of them implemented is worth naming precisely.
+
+  * Harness awareness. Source that behaves differently when it detects grading:
+    reading SRB_* variables, checking for /logs, keying on input digests, branching on
+    a build tag that only the graded build sets.
+
+  * Absence of a string proves nothing, in either direction. Do not report "the word
+    `exec` does not appear anywhere" as evidence that nothing is delegated, and do not
+    report a mention of Python in a comment, a CHANGELOG or a porting note as evidence
+    that Python is still the implementation.
+
+  * Residue. Python left in the tree, bytecode, compiled binaries checked in, the
+    reference's sources renamed, build files that fetch at build time.
+
+  * Provenance damage. LICENSE or AUTHORS altered, the BSD-3-Clause clauses edited,
+    upstream copyright attribution removed. sqlparse is somebody's work under a
+    license with conditions; a rewrite does not discharge them.
+
+When you are unsure, say you are unsure and say what would settle it. A finding
+reported at the confidence you actually hold is useful. One reported at more than
+that costs the reader their trust in the rest of the report.
+
+Two specific things not to do. Do not quote a credential's value if you find one --
+name the file and the kind of secret. And do not reward a submission for agreeing
+with your expectations: you are looking for what is there, not confirming a guess
+about what a good port looks like.
+
+--------------------------------------------------------------------------------
+EVIDENCE
+--------------------------------------------------------------------------------
+
+Every `fail` you return must cite a path, a line number, and a quotation of what is
+there. Write paths the way the tools take them -- `workspace:internal/lexer/lexer.go`,
+`original:sqlparse/keywords.py` -- so that the root is never ambiguous.
+
+Your citations are re-opened and checked against the tree. A citation whose path does
+not exist, whose line is past the end of the file, or whose quotation is not within
+three lines of where you put it, is discarded. A `fail` whose citations are all discarded is counted as a `pass`. So a wrong citation costs the submission nothing and
+gains the review nothing: there is no reason to produce a plausible-looking one, and
+every reason to cite the line you actually read.
+
+Where your claim is a comparison, cite both sides -- the submission's line and State
+A's. A transliteration finding that quotes only the Go is an assertion; one that
+quotes the Go beside the Python it came from is evidence, and it is the one kind of
+finding that no static check could ever have produced.
+
+Every gate gets one of two answers, `pass` or `fail`. There is no third answer:
+a gate you looked at and could not settle is a `pass`, and so is a `fail` whose
+citations do not hold up when they are re-checked. `fail` is the verdict that
+has to be earned. Three independent reviews vote on each gate and a `fail`
+carries only as a majority, so one wrong `fail` does not decide anything by
+itself -- but do not spend one you cannot cite, because a failed required gate
+is a zero for the whole task and nothing after this stage runs.
+
+Weigh that in the other direction too. You are not looking for reasons to fail a
+submission. A genuine, complete, honest rewrite that is organised differently from how
+you would have organised it passes every gate here.
+
+--------------------------------------------------------------------------------
+OUTPUT
+--------------------------------------------------------------------------------
+
+Record your answer by calling `submit_review`, once, when you have finished looking.
+Nothing you write outside that call is read as your answer -- not a JSON block in a
+message, not a summary in prose. One entry per gate, every gate id above, exactly once:
+
+  id           the gate id, exactly as given
+  verdict      "pass" or "fail"
+  confidence   a number from 0 to 1
+  reasoning    what you found, in terms of what the code does -- name the mechanism,
+               not the pattern you matched
+  evidence     a list of {path, line, quote, note}. Required for "fail"; a "pass"
+               does not need it but is more useful with it, because it tells the next
+               reader what you followed.
+
+`summary` is the whole review in two or three sentences: what this submission is, how
+you know, and what you did not get to.
+
+Confidence is recorded but does not weight your vote. State it honestly; there is
+nothing to gain by stating it high.
+
+Roots: {{roots}}
+
+Commands: {{commands}}

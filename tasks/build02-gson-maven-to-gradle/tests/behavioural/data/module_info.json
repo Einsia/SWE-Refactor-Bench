@@ -1,0 +1,55 @@
+{
+ "entry": "META-INF/versions/9/module-info.class",
+ "major": 53,
+ "module": {
+  "exports": [
+   {
+    "flags": 0,
+    "package": "com.google.gson",
+    "to": []
+   },
+   {
+    "flags": 0,
+    "package": "com.google.gson.annotations",
+    "to": []
+   },
+   {
+    "flags": 0,
+    "package": "com.google.gson.reflect",
+    "to": []
+   },
+   {
+    "flags": 0,
+    "package": "com.google.gson.stream",
+    "to": []
+   }
+  ],
+  "name": "com.google.gson",
+  "open": false,
+  "opens": [],
+  "provides": [],
+  "requires": [
+   {
+    "name": "java.base",
+    "static": false,
+    "transitive": false,
+    "version": null
+   },
+   {
+    "name": "java.sql",
+    "static": true,
+    "transitive": false,
+    "version": null
+   },
+   {
+    "name": "jdk.unsupported",
+    "static": true,
+    "transitive": false,
+    "version": null
+   }
+  ],
+  "uses": [],
+  "version": "2.10.1"
+ },
+ "this_class": "module-info"
+}

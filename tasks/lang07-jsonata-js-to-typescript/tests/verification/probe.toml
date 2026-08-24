@@ -1,0 +1,477 @@
+# --------------------------------------------------------------------------- #
+# lang07 stage 3: the verification rounds
+# --------------------------------------------------------------------------- #
+# Six independent attempts to find one expression, one input or one request that
+# State A's JavaScript answers one way and the submitted TypeScript another. A
+# round that finds nothing pays the submission 10 points; a round that errors pays
+# nothing and is reported as an error rather than as either verdict.
+#
+# A candidate counts only when four things hold: it passes on the original, it
+# fails on the submission, it reproduces `reruns` times, and it is in scope. The
+# first three are mechanical and run first because they are cheap and discard most
+# of what arrives. The fourth is a reading, so an adjudicator reads it against the
+# allow and deny statements below.
+#
+# The asymmetry worth stating in this file, because it is where the harness for it
+# lives: condition 1 means anything that stops the *original* from working converts
+# every candidate into "fails on the original" and silently pays the submission all
+# sixty points. A broken stage 3 does not fail loudly -- it awards full marks. So
+# `run-candidate.sh` scrubs by name and never by glob, the harness writes only
+# beside the trees and never inside them, and `check-probe.py` exists to run real
+# candidates through the real image and assert the original still works afterwards.
+#
+# WHAT IS DIFFERENT ABOUT THIS PAIR, AND WHY THIS FILE IS NOT `tommy`'S
+#
+# (`tommy` is a C#-to-TypeScript pair, the compiled-reference shape this task's
+# design was settled against.  It is named by slug throughout, never by number.)
+#
+# On every other language task the reference is written in a language the
+# submission's image cannot run: tommy's State A is C# and `dotnet` is shimmed to
+# exit 127, so leaving the reference readable costs nothing. Here both sides are
+# `node`. State A's `src/jsonata.js` is a complete, working implementation that a
+# dishonest submission could answer every candidate with in one `require`, and no
+# toolchain can be withheld to prevent it because the submission needs the same
+# runtime. The defence is therefore filesystem permissions rather than absence:
+# the published reference is root-owned and mode 0700, the harness's staged trees
+# are made unreadable to the probe user before the submission builds, and both the
+# submission's build and its probe run as an unprivileged user. That is asserted
+# from the finished image rather than assumed, and it is the reason this stage has
+# a `run-candidate.sh` that is not a copy of tommy's.
+schema = "swerefactor.verification-probe/1"
+task = "lang07-jsonata-js-to-typescript"
+prompt = "prompt.txt"
+# Absolute, because the harness runs this with its cwd set to a salted copy of the
+# tree under test, not to this directory.  A bare `run-candidate.sh` is looked for
+# at the root of the jsonata checkout, is not there, and every candidate comes back
+# exit 127 -- which the round reads as "does not pass on the original", so no
+# candidate can ever count and all six rounds award their ten points untested.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# Scope
+# --------------------------------------------------------------------------- #
+# Scope is what keeps the round winnable. An adversary that may assert anything
+# will always find something -- a stack depth, an iteration order, how a number
+# prints in an error message it was never promised -- and no submission would
+# survive, which would make the stage uninformative rather than strict.
+#
+# The line drawn here is the one the source contract already draws: the task
+# promised *the observable behaviour of six probe ops over expressions and inputs*,
+# byte for byte, plus a requirable `dist/jsonata.js` and a `dist/jsonata.d.ts` that
+# still describes the published surface. It did not promise that the port is
+# organised like State A's `src/` internally, that it carries JavaScript's idioms,
+# or that it agrees with State A where State A was reading the wall clock.
+[scope]
+allow = [
+  "any expression string, valid or invalid, and any JSON input, given to any of the six declared ops: hello, ast, eval, evalcb, assign, register",
+  "the value encoding in full, tag by tag: that a bare `undefined` result is `[\"u\"]` while inside a structure it is dropped instead -- a key vanishes from an object, an element is removed from an array so `[1,$nope,3]` is a two-element `a` -- that JSON null is `[\"z\",null]` and is not the same answer as absent, that the four IEEE-754 values a JSON encoder cannot spell travel as the tagged strings `[\"d\",\"inf\"]`, `[\"d\",\"-inf\"]`, `[\"d\",\"nan\"]` and `[\"d\",\"-0\"]` and so stay distinct from each other and from `[\"d\",0]`, that a sequence is `q` and a plain array `a`, that an object is an array of pairs under `o`, that a callable is `f`, and that `x` names the kind of a value with no encoding",
+  "sequence and singleton semantics: every place a one-element sequence collapses to its element and every place it does not, including what `[]` around an expression preserves, what a predicate produces, and what a path step returns when it matched exactly once",
+  "the whole operator and construct grammar at every precedence level: comparison and equality, the numeric and string operators, `and`/`or`/`in`, the conditional, block expressions, variable binding, function definition and application, `~>` chaining, `^(...)` ordering, `{...}` construction and grouping, and the `|...|...|` transform operator",
+  "path navigation: predicates including numeric and negative indices, wildcards, the descendant operator, the parent operator, context and index binding with `@` and `#`, and what each of these does when the step matched nothing",
+  "the builtin library in full, including the functions whose behaviour depends on how many arguments they were given, the higher-order functions and the callback arity they dispatch on, and the functions that take or return callables",
+  "`$fromMillis`, `$toMillis` and `$now`'s picture language: every component specifier and its width and presentation modifiers, the ordinal and name forms, ISO week numbering at a year boundary, timezone offsets, and a picture that does not fit the value it is given",
+  "the diagnostic surface: which of the 101 declared codes a given failure produces, the message text after interpolation, the position and token fields that travel with it, and how many diagnostics one input produces",
+  "recovered parses: `recover: true`, the partial AST that comes back, and what the recorded errors then report -- including an expression that recovers and one that fails to",
+  "signature validation: which argument index and expected type a rejection names, for a builtin and for a function defined in the expression",
+  "the four library options and the `engine` stand-in: `recover`, `timeout`, `stack` and `sequence` -- that each takes effect, and which declared code it produces when its limit is reached -- and all four named engines, `native`, `caseless`, `nomatch` and `broken`, including that what an engine receives already carries the `g` flag and that iteration terminates",
+  "all thirteen registered-function fixtures: that a registered function is called with the evaluation focus as its receiver so `focusInput` and `focusLookup` can read `this.input` and `this.environment.lookup`, that `asyncDouble`'s promise is awaited to its resolved value rather than encoded as `x`, that `counter` keeps state across calls within one registration and is rebuilt between registrations, and what `$type`, `$boolean`, `$count`, `$keys` and `$string` each answer for `hostDate` and `hostMap`",
+  "the pinned clock under its default: that `$millis()` is 1700000000000, that `$now()` formats that instant and takes `$fromMillis`'s picture and timezone arguments, and that `$random()` is the declared mulberry32 stream re-seeded once per request, so two requests carrying the same expression yield the same numbers while two iterations of one `repeat` do not",
+  "the protocol envelope as the README declares it: the response key order, that `op` is echoed, the id echo, absent `input` versus `input` present as null being different requests, `repeat` from 1 to 8 on one compiled expression and what does and does not carry from one iteration to the next -- a `counter` fixture counts up, an `assign` binding holds, the pinned `$millis()` repeats, and `$random()` advances its stream rather than restarting it, a blank line, a line that is not JSON, and the two fixture lists `hello` reports",
+  "the protocol error codes: which of them a malformed line or request produces, and which field a request carrying two faults names. That last one is in scope in full, both orderings of it: the walk over the request's own keys reports an unknown field and a mistyped one in whichever order the request wrote them, while the missing-required check, the `clock` and `repeat` range checks and the engine-name check run in an order fixed by the code that reordering the request cannot change. Also that `P0010` is declared in the table while no code path reaches it, so a port that makes it reachable has added an answer the reference does not give",
+  "the error payload's own shape: `kind` first and `message` last with only the present fields between them, in the fixed order `code`, `position`, `token`, `value`, `index`, `type`; that `value` is an encoded value rather than raw JSON; that no stack trace appears; and that a `Panic` carries a `cause` from the fixed set and no code at all",
+  "`dist/jsonata.js` as a requirable module whose `module.exports` is the callable itself, and `dist/jsonata.d.ts` as a declaration that still names the published surface -- checked by compiling a consumer against it, not by reading it",
+]
+deny = [
+  "the wall clock, and `$now`, `$millis` or `$random` under `\"clock\":\"live\"`. Such a response cannot be compared against anything -- it carries the time it was produced -- and the source contract excludes it by name",
+  "iteration order where the engine does not fix it. Where document order or an explicit `^(...)` decides the order, that is in scope and is graded; where the answer depends on the order a runtime happens to walk an unordered collection, it is not",
+  "the depth at which the runtime exhausts its own stack, and any assertion whose point is that one side survives a deeper expression than the other. The `stack` option is a declared limit and its effect is in scope; where V8 runs out without it is a property of the interpreter and its flags",
+  "how long anything takes: wall-clock duration, the value of the `timeout` option needed to interrupt a given evaluation, memory use, allocation counts or garbage-collection behaviour. That a `timeout` produces its declared code is in scope; how many milliseconds the reference needed is not",
+  "how the port is organised internally: file layout, module boundaries, class or function names, whether `src/` is one file or twenty, which algorithm a lookup uses, and whether something is a closure, a method or a class. The source contract states these are the port's own decisions, the three fixed `dist/` paths excepted",
+  "JavaScript-implementation identity as such: the `name` or `length` of a function reached through the encoding, a prototype chain, a constructor identity, or the string a runtime happens to produce for an object the library has no type for beyond what `hello` and the fixture table declare",
+  "source-level metrics: line counts, comment density, type-annotation density, whether a `.ts` file resembles the `.js` file it replaced, and anything read out of either tree's source rather than out of a response",
+  "anything written to stderr, and any exit code other than the ones the protocol declares",
+  "behaviour of an op name, a request field, an option key, a fixture name or an engine name that the README does not declare. An undeclared input has no promised answer, so a difference in it is not a defect -- `P0005`, `P0006`, `P0009` and `P0010` are themselves declared answers and asserting on *those* is in scope",
+  "locale- or timezone-dependent behaviour. Both sides run under TZ=UTC and LC_ALL=C.UTF-8; a difference that only appears under another setting is a property of the harness, not of the port",
+  "input that is not valid UTF-8, or a request line the transport does not define a response for",
+  "anything requiring network access, a second implementation inside the submission, or reading a file the probe was not given -- including either tree's source from inside a candidate",
+]
+# Commands a candidate may not run. The candidate does not get a shell -- it drives
+# both trees through the helper library, which is what makes "the original passes
+# this" mean the same thing on both sides -- so this list is the belt to that
+# braces, recorded where the stage's configuration lives rather than enforced by
+# it. `node` heads the list, and on this task that is not a formality: both trees
+# are JavaScript by the time they run, so a candidate that got a shell and a `node`
+# could `require` an implementation instead of asking one, and would then be
+# comparing a tree against itself.
+deny_commands = [
+  "node", "npx", "tsc", "ts-node", "deno", "bun",
+  "curl", "wget", "git", "ssh", "nc", "pip", "pip3",
+  "apt", "apt-get", "npm install", "npm ci", "npm run", "yarn", "pnpm",
+]
+require_deterministic = true
+# Three reruns. The engine is deterministic once the clock is pinned -- that is
+# what the pinning is for, and `$random()` is re-seeded per request so even it
+# repeats -- but a flake that costs a submission ten points is a bug in the
+# benchmark rather than a finding, and the `timeout` and `sequence` limits are
+# exactly where a borderline case could produce one.
+reruns = 3
+
+[metadata]
+# The submission's tree is built once per round and the build is cached, so only
+# the first candidate of a round pays for it; the original pays nothing, because
+# the reference was built when the image was built. Measured rather than guessed:
+# `tsc` 5.9.3 over all nine of State A's modules renamed to `.ts` -- 9,057 lines,
+# full strict check -- takes 1.1s, and State A's own `node tools/build.js` takes
+# 0.06s. 1200 is three orders of magnitude above that, which is the same stance
+# the source contract takes about stage 2's timeouts: a correct port that builds
+# slowly is still a correct port, and the ceiling exists to catch a build that
+# hangs rather than one that is unhurried.
+candidate_timeout_sec = 1200.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets. It does not get a shell: `try_case` is how it runs things, and a candidate
+# that has to be executed some other way is out of scope by construction.
+allowed_commands = []
+about = """
+A candidate is a Python test that imports the stage's helper library. It composes
+requests -- an op, an expression, optionally an input, bindings, options or a
+fixture name -- and asks for both trees' responses through one call, then asserts
+on the difference. It never names a language and never sees a compiler: on one
+side the probe is `node` over a `dist/probe.js` published when this image was
+built, on the other `node` over a `dist/probe.js` the submission's own
+`npm run build` produced, and both are reached through the same function.
+
+That indirection is not convenience. It is what makes condition 1 checkable: "the
+original passes this" has to mean the same thing on both sides, and a candidate
+that reached one tree through the helper and the other by requiring a file would
+be asserting on two different harnesses as much as on two implementations. It is
+also the only thing that keeps the two trees anonymous -- the helper labels them
+by an opaque per-run token, and a candidate that could tell which was which would
+satisfy every mechanical condition while establishing nothing.
+
+When a candidate asks for something that does not exist -- an op that was never
+declared, a fixture or engine name that is not in the vocabulary, an option key
+that is in neither list -- the helper raises an error that blames the candidate
+and lists the valid alternatives. It does not pass the unknown name through to the
+probe: a helper that let the probe answer `P0005` for a typo would have
+manufactured a difference out of a mistake, and a false break costs a sound
+submission ten points. Asserting on `P0005` deliberately is a different thing and
+the helper has a separate door for it.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six vendors: what the stage measures is how much
+# scrutiny the submission survives, and an independent attempt is independent
+# whether or not it shares a model with another round. Ids name the round, so two
+# rounds on one model with different briefs stay distinguishable in the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific. Six unguided rounds all go at
+# `$map` with a two-argument lambda; six pointed ones cover the engine. It is a
+# hint about where to look, never a list of tests to write, and the last round ends
+# without one on purpose.
+#
+# Every claim in these briefs was read out of State A's own source or observed by
+# running its probe, not recalled from JSONata's documentation. Where a line number
+# appears it is State A's, so a brief that has gone stale is a brief that can be
+# checked rather than a brief that quietly misleads a round.
+
+[[adversary]]
+id = "a01-sequences-and-encoding-tags"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+singleton collapse, which the source contract names as the single most common
+thing a port gets subtly wrong. A JSONata sequence is a JavaScript array
+carrying three hidden flags -- `sequence`, `keepSingleton` and `cons` -- and
+they decide whether it collapses to its element on the way out; the parser
+records its own half of the decision separately, as `keepArray`,
+`keepSingletonArray` and `consarray` on the expression node. The whole collapse
+is six lines, `src/jsonata.js:136-141`: an empty sequence becomes `undefined`, a
+one-element sequence becomes its element unless `keepSingleton` says otherwise.
+The flags are never visible in an answer; the collapse is. Go at the places
+they are set and cleared: a path step that matched exactly once against one
+that matched twice, `[]` written around an expression that already yields a
+sequence, `[]` around one that yields a single value, a predicate that selects
+one element, `$` at the top of an expression, an input that is itself a JSON
+array against one that is a single object, and the same expression evaluated
+with the array wrapped one level deeper.
+
+Then the encoding, tag by tag, because the tags are how the collapse becomes
+observable. `u` is what a bare undefined result answers, and inside a structure
+undefined is dropped rather than tagged: an object loses the key entirely and an
+array loses the element, so `[1,$nope,3]` is a two-element `a` and
+`{"k":$nope,"j":1}` reports only `j`. `z` is JSON null, it is not `u`, and
+neither is the same answer as a request that omitted `input` altogether. `q` and
+`a` distinguish a sequence from a plain array and are the tag pair a collapsing
+bug shows up in first. Construct answers that differ only in which of these tags
+the encoder chose.
+
+The three values JSON cannot spell are where a port that reached for a stock
+serialiser gives itself away. `1/0`, `0/0` and `-(0)` are `["d","inf"]`,
+`["d","nan"]` and `["d","-0"]`; `JSON.stringify` renders the first two as
+`null` and the third as `0`, which would make all three collide with the `["z",
+null]` and `["d",0]` that a literal `null` and a literal `0` produce. Five
+distinct answers, three of which a convenient port silently merges into the
+other two. They are reachable more ways than the obvious division -- `1e308*10`
+overflows, a `1e309` that arrives in the input document is already infinite
+before any arithmetic runs, `$number("-0")` parses to negative zero, and
+`-0 = 0` is true so a comparison cannot tell you which one you hold. Nest them:
+inside an array, as an object value, as a key's worth of an object that also
+carries an undefined, and as the result of a path step that collapsed.
+"""
+
+[[adversary]]
+id = "a02-builtins-and-arity-dispatch"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the higher-order functions and the fact that they dispatch on how many
+parameters the callback declares. `getFunctionArity` decides what a callback is
+handed, through two separate mechanisms that a port is likely to merge.
+`hofFuncArgs` at `src/functions.js:1467` builds the argument list for `$map`,
+`$filter`, `$single`, `$each` and `$sift`, appending the index at `>= 2` and the
+whole array at `>= 3`. `foldLeft` at `src/functions.js:1614` -- bound as
+`$reduce` at `src/jsonata.js:1946` with the signature `<afj?:j>` -- takes
+accumulator and value instead, appends the index at `>= 3` and the array at
+`>= 4`, and *rejects* a callback of arity below 2 outright with `D3050` and
+`index: 1`. So the same lambda means different things to the two families, and
+one of them refuses what the other accepts. Write each of them at every arity
+from one to four and compare. Then a callback
+that is a builtin rather than a lambda, a partially-applied function, a
+function bound to a variable and passed by name, a function returned from
+another function, and a callback whose declared arity exceeds what the caller
+supplies.
+
+Then the signature validator, which is a small language of its own: the
+argument index and expected type it names when a builtin is given the wrong
+thing, the same for a function the expression itself defines with a signature,
+a signature with an optional or variadic marker, a union type, the
+context-injection marker where a missing argument is filled from the focus
+rather than rejected, and `$` applied where a function is expected. Every one
+of these produces a `T`-series code with a position and a token, and both
+fields are part of the answer.
+"""
+
+[[adversary]]
+id = "a03-numbers-and-datetime-pictures"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+number formatting, and specifically the fact that one number has two spellings
+depending on which channel reports it. There is exactly one `toPrecision` in the
+engine -- `src/functions.js:134`, inside `string()` at 107 -- so the
+15-significant-digit renormalisation belongs to *string conversion* and not to
+evaluation. `0.1+0.2` is `["d",0.30000000000000004]` as a value and `"0.3"`
+through `$string` or through `&`, which reaches the same code at
+`src/jsonata.js:896`. An error payload's `value` field keeps full precision, so
+a failing case and a succeeding one report the same number differently.
+
+The renormalisation crosses back into the value channel in exactly one place:
+`$clone` is `JSON.parse(fn.string(arg))` at `src/jsonata.js:1865`, so
+`$clone({"v": 0.1+0.2})` answers `["d",0.3]` where the object literal answers
+`["d",0.30000000000000004]` -- a function that changes a number by round-tripping
+it through a string. The transform operator looks up that same `clone` at
+`src/jsonata.js:1319` and applies it to the object being transformed, so the
+renormalisation reaches there too -- but only on that one side. The update value
+is evaluated after the clone and is not passed through it, so
+`{"v": 0.1+0.2} ~> |$|{"w": 0.1+0.2}|` answers
+`["o",[["v",["d",0.3]],["w",["d",0.30000000000000004]]]]`: the same arithmetic
+twice in one object, spelled two ways. `$each`, `$merge` and `$sift` clone
+nothing and keep full precision throughout. Establish which functions renormalise
+before building on any of it.
+
+Then the values where 15 digits is where the two spellings diverge: sums that
+accumulate binary error, a quotient whose 16th digit is not zero (`1/3`
+stringifies to `0.333333333333333`), a value just inside and just outside the
+range where JavaScript switches to exponent notation (`$string(1e21)` is
+`"1e+21"`), a number whose shortest round-trip form has 17 digits, and an integer
+large enough to lose precision but still `Number.isInteger` -- integers skip the
+renormalisation entirely, so where a value stops being one is a boundary. Then
+`$formatNumber` and
+`$formatInteger` with their picture strings: grouping separators, a
+sub-picture for negatives, percent and per-mille, the ordinal and word forms,
+and a picture that does not fit the value.
+
+Then the datetime picture language, which is XPath F&O's rather than
+strftime's and is the other place a port improvises. `$fromMillis` and
+`$toMillis` with every component specifier, each width modifier, the name and
+ordinal presentations, ISO week and week-day numbering across a year boundary
+where the week belongs to the other year, a timezone argument against an
+offset baked into the picture, a picture containing a literal that looks like a
+specifier, and a round trip through both directions. `$now()` delegates to
+`$fromMillis` on the pinned instant 1700000000000, so it is the same surface
+reached a second way -- and only under the default clock, since `"clock":"live"`
+is out of scope.
+"""
+
+[[adversary]]
+id = "a04-diagnostics-and-recovery"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+which code fires, and what travels with it. There are 100 entries in the
+`errorCodes` table at `src/jsonata.js` plus `T2099`, which
+`src/probe-fixtures.js:147` throws and which the table has no message for at
+all -- so its message field is whatever the engine does with a code it cannot
+interpolate, and that is an answer worth comparing. The corpus reaches 96 of
+the 101, and the five it does not are `D1012`, `D1013`, `D2005`, `S0205` and
+`S0206`. Those five are the codes a submission could have got wrong without
+stage 2 noticing, which makes them the highest-yield place to start -- provoking
+one at all takes a specific expression, so work out what reaches it before
+writing the comparison. Aim also at codes that need a specific shape to
+provoke: the
+`S02xx` parser series at each distinct expectation, `S03xx` for regex and
+number literals, the `T1xxx` invocation errors, and the `D3xxx` blocks that
+belong to individual functions.
+
+Then the interpolated message and the fields beside it. `D2015` is thrown from
+three places -- `src/functions.js:1730`, `src/jsonata.js:1071` and
+`src/jsonata.js:2181` -- and they do not agree on what `value` means: the first
+two pass the size that was reached, the third passes `options.sequence`, the
+limit that was configured. One message template, `"The maximum sequence length
+of {{value}} was exceeded."`, is interpolated with both, so it means opposite
+things depending on which site fired. Measured on State A at one and the same
+limit of 2: `a.b` over three matches answers "length of 2" and carries no
+`position` or `token`, while `[1,2,3,4]` answers "length of 3"; and
+`$append([1,2],[3,4])` at a limit of 3 answers "length of 4" and does carry a
+`position` and a `token`. Three numbers, one of which is the maximum and two of
+which are the thing that exceeded it. A port that reconciles them -- picking one
+meaning and using it everywhere -- has tidied the engine and failed the task, and
+a port that keeps them will not have done so by accident. Look for more of these:
+a `{{token}}` or `{{value}}` that is an array, absent, or an encoded value rather
+than a string. Then `recover: true` on the
+`ast` op and on `eval`: the partial AST a failed parse returns, what the
+recorded errors say, an expression that recovers into something evaluable, and
+one that recovers into something that then fails at evaluation.
+"""
+
+[[adversary]]
+id = "a05-options-limits-and-regex-engines"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the four library options at their boundaries, and the `engine` stand-in. The
+`sequence` limit produces `D2015`, and the `stack` limit produces `D1011` by
+counting `exec_env.depth` rather than by watching the real stack -- which makes
+it deterministic and in scope, unlike where V8 gives out on its own, which is
+denied. So: a `stack` of 1, of exactly the depth an expression needs, and one
+below it; a recursive lambda against a deeply nested literal against a long
+`~>` chain, which reach depth by three different routes. `timeout` produces
+`D1012` and is measured with `Date.now()`, so assert that it produces its code
+and never how long it took. `recover` interacts with the others: recover plus a
+sequence limit, recover on an expression that cannot be recovered.
+
+Then the regex engines, where State A leaves a trap it documents. What the
+library hands a `RegexEngine` constructor is the `RegExp` **object the parser
+built** -- `src/jsonata.js:1145`, `new environment.base.RegexEngine(expr.value)`
+-- and that object already carries the `g` flag. An engine that rebuilds it
+from `.source` and forgets to merge flags stops `lastIndex` advancing and the
+match iteration never terminates. Drive all four engines -- `native`,
+`caseless`, `nomatch`, `broken` -- through every function that consumes a
+regex: `$match`, `$replace` with a string and with a function replacement and
+with group references, `$split`, `$contains`, and a regex used directly as a
+predicate. `nomatch` and `broken` exist to be answered wrongly; find where the
+two implementations disagree about what "wrongly" is.
+"""
+
+[[adversary]]
+id = "a06-protocol-envelope-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the envelope rather than the expression. Response key order is declared as
+`id`, `ok`, `op`, then `result` or `error`, and `op` *is* echoed here -- so a
+port that assembled the object in another order fails on bytes while agreeing
+on content. An id that is zero, negative, very large, or a float that happens
+to be integral. Absent `input` against `"input": null`, which the README says
+are different requests. `repeat` from 1 to 8 on one compiled expression, where
+the point is what carries from one iteration to the next: `counter` counts up,
+an `assign` binding holds, the pinned `$millis()` repeats, `$random()` advances
+its stream rather than restarting it, and a sequence limit can be reached on the
+third pass and not the first. The source says so in as many words at
+`src/probe.js:453` -- `repeat` exists to make per-evaluation state observable --
+so a port that rebuilds its environment per `evaluate` call answers `repeat: 1`
+correctly everywhere and diverges here.
+
+Then the `P00xx` codes, each provoked deliberately -- a line that is not JSON, a
+request that is a JSON array, a missing or non-integer id, an unknown op, a
+field that belongs to another op, a field of the wrong type, a missing required
+field, and an unknown fixture or engine name, which is `P0009` and not the
+`P0010` a reader would expect. `P0010` is worth its own case: the table declares
+it and `src/probe.js` never throws it -- the nine reachable codes are thrown once
+each except `P0006` four times, `P0007` seven, `P0008` five and `P0009` twice --
+so a port that found an option it considered unusable and answered `P0010` has
+invented an answer.
+
+Then the ordering rule that makes all of these fragile, which is where a request
+carrying two faults at once stops being predictable. `validate` in `src/probe.js`
+is a ladder of five steps, and *two different orderings* govern it: steps 1 and
+the head of 4 follow the request's own key order, while 2, 3 and the tail of 4
+follow an order fixed in the code that no amount of reordering the request will
+change.
+
+  1. one walk over the request's keys in document order, reporting `P0006` for a
+     key the op does not take and `P0007` for one of the wrong type -- both fault
+     kinds in the same walk, so whichever comes first in the request wins:
+     `{"zzz":1,"expr":5}` answers `P0006` on `zzz` and the same pair swapped
+     answers `P0007` on `expr`;
+  2. missing required fields, in the *field table's* order rather than the
+     request's -- so bare `{"op":"assign"}` and `{"op":"register"}` both name
+     `expr`, and neither ever names the `assigns` or `funcs` it is also missing;
+  3. `clock`'s value, then `repeat`'s range -- both `P0007`, neither a type
+     fault, and in this fixed order regardless of the request, so
+     `{"repeat":99,"clock":"x"}` and `{"clock":"x","repeat":99}` both name
+     `clock`;
+  4. `options`, walked in *its* own key order for `P0006` and `P0007`, and only
+     after that whole walk the engine-name check for `P0009`: so
+     `{"engine":"nope","zzz":1}` and its swap both answer `P0006` on `zzz`, while
+     `{"engine":"nope","timeout":"x"}` answers `P0007` on `timeout`;
+  5. `assigns` and `funcs` entries, by index.
+
+`repeat` is therefore checked under both regimes: `repeat:"x"` is a type fault
+caught in step 1 by document order, and `repeat:99` is a range fault caught in
+step 3 in fixed order. One field, two orderings. A port that validated each field
+once and completely, in document order -- the obvious reading, and the one the
+README's table invites -- agrees with the reference on every request that carries
+a single fault and diverges on every pair above. Build those, then look for pairs
+this list does not name. A blank line. Two requests on one line. A very long line.
+
+Then `funcs` and `assigns`, which are arrays of objects rather than objects and
+are applied in order: a duplicate name, an explicit `"signature": null` against
+an absent one, a fixture registered twice, and `assign` and `register` combined
+on one expression.
+
+Then, with whatever budget remains, nothing in particular -- read the
+JavaScript and the TypeScript and follow what looks weakest. The other five
+rounds were told where to look, so this tail is where anything they were not
+told about has to be found.
+"""
+
+

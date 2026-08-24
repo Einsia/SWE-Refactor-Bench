@@ -1,0 +1,44 @@
+# The oracle's public-transport configuration: State A with a GTFS feed.
+#
+# tests/behavioural/data/configs/config-pt.yml with the placeholders resolved.
+# This is the configuration that makes §4.1 and §4.2 observable, and those two
+# sections are worth more than the rest of the migration put together -- so this
+# file is the more important of the two oracles even though it is the smaller.
+#
+# With this file the transit paths exist and a `pt` profile on /route is diverted
+# into them in process.  With config-base.yml they do not exist at all.  Run both
+# and compare: that difference is the thing §4.1 asks a port to reproduce.
+#
+# Flipping `gtfs.free_walk` or `gtfs.trip_based` here selects a different
+# PtRouter implementation and /route-pt answers differently -- which is §4.2,
+# also observable, also from this one file.
+graphhopper:
+  datareader.file: /workspace/repo/reader-gtfs/files/beatty.osm
+  gtfs.file: /workspace/repo/reader-gtfs/files/sample-feed,/workspace/repo/reader-gtfs/files/another-sample-feed
+  graph.location: /opt/oracle/graph-cache/pt
+  profiles:
+    - name: foot
+      custom_model_files: [foot.json]
+    - name: car
+      custom_model_files: [car.json]
+  graph.encoded_values: car_access, car_average_speed, foot_access, foot_priority, foot_average_speed, roundabout, road_class, road_environment, road_access, foot_road_access, hike_rating, foot_network, smoothness, surface, track_type, max_speed, road_class_link, lanes, average_slope, max_slope, country, mtb_rating
+  prepare.min_network_size: 0
+  prepare.subnetworks.threads: 1
+  graph.dataaccess.default_type: RAM_STORE
+  import.osm.ignored_highways: ""
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: 8990
+      bind_host: 0.0.0.0
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

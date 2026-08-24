@@ -1,0 +1,256 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "fw04-chartmuseum-gin-to-chi"
+
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing?
+#
+# `corpus` carries the most because it is the promise the task makes -- every recorded
+# request has to be answered the way it was answered before. `routing`, `tenant` and
+# `lifecycle` come next: this project registers no routes with its framework at all,
+# it dispatches inside a hand-written matcher, and re-hosting that matcher is the
+# substance of the task. None of those three is visible in the corpus, which is
+# replayed one recorded path at a time and would pass against a dispatcher that only
+# handles the paths that were recorded.
+#
+# `metrics` and `upload_limit` are priced higher than their size suggests, and that
+# was measured rather than judged. The two retired middlewares have no drop-in
+# equivalent, so re-implementing them is real work -- but only a couple of recorded
+# cases carry an exposition. They are their own modules now, at their own weight.
+#
+# `build` is first, and everything after it measures the binary it publishes, so a
+# submission that cannot be resolved and compiled against the target module set leaves
+# them nothing behavioural to measure: each fails its own checks on its own evidence.
+# No module here can zero another's result, and none needs to: the stage pays only for
+# a submission that passed every scored check in every weighted module.
+#
+# Every module here builds the submission and then observes it: an HTTP response, a
+# CLI invocation, a storage directory, the linker's own record of what it put in the
+# binary. None of them opens a file in the submitted tree -- there is no `repo`
+# fixture to hand them one. The checks that did are in `tests/audit/`,
+# which reads both trees and executes neither.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+SRB_GOPROXY_ROOT = "/opt/goproxy"
+
+[metadata]
+runtime = "go1.24.13"
+target_stack = "chi v5 + net/http"
+retired_stack = "gin 1.8.1 + gin-contrib/size + zsais/go-gin-prometheus"
+
+# --------------------------------------------------------------------------- #
+# The build everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "offline resolve and build from submitted source"
+weight = 0.06
+timeout_sec = 5400
+command = ["python3", "run.py"]
+about = """
+Resolves the module graph and compiles the submission into
+$SRB_SUITE_WORK/chartmuseum, offline, against the image's COMPLETE file mirror --
+complete because State A imports the retired Gin stack and State A is the oracle
+every expectation in this suite was recorded from, so a mirror that cannot compile
+it could never show the suite is satisfiable. Measured: State A failed this module
+against the agent's pruned mirror, and passed every scored check against a complete
+one. A committed vendor/ or bin/ is removed from a copy first, so neither a
+smuggled dependency nor a stale artifact can make a broken tree look buildable.
+Publishes the binary, the linker's build information and the resolved build list,
+plus one weightless note on whether the tree still needs an archive the agent was
+never given -- weightless because that is stage 1's question, and stage 1's gate
+zeroes the whole submission. It stays in this module's own log and is deleted at
+collection rather than reaching the report unpriced.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: State A's answers have to survive
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "corpus"
+title = "recorded responses, status and headers and bodies"
+# The largest share in the stage: this is the module that replays State A's own
+# answers. Whether the retired framework is gone is not asked here -- that is stage
+# 1's question, and a check on it here would be an assertion about the
+# implementation with points attached. What this stage says is that the server still
+# answers what State A answered.
+weight = 0.20
+timeout_sec = 5400
+command = ["bash", "run.sh"]
+about = """
+Replays every recorded profile against the built binary and compares status,
+header set, header values, content type, length against body, and body bytes.
+Fields that two capture runs of State A itself disagreed on are recorded as
+volatile and skipped per field, so a timestamp never fails a submission.
+"""
+
+[[module]]
+id = "index"
+title = "index.yaml semantics, not index.yaml bytes"
+weight = 0.07
+command = ["bash", "run.sh"]
+about = """
+The document Helm actually consumes, parsed and compared as structure: apiVersion,
+entry names, the version set per chart, version ordering, digests, and the presence
+of download URLs. A byte comparison would fail an honest port for reordering a map;
+this fails it for changing what the document says.
+"""
+
+[[module]]
+id = "cli"
+title = "command line surface"
+weight = 0.06
+command = ["bash", "run.sh"]
+about = """
+Every recorded invocation: exit code, which stream carried which output, the
+version line, the flag table, and the index-generation output. The flag table is
+compared as a set of flags rather than as help text, so reflowing is free and
+dropping a flag is not.
+"""
+
+# --------------------------------------------------------------------------- #
+# Dispatch: what the corpus cannot see
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "routing"
+title = "generated paths, and what a real router does with them"
+weight = 0.09
+timeout_sec = 2400
+command = ["bash", "run.sh"]
+about = """
+Paths that are generated rather than recorded -- doubled separators, trailing
+slashes, over-long suffixes, unknown prefixes -- asked as properties: nothing
+crashes or answers outside a sane status set, HEAD is answered exactly where the
+routes declare it and nowhere else, OPTIONS stays unhandled, and under
+--context-path the unprefixed forms of real routes stop resolving.
+"""
+
+[[module]]
+id = "tenant"
+title = "multitenancy, as a cross product"
+weight = 0.05
+command = ["bash", "run.sh"]
+about = """
+Each tenant is asked about each tenant's chart and only the diagonal may be
+found; stated over the API and over index.yaml, which are assembled by different
+code. Charts are named after a value generated at grading time, so neither half
+can be answered from a table.
+"""
+
+[[module]]
+id = "auth"
+title = "authorisation, paired with the storage tree it left behind"
+weight = 0.06
+command = ["bash", "run.sh"]
+about = """
+Every mutating route refused without credentials, a challenge sent when it is
+refused, and -- the half that matters -- nothing written while refusing. A 401
+that wrote anyway passes any status-only check. Run with reads closed and again
+with --auth-anonymous-get, which must open the reads and leave the writes exactly
+as closed.
+"""
+
+[[module]]
+id = "lifecycle"
+title = "charts whose names were invented after the submission was written"
+weight = 0.09
+timeout_sec = 2400
+command = ["bash", "run.sh"]
+about = """
+Push, list, describe, download, conflict, overwrite, delete -- on charts named
+with a value generated at grading time, verified by reading the storage directory
+rather than by asking the API. A submission answering from a table of the recorded
+corpus scores well everywhere else and fails every check here.
+"""
+
+[[module]]
+id = "consistency"
+title = "responses held to their own claims, and to each other"
+weight = 0.06
+command = ["bash", "run.sh"]
+about = """
+The index advertises a download URL and a digest for every version; follow the URL,
+hash the bytes, and the server has either agreed with itself or contradicted itself.
+Determinism is asked the same way: four identical requests must produce four
+identical responses, which a document rebuilt by ranging over a Go map does not.
+"""
+
+[[module]]
+id = "invariance"
+title = "the same request, dressed differently"
+weight = 0.05
+command = ["bash", "run.sh"]
+about = """
+Each request is re-issued with the incidental parts changed -- header casing, a
+different user agent, an added accept header -- and must produce the same answer.
+This is where a submission that recognises the grader rather than doing the work
+stops matching itself.
+"""
+
+# --------------------------------------------------------------------------- #
+# The two retired middlewares, which have no drop-in replacement
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "metrics"
+title = "the exposition, as arithmetic over storage and traffic"
+weight = 0.08
+command = ["bash", "run.sh"]
+about = """
+Every family's declaration and every series' label signature, one check each. The
+gauges are compared against what is actually in storage after this module has
+pushed to it, and the counters against the traffic it generated. No name generated
+at grading time may appear anywhere in the exposition, which is how a dropped URL
+mapping function is detected: without it every chart name requested becomes its own
+time series.
+"""
+
+[[module]]
+id = "upload_limit"
+title = "the request size limit, at sizes decided at grading time"
+weight = 0.05
+command = ["bash", "run.sh"]
+about = """
+Sizes jittered by a value generated at grading time, so "which bodies are too big"
+cannot be a fixed rule; the refusal is 413 with a bare text/plain body while every
+other error this API produces is JSON, and the limit applies to reads not at all.
+Refused bodies are checked against storage afterwards.
+"""
+
+# --------------------------------------------------------------------------- #
+# What the toolchain says about the artifact
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "release"
+title = "every platform the release ships for still compiles"
+weight = 0.04
+timeout_sec = 5400
+command = ["python3", "run.py"]
+about = """
+The project's own build entry point still works, and each of the eleven platform
+pairs in its Makefile still cross-compiles -- one check per platform. A port can
+compile for linux/amd64 and fail for windows/amd64 on path separators or for a
+32-bit target on integer width, and the retired framework abstracted none of that
+away.
+"""
+
+[[module]]
+id = "own_tests"
+title = "the repository's own test suite"
+weight = 0.04
+timeout_sec = 7200
+command = ["python3", "run.py"]
+about = """
+Half of the project's test files import the retired framework directly, so porting
+them is part of the work. Every package must pass, every package that had tests must
+still have tests under its own import path, and the total number of distinct test
+ids may not fall below the measured baseline. Test names are deliberately not
+graded: a rename is not a regression.
+"""

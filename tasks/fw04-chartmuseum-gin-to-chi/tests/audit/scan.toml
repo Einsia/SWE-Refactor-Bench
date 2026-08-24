@@ -1,0 +1,101 @@
+schema = "swerefactor.scan-suite/1"
+task = "fw04-chartmuseum-gin-to-chi"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# The gate for this task is the five prose questions in evaluation.toml, answered
+# by a model that has both trees mounted and no toolchain to build either. This
+# suite exists to spend that model's turns well: it answers, mechanically, the
+# sub-questions a string search can answer, so the reviewer can spend its budget
+# on the ones it cannot -- above all "is this dispatch, or is it Gin's dispatch
+# with the names filed off", which no token scan will ever settle.
+#
+# Every check is recorded with required = false. `scoring.grade_audit` gates
+# on required checks only, and the required checks are the prose gates. So a scan
+# finding costs a submission nothing by itself; what it does is put a file and a
+# line number in front of a reviewer that has the file open. A clean scan is not
+# a pass, and the prompt says so in those words.
+#
+# The asymmetry is deliberate and it is the reason these checks are here rather
+# than in stage 2. Stage 2 builds both sides and compares what they answer; a
+# check in stage 2 that opens a .go file and looks for `gin.Context` is asserting
+# on the implementation with points attached, and it is wrong in both directions
+# -- it fires on a comment explaining why Gin was removed, and it stays silent on
+# a hand-copied dispatch loop that imports nothing. Same observation, no verdict,
+# no points: that is what this stage is for.
+#
+# Weights are recorded and unused: nothing here is scored. They are kept so a
+# module could move back to a scored stage without a rewrite, which is also why
+# the module contract is byte-for-byte stage 2's -- same env vars, same result
+# schema, same runner.
+
+default_timeout_sec = 600
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check in this suite can fail the audit gate. The three modules
+read `SRB_REPO` and `SRB_ORIGINAL`, parse text, and write findings; there is no
+Go toolchain in this image and no module mirror, so nothing here can resolve,
+build, link or run either tree. Anything that needs a running program is stage
+2's, and anything that needs both programs running at once is stage 3's.
+
+Calibrated against the pre-migration tree: `entrypoint` and `provenance` are
+silent on it end to end, and every one of `closure`'s retired-stack checks fires.
+A check that reports something on an unmodified repository is a check that
+teaches the reviewer to skim, so the two that did -- a bare `junit`, which
+matches this repository's real go-junit-report dependency, and an unfiltered
+Makefile target scan, which reported each target once per `export` line -- were
+narrowed until they went quiet.
+"""
+
+[[module]]
+id = "closure"
+title = "the retired stack in the tree and in what the tree declares"
+weight = 1.0
+about = """
+Ordered by how much of the answer each observation can carry. First the import
+blocks, parsed rather than grepped, split into delivered source and test files
+because a stale test and a live dependency are different findings. Then the
+module graph: require lines with their direct/indirect kind, go.sum pins, vendored
+copies, replace directives. Then two derived comparisons against the original --
+did the dependency set change at all, is the module path still the same. Then the
+one structural check, which counts how many of the retired framework's context
+methods a single delivered type redefines under the same spellings, because a
+framework that was renamed rather than retired imports nothing. The token sweep
+is last and weakest on purpose: it reads text the compiler may never see.
+"""
+
+[[module]]
+id = "entrypoint"
+title = "what the published entry points name"
+weight = 1.0
+about = """
+The surfaces a migration is supposed to leave alone: the command package the
+cross-compile matrix hardcodes, the Makefile's target set, the container's COPY
+source and ENTRYPOINT, the scripts/ directory the test and release targets shell
+out to, the top-level layout every other finding cites paths into. Then three
+"two implementations where there should be one" checks -- more than one router
+library imported, a filename that looks like a preserved copy, a build constraint
+in a tree that had none -- plus committed build output, which would let a binary
+nobody watched being built be the one that runs. Diffed against the original in
+both directions, so a target that appeared is reported beside one that vanished.
+"""
+
+[[module]]
+id = "provenance"
+title = "code addressed to the grader"
+weight = 1.0
+about = """
+Whether the submission knows it is being measured. The harness's own vocabulary;
+Go's idioms for detecting a test binary; the comparison rig's paths and its
+oracle port; environment lookups the original did not make, which matter here
+because this server is configured almost entirely by environment variable and a
+direct os.Getenv in a handler is therefore a setting nobody declared. Then
+whether the program answers or delegates -- outbound clients, reverse proxies,
+shelling out -- and whether it computes or recites: route literals paired with
+status literals, and structured data the original did not carry that is shaped
+like recorded traffic. Last, two checks on the repository's own suite, which
+stage 2 runs: test functions deleted, and test functions kept but skipped.
+"""

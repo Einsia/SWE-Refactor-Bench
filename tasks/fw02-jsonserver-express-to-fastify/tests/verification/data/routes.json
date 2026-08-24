@@ -1,0 +1,9 @@
+{
+  "/api/": "/",
+  "/blog/:resource/:id/show": "/:resource/:id",
+  "/blog/:category": "/posts?category=:category",
+  "/api/*": "/$1",
+  "/v1/notes/:id": "/notes/:id",
+  "/search/:term": "/posts?q=:term",
+  "/leaderboard": "/posts?_sort=views&_order=desc&_limit=3"
+}

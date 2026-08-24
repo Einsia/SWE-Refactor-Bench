@@ -1,0 +1,290 @@
+# =============================================================================
+# SWERefactorBench -- build toolchain rewrite
+#
+#   State A : pycryptodome 3.20.0, built by a 543-line imperative setup.py on
+#             distutils.  A 406-line hand-written `compiler_opt.py` shells out to
+#             the compiler for ~11 probes to decide what the toolchain can do,
+#             then *deletes* Extension objects when an instruction set is
+#             missing.  47 translation units become 41 shared libraries -- not
+#             CPython extension modules: no PyInit_, no libpython in NEEDED,
+#             opened by `ctypes.CDLL` through
+#             `Crypto.Util._raw_api.load_pycryptodome_raw_lib` -- with ten macros
+#             global, two module-scoped, and an ISA partition that puts -msse2 on
+#             every unit, -maes on one and -mpclmul -mssse3 on another.  192 .py,
+#             96 .pyi and a py.typed across 20 packages, and a self-test suite
+#             that collects 42,784 cases and runs 39,245 distinct ids.
+#   State B : the same 41 artifacts at the same installed paths, the same 277
+#             exported symbols, the same probe-driven artifact set and the same
+#             PEP 621 metadata, produced by Meson through meson-python -- with
+#             setuptools and distutils gone from the build closure.
+#
+# CPython 3.12 is the forcing function rather than a preference: PEP 632 removed
+# distutils from the standard library, so State A's `setup.py` works at all only
+# because setuptools vendors a copy of it.  Whether the old path really left is
+# decided by stage 1, over both trees, with a reviewer -- not by what a container
+# happens to have installed.  Stages 2 and 3 both install the pinned setuptools
+# State A declares, because State A is the reference every number is compared
+# against and an image that cannot build the reference cannot check its own
+# recordings.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs a wheel builds
+# one from the submitted source, through the PEP 517 front end, offline.  That is
+# what makes "setuptools is gone from this tree" a fact about the repository
+# rather than a claim about a dist/ directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, six gates, all required.  Failing one is a zero and nothing
+#      after it runs.
+#   2. twelve behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test the setuptools build
+#      passes and this one fails.  60 points, 10 for every adversary that finds
+#      nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has no
+# compiler, no Meson and no build front end at all, because a review that can
+# build grades a build log instead of a build system, and the question here --
+# were the toolchain probes rewritten, or was `compiler_opt.py`'s answer sheet
+# transcribed -- is not one a build log answers.  Stages 2 and 3 can both build
+# either state, and need to: stage 2 grades every submission against numbers
+# recorded from the setuptools build, and stage 3's adversaries have to execute
+# "the setuptools build produces this and yours does not".  Both of those mean
+# having State A's toolchain present at grading time.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop build and install debris only.  They exist so the verifier
+# cannot be handed a prebuilt `_raw_aes.abi3.so` and be fooled into inspecting
+# something the submitted *source* no longer produces -- which for this task is
+# the whole ball game, since a tree that kept its setup.py would otherwise ship
+# 41 perfectly good shared objects built from it.  Solutions must therefore live
+# in tracked source files, never inside these paths, a rule instruction.md states
+# outright.
+#
+# `lib/` is deliberately NOT excluded and must never be: it is where the whole
+# Crypto package lives -- 192 .py, 96 .pyi, py.typed -- and it is the payload the
+# wheel is made of.  Neither is `src/`, which holds the 79 C sources and 27
+# headers.  The `*.so` and `*.abi3.so` globs are safe only because State A's tree
+# ships no checked-in shared object: every one of them under lib/ is something a
+# build wrote.  Before adding a glob here, check it against
+# tests/behavioural/data/baseline.json, which lists all 590 delivered paths.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "build",
+    "_build",
+    "builddir",
+    "build-meson",
+    "build-release",
+    "build-debug",
+    "dist",
+    "meson-logs",
+    "meson-info",
+    "meson-private",
+    ".mesonpy-*",
+    "*.egg-info",
+    ".eggs",
+    "*.o",
+    "*.a",
+    "*.so",
+    "*.so.*",
+    "*.abi3.so",
+    "*.pyd",
+    "*.dylib",
+    "*.whl",
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    ".pytest_cache",
+    ".ninja_deps",
+    ".ninja_log",
+    "build.ninja",
+    "compile_commands.json",
+    "wheelhouse",
+    "install",
+    "prefix",
+]
+
+[task]
+name = "swerefactor/build03-pycryptodome-setuptools-to-meson"
+description = "Migrate the whole pycryptodome 3.20.0 build from setup.py/distutils to Meson + meson-python, preserving the 47-unit compile graph, probe-driven artifact removal, the 41 ctypes shared libraries and their 277 exported symbols, the typed Python payload across 20 packages and the PEP 621 metadata -- with setuptools and distutils gone from the build closure."
+authors = []
+keywords = [
+    "swe-refactor",
+    "build-toolchain-migration",
+    "python-packaging",
+    "c-extension",
+    "meson",
+    "meson-python",
+    "setuptools",
+    "distutils",
+    "pep-517",
+    "pep-621",
+    "pycryptodome",
+    "offline",
+]
+
+[metadata]
+category = "build-toolchain"
+difficulty = "frontier"
+# Read out of the archive, not out of upstream's packaging metadata.  LICENSE.rst
+# grants exactly two things: the PyCrypto-derived code is released into the public
+# domain in the Unlicense's words, and direct contributions to PyCryptodome are
+# BSD-2-Clause.  repo/setup.py additionally lists the classifier
+# "License :: OSI Approved :: Apache Software License", which no file in the tree
+# backs with a grant and which upstream's own `license="BSD, Public Domain"` two
+# lines below contradicts.  That classifier is where the Apache-2.0 conjunct here
+# came from; it is upstream's error and does not belong in ours.
+license = "BSD-2-Clause AND Unlicense"
+upstream = "https://github.com/Legrandin/pycryptodome"
+upstream_version = "3.20.0"
+source_repository = "https://pypi.org/project/pycryptodome/3.20.0/"
+source_version = "3.20.0"
+# Pinned by artifact digest rather than by VCS commit: the snapshot is built from
+# the PyPI sdist, and the task deliberately ships no VCS metadata, so there is no
+# commit to name.  Both digests are checked -- the first when the snapshot is
+# rebuilt from upstream, the second by environment/Dockerfile on every image
+# build.
+upstream_sdist = "pycryptodome-3.20.0.tar.gz"
+upstream_sdist_sha256 = "09609209ed7de61c2b560cc5c8c4fbf892f8b15b1faf7e4cbffac97db1fffda7"
+snapshot_sha256 = "2851a1a416e12d3e00cee986e548a5a29f08fafcfc08fc3bc23f6cc8ad05d527"
+state_a = "pycryptodome 3.20.0 built by setup.py on distutils with a hand-written compiler_opt.py, 47 translation units compiled into 41 ctypes shared libraries, ten global and two module-scoped macros, a three-way ISA partition, probe-driven artifact removal"
+state_b = "the same 41 artifacts at the same installed paths with the same 277 exported symbols, the same probe-driven artifact set and the same PEP 621 metadata, produced by Meson + meson-python, with setuptools and distutils gone from the build closure"
+scale = "47 translation units, 41 shared libraries, 79 C sources, 27 headers, 11 toolchain probes, 192 .py + 96 .pyi across 20 packages, 39,245 self-test ids"
+tags = [
+    "whole-repository",
+    "build-system-rewrite",
+    "pep-517-backend",
+    "compile-probes",
+    "isa-dispatch",
+    "elf-forensics",
+    "wheel-forensics",
+    "ctypes-shared-libraries",
+    "offline",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 6h wall clock: 47 translation units whose per-unit macros and ISA flags have to
+# survive, ~11 toolchain probes that have to stay probes rather than a transcribed
+# answer sheet -- two of them decide whether an artifact ships at all -- 41
+# artifacts that must land at the exact installed paths the Python code loads them
+# from and export their symbols through .dynsym, since Meson's
+# py.extension_module() defaults to hidden visibility and produces a file that
+# loads and then fails on the first getattr, 20 packages of typed Python payload
+# to route explicitly because Meson does not glob, PEP 621 metadata to carry
+# across from setup.cfg, and a 39,245-id self-test suite that has to still pass.
+# The State A tree stays in the image as the oracle, so the time goes on the port
+# rather than on discovering what the old build did.
+#
+# no-network: the toolchain is already in the image and every build dependency is
+# pinned there, so offline costs the agent nothing and removes "downloaded
+# somebody else's meson.build" as a possibility.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 21600.0
+network_mode = "no-network"
+user = "root"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+PYTHONDONTWRITEBYTECODE = "1"
+# The image has no index to reach and no wheel cache to fall back on.  Saying so
+# here rather than relying on the network mode alone means a build that tries to
+# resolve a dependency fails with "no index" instead of waiting out a DNS
+# timeout, which is a far clearer thing for an agent to read.
+PIP_NO_INDEX = "1"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
+# Reproducibility of anything the build stamps with a timestamp.  State A honours
+# it through distutils; State B has to keep honouring it.
+SOURCE_DATE_EPOCH = "1704758400"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.  Stage 2 is budgeted generously because it
+# builds a wheel in each of five configurations from a clean copy of the tree and
+# then runs 39,245 self-test ids against one of them.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota to
+# be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+# Three images.  The stage-3 one carries both build paths and does a reference
+# build of State A at image-build time, because a stage that cannot build the
+# original would report every candidate as "fails on the original" and pay out
+# all 60 points; its build is therefore slower than the agent environment's.
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+PYTHONDONTWRITEBYTECODE = "1"
+PIP_NO_INDEX = "1"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
+SOURCE_DATE_EPOCH = "1704758400"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a
+# smoke test that the suite can be passed at all.  The suite's own gate answers
+# that: stage 3 is asked only of a submission that scored stage 2 in full, so a
+# tree that reaches it has already passed every recorded check.  What six models
+# add is the other half -- an hour each spent hunting for a behaviour nobody
+# thought to record.

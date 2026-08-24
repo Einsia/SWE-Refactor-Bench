@@ -1,0 +1,223 @@
+# =============================================================================
+# SWERefactorBench -- framework rewrite
+#
+#   State A : json-server 0.17.4 on Express 4.18 -- CommonJS sources compiled by
+#             Babel into lib/, with the whole connect-style middleware stack
+#             (body-parser, compression, cors, method-override, morgan,
+#             errorhandler, express-urlrewrite, serve-static) and an
+#             express.Router() per resource kind.
+#   State B : the same product on Fastify 5 -- the middleware stack replaced by
+#             Fastify's own lifecycle (plugins, hooks, content-type parsers,
+#             @fastify/* equivalents). Native ESM with no transpile step is the
+#             intended end state, but the module system is the submission's
+#             choice: the gates grade what the package's declared main and bin
+#             actually load, not how it was authored.
+#
+# The agent edits /workspace/repo in place. Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository in
+# independent verifier containers the agent never touches and whose tests/ tree
+# the agent never sees.
+#
+# Anything the agent installed is deliberately NOT carried over: the verifier
+# deletes node_modules and reinstalls offline from its own registry mirror -- a
+# mirror that serves no express, body-parser, compression, cors, morgan,
+# method-override, errorhandler, express-urlrewrite, serve-static, qs, etag,
+# supertest, no Express-to-Fastify bridge (@fastify/express, middie, connect) and
+# none of the other retired distributions. A submission that did not really
+# migrate cannot be installed there at all.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission: five gates, all required. Failing one is a zero and nothing
+#      after it runs.
+#   2. ten behavioural modules, 40 points, paid only for a submission that passed
+#      every scored check in every one of them. Short of that the ladder stops
+#      here with nothing from this stage.
+#   3. six adversaries with an hour each to write a test State A passes and the
+#      submission fails. 60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures. Stage 1 has both
+# trees and no node and no npm, because a review that can build grades a build log
+# instead of an implementation. Stage 2 has one registry mirror -- the target one --
+# so installing is itself evidence, and it is not given State A's source at all,
+# because it talks to a running server rather than reading a repository. Stage 3 is
+# the only image that can build both stacks, because "State A passes this test" is
+# a claim that has to be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop build and install debris only. They exist so the verifier
+# cannot be handed a pre-built tree and fooled into loading something the
+# submitted *source* no longer contains: node_modules is rebuilt from the
+# manifest, so a vendored copy of Express cannot survive collection. Solutions
+# must therefore live in tracked source files, never inside these paths -- a
+# rule instruction.md states explicitly.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "node_modules",
+    ".npm",
+    ".npmrc",
+    "npm-shrinkwrap.json",
+    "*.tgz",
+    ".cache",
+    "coverage",
+    ".nyc_output",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".git",
+    ".husky/_",
+]
+
+[task]
+name = "swerefactor/fw02-jsonserver-express-to-fastify"
+description = "Migrate json-server 0.17.4 off Express 4 and its connect middleware stack onto Fastify 5, repository-wide, preserving byte-exact HTTP behaviour, the CLI surface and the published release artifacts."
+authors = []
+keywords = [
+    "swe-refactor",
+    "framework-migration",
+    "javascript",
+    "nodejs",
+    "express",
+    "fastify",
+    "commonjs",
+    "esm",
+    "json-server",
+    "offline",
+]
+
+[metadata]
+category = "framework-rewrite"
+difficulty = "frontier"
+license = "MIT"
+source_repository = "https://github.com/typicode/json-server"
+source_version = "0.17.4"
+state_a = "express-4.18.2 + body-parser + compression + cors + method-override + morgan + errorhandler + express-urlrewrite (CommonJS, Babel-compiled)"
+# Deliberately names only the framework. Which @fastify/* plugins a submission
+# reaches for -- if any -- is an engineering decision the gates do not grade: the
+# reference needs exactly one (@fastify/static) and hand-writes the rest of the
+# stack, but a submission that uses four, or none, is judged the same way.
+state_b = "fastify-5 (plugin choice and module system at the submission's discretion; native ESM intended)"
+tags = [
+    "whole-repository",
+    "framework-rewrite",
+    "middleware-to-plugin",
+    "commonjs-to-esm",
+    "http-contract",
+    "cli-contract",
+    "release-closure",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 9h wall clock. The scale is the whole repository: eight source modules under
+# src/, three routers, the rewriter, the CLI with its full yargs surface, and
+# the project's own suite (129 tests run by `node --test`, written against
+# supertest, which is retired). Express behaviour has to be reproduced to the
+# byte -- ETag algorithm,
+# Link pagination, the HTML error page, `json spaces = 2`, the exact 404/500
+# shapes -- on a framework whose defaults differ in every one of those places.
+#
+# The State A oracle runs locally on 127.0.0.1:8899 for differential testing, so
+# the time is spent on engineering rather than on guessing what Express does.
+#
+# no-network: every package the target stack may use is already in the local
+# registry mirror. Offline is what turns "the old framework left the dependency
+# closure" from a code-review opinion into a mechanical fact.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 32400.0
+network_mode = "no-network"
+
+[environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+NODE_ENV = ""
+JSON_SERVER_ORACLE_URL = "http://127.0.0.1:8899"
+SRB_REGISTRY_ROOT = "/opt/npm-registry"
+SRB_RETIRED_PACKAGES = "/opt/srb/retired-packages.txt"
+npm_config_cache = "/opt/npm-cache"
+npm_config_audit = "false"
+npm_config_fund = "false"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes
+# the build context of the verifier image and Harbor does not upload it to the
+# agent container. That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s. The margin above that is for building three
+# images -- and this task's images are the expensive kind: two npm registry
+# mirrors, two package caches and a babel build of the whole of src/. It is a
+# ceiling rather than an expectation. Most submissions never reach stage 3,
+# because stage 1 zeroed them or stage 2 came in short of full marks. A run
+# that does reach it spends most of its day there: six adversaries with an
+# hour each, sequentially, so no candidate inherits a server the previous one
+# left in a state of its own choosing -- which matters more here than in most
+# tasks, because json-server writes its database in place.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota
+# to be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+
+[verifier.environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+NODE_ENV = ""
+PYTHONDONTWRITEBYTECODE = "1"
+REPO_DIR = "/workspace/repo"
+VERIFIER_LOG_DIR = "/logs/verifier"
+SRB_REGISTRY_ROOT = "/opt/npm-registry"
+SRB_RETIRED_PACKAGES = "/opt/srb/retired-packages.txt"
+npm_config_cache = "/opt/npm-cache"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files. score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env]. A reference
+# implementation in the task directory has to be kept correct against every
+# future change to the suite, and its only consumer would be a smoke test that
+# the suite can be passed at all. The suite's own gate answers that: stage 3 is
+# asked only of a submission that scored stage 2 in full, so a tree that
+# reaches it has already passed every recorded check. What six models add is
+# the other half -- an hour each spent hunting for a behaviour nobody thought
+# to record.

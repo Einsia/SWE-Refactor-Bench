@@ -1,0 +1,75 @@
+# The read-only scan that runs before the review reads anything.
+#
+# Three modules, ~270 mechanical observations, no toolchain. Their output is not a
+# score and not a verdict: `swerefactor.scan` forces `required = False` on every check
+# it emits, prefixes the ids with `scan/`, and renders the ones that *found*
+# something into the review's prompt at `{{findings}}` as leads. The six gates in
+# evaluation.toml are the only required checks in this stage, and they are answered
+# by a model reading two trees.
+#
+# Before, 61 rule-based assertions decided audit between them, and about a third
+# of them were a reviewer's question asked by a regex -- whether a settings script
+# "declares all four projects", decided by searching for a quoted string; whether the
+# OSGi manifest is "generated", decided by grepping the build files for a header name
+# that is also in any manifest a submission transcribed. Those now run here, where
+# finding something means "open this path", and a correct submission that phrases its
+# build unusually loses nothing.
+#
+# What stayed a measurement stayed a measurement. 241 sha256 comparisons against the
+# tree mounted at /opt/original are not an interpretation of anything, and the prompt
+# says so: a mismatch is the certain kind of finding, and the review is told to
+# confirm the diff and fail `sources_untouched` rather than deliberate about it.
+schema = "swerefactor.scan-suite/1"
+task = "build02-gson-maven-to-gradle"
+
+# Fifteen minutes each. The work is a filesystem walk over ~260 files plus 241
+# sha256s, which takes seconds; the ceiling is here so a module that somehow loops
+# ends the stage with an `error` -- which re-runs -- instead of eating the review's
+# 5400s budget and timing out the whole stage.
+default_timeout_sec = 900
+
+# `lib/` lands on PYTHONPATH, which is what makes `-p srbscan` resolve and lets each
+# module `import srbscan` without a conftest per directory.
+lib_dir = "lib"
+
+# Did the sources survive?
+#
+# The measurement. 241 checksums against State A, one parametrized check each, plus
+# the composites that catch the ways a tree can pass 241 hash comparisons and still
+# be wrong -- a symlink hashes as its target, a relocated file is missing rather than
+# modified, and a flattened single-project layout loses three subprojects while
+# keeping every class.
+[[module]]
+id = "sources"
+title = "State A's sources, unmodified"
+dir = "modules/sources"
+
+# What describes the build?
+#
+# The advisory half. Two different things get called certain here and they should
+# not be confused. Whether the five POMs are gone is a certain *observation* -- the
+# file is there or it is not, and the review still decides what it means for
+# `maven_retired`. A build file naming `SRB_TARGET_NAME` or `SRB_TARGET_ROLE` is a
+# certain *verdict*: the prompt tells the review to fail `no_grader_awareness` on it
+# without weighing anything, and those two names are the whole of that list.
+# Whether a build script that mentions `maven` is resolving from Maven Central or
+# handing the work back to `mvn` is neither, so those are leads with citations. The
+# probe version is deliberately not a certainty of either kind: a build that
+# branches on it is fitted to the measurement, a build that names it in a comment is
+# not, and the prompt says so -- a submission once lost a required gate, and with it
+# its whole score, on a commented-out command line because this said otherwise.
+[[module]]
+id = "buildsystem"
+title = "What describes the build, and what it mentions"
+dir = "modules/buildsystem"
+
+# Was the output built, or brought?
+#
+# Stage 2 answers this by building; this module hands the review the paths that make
+# the answer quick. A checked-in MANIFEST.MF, a manifest containing text bnd computes
+# rather than accepts, a file enumerating the classes a correct build packages, a
+# base64 payload, a class file renamed past the `*.class` artifact filter.
+[[module]]
+id = "provenance"
+title = "Where the build output came from"
+dir = "modules/provenance"

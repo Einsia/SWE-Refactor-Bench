@@ -1,0 +1,50 @@
+# The candidate's test stack for stage 3.  One set of versions, used against both
+# trees.
+#
+# This is not the application's dependency list.  The application under test is a
+# JVM service built by Maven, and its dependencies are resolved from the offline
+# repository this image warms; nothing on this list reaches it.  What this list is
+# is the set of packages a candidate test file may import beyond the standard
+# library -- and both trees get it at identical versions, because a candidate whose
+# own test framework differed between the two halves of a comparison would not be
+# comparing the two web tiers.
+#
+# The same five lines as stage 2's requirements-runner.txt, at the same versions,
+# and the same three that stage 1's requirements-scan.txt shares with it.  A
+# benchmark should not run three pytests: a candidate that passes stage 3's pytest
+# and would have failed stage 2's is reporting a difference between two test
+# runners, and the report would name the submission for it.
+#
+# Deliberately absent: httpx, requests, urllib3 -- and any wrapper over
+# http.client.  The candidate speaks to both servers through
+# `lib/harness/wire.py`, the raw socket sender copied byte for byte from stage 2,
+# and the difference is the whole point.  Every convenience client rewrites the
+# request target it is handed, and on this task the target IS often the thing under
+# test: `/route%2Fnonsense`, a doubled separator mid-path, and a trailing slash
+# that differs from its sibling by one byte are each graded behaviour, and a client
+# that canonicalised paths would send the same bytes for all of them and find
+# nothing.
+#
+# No PyYAML, for stage 2's reason: the profile configs are produced by substituting
+# @APP_PORT@ and friends into a committed template, never by parsing and
+# re-emitting, so the only YAML reader whose behaviour matters is the one inside
+# the application being graded.
+#
+# pytest-timeout is not optional.  Every request here is a blocking read on a raw
+# socket, and a submission that accepts a connection without answering would
+# otherwise hang the candidate until the stage-level timeout killed it -- which
+# reads as "failed on the submission" for a reason that is not the candidate's
+# assertion, and which would cost the round its remaining budget as well.
+#
+# Installed with --require-hashes, as stage 2 installs the same five, so a
+# substituted artefact fails the image build rather than the grading run.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6
+iniconfig==2.0.0 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759
+pluggy==1.5.0 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest-timeout==2.3.1 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e

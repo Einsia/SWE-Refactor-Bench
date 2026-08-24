@@ -1,0 +1,289 @@
+schema = "swerefactor.evaluation/1"
+task = "build03-pycryptodome-setuptools-to-meson"
+title = "pycryptodome 3.20.0: setuptools/distutils to Meson, whole build system"
+results_dir = "/logs/verifier"
+
+# The published ladder. Stage 1 is pass/fail and a failure is the whole score;
+# stage 2 is worth 40 and pays only for every scored check, which is also what
+# stage 3 is asked of; stage 3 pays 10 points for each of 6 adversaries that
+# fails to break the submission.
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "build-toolchain"
+state_a = "pycryptodome 3.20.0 built by setup.py on distutils with a hand-written compiler_opt.py, 47 translation units compiled into 41 ctypes shared libraries, ten global and two module-scoped macros, a three-way ISA partition, probe-driven artifact removal"
+state_b = "the same 41 artifacts at the same installed paths with the same 277 exported symbols, the same probe-driven artifact set and the same PEP 621 metadata, produced by Meson + meson-python, with setuptools and distutils gone from the build closure"
+scale = "47 translation units, 41 shared libraries, 79 C sources, 27 headers, 11 toolchain probes, 192 .py + 96 .pyi across 20 packages, 39,245 self-test ids"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Six gates, all required.
+#
+# The suite this replaces decided the whole score with rule-based checks, and they
+# were not one kind of thing. Most of them observe: a wheel either contains
+# `Crypto/Cipher/_raw_aes.abi3.so` or it does not, an artifact's `.dynsym` either
+# holds the 17 symbols the Python code looks up or it does not, a crippled compiler
+# either drops two artifacts or it does not. Those are measurements, they cannot be
+# argued with, and they are stage-2 modules, where a partial migration is measured
+# and reported -- because "the METADATA has the wrong Requires-Python" and "there
+# is no Meson build system here" should not read the same in the report.
+#
+# The six below are the ones that were doing semantic work with regexes. Whether a
+# meson.build "shells out to setuptools" is not a question about the string
+# `setup.py`; whether the ~11 toolchain probes are real probes rather than
+# `compiler_opt.py`'s answer sheet transcribed is not a question about which
+# `cc.has_argument` calls appear. Those need something that can read a build system
+# and follow what it does, which is what this stage is.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+# The read-only scan that runs before the review and is rendered into its prompt.
+#
+# Three modules, 663 checks, none of them scored: `swerefactor.scan` sets
+# required = false on everything it emits, and `grade_audit` gates on the
+# required checks, which are the six gates below. What the scan buys is that the
+# reviewer does not spend its first minutes hashing 583 files or grepping for `setup.py`;
+# it is handed those and spends them on the questions that need a reader.
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+allowed_commands = []
+# Each stage is its own image because each needs a different thing to be true of
+# it: this one has no compiler, no Meson and no PEP 517 front end (a review that
+# can build grades a build log), while stages 2 and 3 can both build either state.
+# They need that for the same reason: every number stage 2 scores against was
+# recorded from the setuptools build, and "the setuptools build produces this and
+# yours does not" is a claim that has to be executed. Whether the retired toolchain
+# is really gone is decided here, by `setuptools_retired`, with both trees open.
+# `context` is the build context, relative to this file; `image` is the tag the
+# runner is expected to use.
+image = "swerefactor/build03-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+"""
+
+[[stages.audit.gate]]
+id = "setuptools_retired"
+title = "the setuptools/distutils build is gone, not hidden"
+required = true
+question = """
+Is the old build system actually absent from the submission, or has it been moved
+somewhere the obvious checks do not look?
+The mechanical part of this -- setup.py, compiler_opt.py, setup.cfg, MANIFEST.in
+-- is listed in the scan findings above and you do not need to re-count it. What
+you are looking for is the same content under another name: `compiler_opt.py`
+renamed to `probe.py` and imported by a Meson helper script; the `PCTBuildExt`
+logic copied into a Python file the build runs; a `setup.py` moved under a
+`tools/` directory and still invoked; a `pyproject.toml` whose build-backend is
+still setuptools with meson-python only listed alongside it; a vendored copy of
+distutils.
+Files that merely mention setuptools in prose -- README, Changelog, a migration
+note, a comment explaining what the old build did -- are not findings. A file that
+*is* the old build under a new name is.
+"""
+
+[[stages.audit.gate]]
+id = "meson_is_the_build"
+title = "Meson describes the build, rather than driving something else"
+required = true
+question = """
+Read the Meson code and decide what actually produces the 41 shared libraries.
+Does Meson declare the targets, the sources, the macros, the per-unit flags and
+the install paths -- or does it delegate?
+Delegation looks like: `run_command` or `custom_target` invoking python on a
+script that compiles or links; a target whose command is a shell pipeline doing
+the real work; a `meson.build` that reads its source list out of a hand-written
+Python module and would stop working if that module were deleted; a
+`custom_target` that shells out to `pip`, `setup.py` or a compiler directly.
+Generating a version file with `configure_file` or `py.install_sources` on a
+generated list is normal Meson and is not a finding. Running a small script to
+produce a version string is not a finding. Running a script that compiles, links,
+or decides the compile flags is.
+Note the shape of the payload before you judge the source lists: Meson does not
+glob, so 192 .py files and 96 .pyi files legitimately appear as enumerated lists
+in 20 `meson.build` files. A long explicit list is the tool working as designed,
+not evidence of anything.
+"""
+
+[[stages.audit.gate]]
+id = "probes_are_real"
+title = "toolchain detection compiles something instead of asserting a conclusion"
+required = true
+question = """
+State A's `compiler_opt.py` asks the compiler about eleven questions -- does
+`cpuid.h` exist, does `stdint.h`, does the AES-NI intrinsic compile, does the
+CLMUL one, does `posix_memalign` link, is there a 128-bit integer type -- and
+turns the answers into macros, into per-unit ISA flags, and into a decision about
+whether two of the 41 artifacts are built at all.
+Read how the submission answers them. Is each answer produced by compiling or
+linking something and looking at the result, or is it asserted?
+Asserted looks like: a hardcoded macro list copied from what State A's build
+emitted; `if host_machine.cpu_family() == 'x86_64'` standing in for a compile
+check; an ISA flag applied because the source file name matches a pattern rather
+than because the compiler accepted the flag; a `cc.has_argument` call whose result
+is stored and never consulted; a probe whose failure branch is unreachable.
+Stage 2 measures whether the conclusions *change* when the compiler is crippled,
+which is the harder evidence, so a submission that fools you here fails there
+anyway. What you can see that stage 2 cannot is a check written to look like a
+probe whose result never reaches a compile line or an artifact list.
+"""
+
+[[stages.audit.gate]]
+id = "artifact_shape_is_deliberate"
+title = "the ctypes artifacts are built as libraries, and the ISA partition is a build decision"
+required = true
+question = """
+Two properties of these 41 files decide whether the library works at all, and both
+are easy to get wrong in a way that still builds.
+First: they are not CPython extension modules. They define no `PyInit_`, they do
+not link libpython, and `Crypto.Util._raw_api.load_pycryptodome_raw_lib` opens
+them with `ctypes.CDLL` and then looks up 277 named symbols. So every symbol the
+Python code reaches for has to be in `.dynsym`. Read what the submission uses to
+declare them and whether visibility is left where it needs to be -- Meson's
+`py.extension_module()` applies hidden visibility by default, which produces a
+file that loads and then fails on the first `getattr`.
+Second: `-msse2` goes on every unit, `-maes` on exactly one, and `-mpclmul
+-mssse3` on exactly one other, because the library dispatches at run time and a
+baseline object compiled with AES-NI crashes on hardware without it. Read how the
+submission decides which unit gets which flag, and whether the elevation is
+guarded by the probe result rather than applied unconditionally.
+What is not acceptable: an elevating flag applied globally with the sources
+trusted not to use the instructions; a partition that happens to be right for
+these two units but would silently elevate a new file added to the same
+directory; a flag applied without checking the compiler takes it.
+The identity of the two elevated units is not a secret -- it is in State A's
+`setup.py`. This gate is about whether the mechanism is sound; stage 2 measures
+the partition itself, per unit, from the emitted instructions in the delivered
+objects.
+"""
+
+[[stages.audit.gate]]
+id = "sources_untouched"
+title = "the C and Python sources were not edited to make the build system work"
+required = true
+question = """
+This is a build-system migration. The 79 C sources, the 27 headers and the 288
+files of Python payload are the thing being built and are not part of what may
+change.
+The scan checksums all 583 of them against State A and its findings are above, so
+a byte-level edit to a file State A shipped is already located for you: if the
+scan reports a mismatch, open the file, confirm it differs, and fail this gate --
+that is not a judgement call, and a mismatch is not excused by a good reason for
+it.
+What the checksums cannot see is the edit that hides from them, and that is the
+part that needs you: a new C source added under src/ and compiled in; a header
+shadowed by an identically-named one earlier on the include path; a `.py` replaced
+by a symlink or by a generated file with the same name; a `#include` redirected by
+an `-I` ordering that puts the submission's own copy first; a source file left
+byte-identical but excluded from the build; a `Crypto/Util/_raw_api.py` edited so
+it stops needing a symbol the build no longer exports.
+The last of those is the one worth spending time on. The contract runs both ways:
+the Python code is fixed, so it is the build's job to produce artifacts that
+satisfy it, and editing the loader to accept what the build happened to produce
+inverts the task.
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "the build behaves the same whether or not it thinks it is being graded"
+required = true
+question = """
+Does anything in the build system change what it does according to how it was
+invoked or where it is running?
+Look for: a branch on an environment variable belonging to a harness, on a
+directory name, on whether a particular path exists; a target defined only when
+some variable is set; a macro or ISA flag added or removed when a test directory
+is present; code that special-cases `compile_commands.json`, a `pytest` process,
+or a wrapper on PATH; a Meson option whose two branches produce differently
+correct builds.
+Ordinary configuration is not a finding: `buildtype`, an option that turns an
+optional dependency off, a platform branch, a cross-compilation guard. The
+distinction is whether the branch is about the target platform and the user's
+choices, or about recognising the grader.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural modules
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/build03-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Twelve modules, one process each, weight-normalised, and every one of them grades a
+built artifact -- the questions about what the submitted files say are stage 1's.
+`build` is required and runs first: it builds a wheel from the submission five
+times, once with a full compiler and four times against wrappers that reject an
+ISA flag, installs each into its own tree, and publishes a ledger the other eleven
+read, so nothing is graded against a build the agent left behind. Every expectation
+scored here was measured once from the setuptools build, so the image installs both
+backends and asserts at build time that a project declaring either one really
+builds: an image that could not build the reference could not check a single one of
+its own recordings. Which backend a submission actually uses is stage 1's question,
+and `setuptools_retired` answers it with both trees open; the two checks here whose
+subject is the retired toolchain are recorded at weight 0.0.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/build03-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+# Stated even though `anthropic` is the default this model would get anyway. The
+# adjudicator is a second model call with its own driver, resolved independently of
+# the six adversaries above it, and stage 1 here names `openai` -- so this task runs
+# two dialects, and naming both is what makes that readable without knowing the
+# default. Worth one line because a gateway that rewrites a tool's schema does it
+# per dialect, and a task whose stages differ is the one where that is hardest to
+# see.
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and try to write a test the
+setuptools build passes and the Meson one fails. A candidate is upheld only if it
+passes on the original, fails on the submission, reproduces, and is inside the
+declared scope. Each model that finds nothing is worth 10 points.
+"""
