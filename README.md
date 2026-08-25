@@ -4,7 +4,7 @@
 
 **Can coding agents complete a long-horizon, whole-repository stack migration?**
 
-[🏠 **Homepage & Leaderboard**](https://lab.einsia.ai/swe-refactor-bench)
+[🏠 **Homepage**](https://lab.einsia.ai/swe-refactor-bench/) | [🏆 **Leaderboard**](https://lab.einsia.ai/swe-refactor-bench/leaderboard/) | [📄 **Paper**](https://arxiv.org/abs/2608.23564)
 
 </div>
 
@@ -126,10 +126,10 @@ re-pinned without appearing there. If you redistribute this repository, `NOTICE`
 ## Citing this work
 
 ```bibtex
-@misc{swerefactorbench2026,
-  title        = {SWERefactorBench: whole-repository migration as a benchmark},
-  author       = {The SWERefactorBench Authors},
-  year         = {2026},
-  howpublished = {\url{https://github.com/Einsia/SWE-Refactor-Bench}}
+@misc{hong2026swerefactorbenchcoding,
+      title={SWE Refactor Bench: Can Coding Agents Complete a Long-Horizon, Whole-Repository Stack Migration?}, 
+      author={Deyao Hong and Yizhe Chi and Wenyi Li and Xiaoqiu Wang and Mingju Gao and Kaisen Yang and Bingxiang He and Youjie Zheng and Calvin Xiao and Qinhuai Na},
+      journal={arXiv preprint arXiv:2608.23564},
+      year={2026}
 }
 ```
