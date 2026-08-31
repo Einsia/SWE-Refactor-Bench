@@ -997,35 +997,42 @@ SESSION_SPECS: list[Session] = [
     ),
 
     # -- custom headers ----------------------------------------------------
+    #
+    # The `Rmb` spelling below is frozen, not stale. These strings are request
+    # inputs: they go into `fingerprint()`, and the server echoes them into the
+    # responses `data/responses.json.gz` recorded from State A. Renaming them --
+    # which a project-wide rename once did -- invalidates that capture and stops
+    # the stage building, for a token that names nothing and means nothing. Any
+    # new spelling requires a fresh capture; see `harness/capture.py`.
     Session(
         id="headers",
-        argv=("--header", "X-Srb-One:first",
-              "--header", "X-Srb-Two: second",
+        argv=("--header", "X-Rmb-One:first",
+              "--header", "X-Rmb-Two: second",
               "--header", "Cache-Control:no-store",
-              "--header", "X-Srb-Empty:"),
+              "--header", "X-Rmb-Empty:"),
         cases=(
             Case(id="hd-root", path="/", body_mode="html",
-                 headers_extra=("x-srb-one", "x-srb-two", "cache-control",
-                                "x-srb-empty")),
+                 headers_extra=("x-rmb-one", "x-rmb-two", "cache-control",
+                                "x-rmb-empty")),
             Case(id="hd-file", path="/test.txt",
-                 headers_extra=("x-srb-one", "x-srb-two", "cache-control",
+                 headers_extra=("x-rmb-one", "x-rmb-two", "cache-control",
                                 "content-type", "etag")),
             Case(id="hd-404", path="/nope", body_mode="html",
-                 headers_extra=("x-srb-one", "cache-control"),
+                 headers_extra=("x-rmb-one", "cache-control"),
                  note="the custom headers survive the error path"),
             Case(id="hd-favicon", path="{favicon}",
-                 headers_extra=("x-srb-one", "content-type")),
+                 headers_extra=("x-rmb-one", "content-type")),
             Case(id="hd-head", method="HEAD", path="/test.txt",
-                 headers_extra=("x-srb-one", "x-srb-two")),
+                 headers_extra=("x-rmb-one", "x-rmb-two")),
             Case(id="hd-redirect", path="/dira", body_mode="shape",
-                 headers_extra=("x-srb-one", "location")),
+                 headers_extra=("x-rmb-one", "location")),
         ),
         note="DefaultHeaders wraps everything, including errors and redirects",
     ),
     Session(
         id="headers-override",
-        argv=("--header", "Content-Type:application/x-srb",
-              "--header", "Server:srb-test"),
+        argv=("--header", "Content-Type:application/x-rmb",
+              "--header", "Server:rmb-test"),
         cases=(
             Case(id="hdo-file", path="/test.txt",
                  headers_extra=("content-type", "server"),
@@ -1038,7 +1045,7 @@ SESSION_SPECS: list[Session] = [
     # -- presentation ------------------------------------------------------
     Session(
         id="title",
-        argv=("--title", "SRB <fw05> & \"friends\""),
+        argv=("--title", "RMB <fw05> & \"friends\""),
         cases=(
             Case(id="ti-root", path="/", body_mode="html",
                  note="the title is HTML-escaped in <title> and in the header"),

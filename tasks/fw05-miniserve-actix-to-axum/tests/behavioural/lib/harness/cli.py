@@ -112,7 +112,9 @@ INVOCATIONS: tuple[Invocation, ...] = (
 
     # Runtime failures, which exit 1 rather than 2. Their messages name a path,
     # so they are graded on the exit code and the substrings only.
-    Invocation(id="err-missing-path", argv=("/nonexistent-srb-path",),
+    # `rmb` here is frozen for the same reason as corpus.py's headers: this
+    # argv is part of fingerprint() and of the recorded capture.
+    Invocation(id="err-missing-path", argv=("/nonexistent-rmb-path",),
                exact=False, contains=("Error",)),
     Invocation(id="err-missing-tls-cert",
                argv=("--tls-cert", "/nonexistent.pem",
