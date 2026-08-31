@@ -167,9 +167,9 @@ RUN set -eu; \
             exit 1; \
         fi; \
     }; \
-    check /opt/srb/deps.txt                          8c21fb43b03e006d; \
-    check /root/.m2/settings.xml                     dd1e2f901e381beb; \
-    check /root/.gradle/init.d/srb-offline.gradle    9f1bb633e5ee6759; \
+    check /opt/srb/deps.txt                          1fe5a5321f4b4264; \
+    check /root/.m2/settings.xml                     c649f180bd8671cf; \
+    check /root/.gradle/init.d/srb-offline.gradle    3ffe9bd34097ec28; \
     echo "shared inputs: three files, digests match the agent image"
 
 # ---------------------------------------------------------------------------

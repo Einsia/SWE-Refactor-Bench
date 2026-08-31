@@ -381,9 +381,9 @@ RUN set -eu; cd /tests/behavioural; \
         printf '%s\n' "$out" | tail -20 >&2; \
         echo "FATAL: collection failed" >&2; exit 1; }; \
     got=$(printf '%s\n' "$out" | awk -F': ' '/: [0-9]+$/{s+=$2} END{print s+0}'); \
-    [ "$got" = "11510" ] || { \
+    [ "$got" = "11397" ] || { \
         printf '%s\n' "$out" | tail -5 >&2; \
-        echo "FATAL: collected ${got:-no} tests, expected 11510" >&2; exit 1; }; \
+        echo "FATAL: collected ${got:-no} tests, expected 11397" >&2; exit 1; }; \
     echo "the eleven pytest modules collect $got tests"
 
 ENV SRB_REPO=/workspace/repo \

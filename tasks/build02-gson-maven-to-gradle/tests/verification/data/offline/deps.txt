@@ -13,6 +13,16 @@
 # maven-install-plugin:3.1.2's own dependencies. Reached only by `mvn deploy`,
 # which runs the install phase before the deploy phase, so a closure built for
 # `mvn package` does not hold them and the publish configuration cannot build.
+#
+# maven-javadoc-plugin:3.4.1's own dependencies, for the same reason and with one
+# trap. The release profile binds it, so `mvn deploy` resolves the plugin before
+# it executes any goal -- which means -Dmaven.javadoc.skip=true cannot rescue an
+# incomplete closure: `skip` is read by the goal, and a plugin whose descriptor
+# will not resolve never reaches its goal. The trap is the classifier. Upstream
+# renamed sisu-guice's AOP-free variant `noaop` -> `no_aop` between 2.x and 3.x,
+# so the 2.1.7 line below and the 3.2.3 one spell it differently and a fetcher
+# run with -Dtransitive=false takes the manifest literally. Both spellings are
+# required: 2.1.7:noaop for the older plugin ancestry, 3.2.3:no_aop here.
 aopalliance:aopalliance:1.0:jar
 aopalliance:aopalliance:1.0:pom
 asm:asm-parent:3.3.1:pom
@@ -774,6 +784,7 @@ org.sonatype.sisu.inject:guice-plexus:1.4.2:pom
 org.sonatype.sisu:sisu-guice:2.1.7:jar:noaop
 org.sonatype.sisu:sisu-guice:3.1.0:pom
 org.sonatype.sisu:sisu-guice:3.2.3:jar
+org.sonatype.sisu:sisu-guice:3.2.3:jar:no_aop
 org.sonatype.sisu:sisu-guice:3.2.3:pom
 org.sonatype.sisu:sisu-inject-bean:1.4.2:jar
 org.sonatype.sisu:sisu-inject-plexus:1.4.2:jar
