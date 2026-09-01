@@ -126,7 +126,7 @@ re-pinned without appearing there. If you redistribute this repository, `NOTICE`
 ## Citing this work
 
 ```bibtex
-@misc{hong2026swerefactorbenchcoding,
+@article{hong2026swerefactorbenchcoding,
       title   = {SWE Refactor Bench: Can Coding Agents Complete a Long-Horizon, Whole-Repository Stack Migration?},
       author  = {Deyao Hong and Yizhe Chi and Wenyi Li and Xiaoqiu Wang and Mingju Gao and Kaisen Yang and Bingxiang He and Youjie Zheng and Calvin Xiao and Qinhuai Na},
       journal = {arXiv preprint arXiv:2608.23564},
