@@ -110,14 +110,14 @@ def test_no_delivered_source_detects_a_test_binary(repo, token):
 # submission that kept the tests it was given.
 #
 # The last two are this task's specifically.  `golden-statea` is the name of the
-# recorded response corpus, and `SWERefactorBenchBoundary` is the fixed multipart
+# recorded response corpus, and `RepoMorphBenchBoundary` is the fixed multipart
 # boundary every upload case in that corpus sends.  A server that recognised
 # either would be recognising the test, and the boundary in particular is the one
 # string in the whole rig that arrives inside a request body.
 _ORACLE_TOKENS = (
     "/opt/original", "/opt/workspace", "/opt/goproxy", "/opt/fixtures",
     "/opt/verifier", "/opt/state-a", "/logs/verifier", "golden-statea",
-    "SWERefactorBenchBoundary",
+    "RepoMorphBenchBoundary",
 )
 
 

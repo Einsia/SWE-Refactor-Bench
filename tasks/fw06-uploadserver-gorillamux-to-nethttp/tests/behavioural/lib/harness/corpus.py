@@ -52,7 +52,7 @@ PROFILES = {
 
 def _mp(filename: str, content: bytes, field: str = "file") -> tuple[dict, bytes]:
     """A minimal multipart/form-data body with a fixed boundary."""
-    b = "----SWERefactorBenchBoundary"
+    b = "----RepoMorphBenchBoundary"
     body = (
         f"--{b}\r\n"
         f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
