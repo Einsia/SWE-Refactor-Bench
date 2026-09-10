@@ -1,0 +1,305 @@
+{
+  "schema_version": "swerefactor-source-contract-v1",
+  "task": "lang07-jsonata-js-to-typescript",
+  "submission_root": "/workspace/repo",
+  "note": "The machine-readable half of instruction.md. Where the two disagree, this file is what the graders read, and the disagreement is a bug in the task -- tests/check-task.py round-trips the numbers in instruction.md against the ones here for exactly that reason. Everything stated as a fact about State A was measured from environment/original.tar.gz, not recalled.",
+
+  "product": {
+    "name": "JSONata",
+    "upstream_version": "2.2.2",
+    "upstream": "https://github.com/jsonata-js/jsonata",
+    "state_a_language": "JavaScript",
+    "state_b_language": "TypeScript",
+    "what_it_is": "A query and transformation language for JSON, and its reference implementation: a lexer, a Pratt parser producing an AST, a tree-walking evaluator with tail-call handling and a configurable stack limit, a builtin library of about a hundred functions, an XPath-style picture-string datetime formatter with its own ISO-week arithmetic, and a signature validator that type-checks calls at run time from a compact letter grammar. It is a *dynamic* language implementation: the values flowing through it are arbitrary JSON, sequences carry hidden flags, and an expression can register its own functions and be interrupted by a timeout or a depth limit."
+  },
+
+  "source_tree_facts": {
+    "file_count": 15,
+    "total_lines": 9706,
+    "total_lines_note": "Newline count (`wc -l`), summed over every file in the tree. Stated because the two obvious counters disagree: LICENSE has no trailing newline, so a line-splitting counter reports one more for it than `wc -l` does. Where a number here could be produced two ways, this file says which way.",
+    "javascript_file_count": 10,
+    "javascript_file_count_note": "The nine files under src/ plus tools/build.js. jsonata.d.ts is TypeScript declarations and is not counted; package.json is data.",
+    "src_bytes": 358338,
+    "src_lines": 9048,
+    "js_logic_lines": 6376,
+    "js_logic_lines_note": "Lines under src/ that are neither blank nor comment-only, block comments tracked, by the same counter tests/audit/lib/srbscan.py:count_ts_logic_lines() applies to the submission's TypeScript. 5,665 of them are the library and 711 are the probe.",
+    "library_logic_lines": 5665,
+    "probe_logic_lines": 711,
+    "probe_logic_lines_note": "src/probe.js, src/probe-wire.js and src/probe-fixtures.js, by the same counter. Counted separately from library_logic_lines because it is a different job: the six library modules are what is being ported, and the probe is the instrument the port is measured through -- but both have to be rewritten, because the probe is JavaScript too.",
+    "files": [
+      {"path": "src/jsonata.js", "bytes": 90893, "lines": 2271, "logic_lines": 1628, "role": "the evaluator: environment chain, sequence semantics, tail calls, timeout and depth limits, and the public API surface"},
+      {"path": "src/functions.js", "bytes": 70260, "lines": 2091, "logic_lines": 1397, "role": "the builtin library"},
+      {"path": "src/datetime.js", "bytes": 59684, "lines": 1361, "logic_lines": 1026, "role": "$fromMillis/$toMillis picture-string formatting and parsing, including ISO week-date arithmetic and roman/word numerals"},
+      {"path": "src/parser.js", "bytes": 56400, "lines": 1423, "logic_lines": 1222, "role": "tokeniser and Pratt parser, producing the AST and then rewriting it into evaluation form"},
+      {"path": "src/probe.js", "bytes": 32156, "lines": 753, "logic_lines": 468, "role": "the differential probe: the graded interface, not part of JSONata"},
+      {"path": "src/probe-wire.js", "bytes": 14702, "lines": 314, "logic_lines": 140, "role": "the probe's response encoder -- graded on bytes, so this is contract"},
+      {"path": "src/probe-fixtures.js", "bytes": 14041, "lines": 303, "logic_lines": 103, "role": "the closed vocabulary of registerable implementations and regex engines, plus the pinned clock and PRNG"},
+      {"path": "src/signature.js", "bytes": 13935, "lines": 317, "logic_lines": 265, "role": "the signature grammar and its run-time argument validation"},
+      {"path": "src/utils.js", "bytes": 6267, "lines": 215, "logic_lines": 127, "role": "shared predicates: sequence flags, deep equality, numeric coercion"},
+      {"path": "tools/build.js", "bytes": 4456, "lines": 118, "logic_lines": 63, "role": "the build. Loads every module to prove the require graph resolves, copies it into dist/, writes the declarations beside it, runs the probe's self-check."},
+      {"path": "jsonata.d.ts", "bytes": 2297, "lines": 81, "role": "the hand-written published type surface. See declarations_contract."},
+      {"path": "README.swerefactor.md", "bytes": 16665, "lines": 348, "role": "the probe protocol, in prose. The normative description of what probe_contract summarises."},
+      {"path": "README.md", "bytes": 1673, "lines": 68, "role": "upstream JSONata's own readme"},
+      {"path": "package.json", "bytes": 515, "lines": 25, "role": "name, version, main, types, and three scripts. No dependencies of any kind."},
+      {"path": "LICENSE", "bytes": 1035, "lines": 18, "role": "MIT. See preserved_paths -- it carries no copyright-holder line, which is upstream's own text and not a defect."}
+    ]
+  },
+
+  "ts_code_policy": {
+    "language": "TypeScript",
+    "compiled_by": "tsc 5.9.3, vendored into the image",
+    "runtime": "node 24.18.1 (the image's own), invoked as `node dist/probe.js`",
+    "allowed_dependencies": "none. The package.json the submission writes must have empty dependencies and devDependencies. There is no reachable registry at build time, so a declared dependency does not fail cleanly -- it fails the build.",
+    "min_ts_logic_lines": 2600,
+    "min_ts_logic_note": "A floor, not a target, and a low one. src/ is 6,376 logic lines of JavaScript by the counter this floor is measured with -- 5,665 library and 711 probe -- so an honest port lands in the same order of magnitude and clears this without trying. It exists to catch the shape of submission that ports a fraction of the engine and leaves the rest as stubs, or that reaches the answers some way other than by implementing them. A number *below* the floor is a finding; a number above it proves nothing on its own, which is why sources-ported is a reading gate and not a count.",
+    "forbidden_runtime_behaviour": [
+      "spawning a process from any code reachable from dist/probe.js -- child_process in any form, a name assembled at run time, an absolute path to a binary, process.binding, or a native addon",
+      "requiring or importing any JavaScript that came from State A rather than from tsc -- a relative path into a kept copy of the original, a vendored bundle, a base64 blob decoded and eval'd, a Function() over source text",
+      "requiring a third-party jsonata from anywhere, including a node_modules tree committed into the submission",
+      "reading anything under /opt/assets, /opt/swerefactor, /opt/state-a, /opt/original, /opt/freeze, /opt/baseline or /logs",
+      "reading its own expected output from any file, under any name, and replaying it",
+      "network access of any kind"
+    ],
+    "forbidden_runtime_note": "This list is what no-foreign-jsonata, no-reference-relay and no-answer-tables ask a reviewer to rule out. It is phrased as reachability from dist/probe.js rather than as forbidden strings, because the interesting versions are assembled rather than written: `require(['child','_process'].join('_'))` contains no forbidden token. The one *permitted* subprocess is the build's own -- `npm run build` invoking tsc is a process spawn and is the point.",
+    "any_policy": "Not forbidden, and deliberately so. JSONata values are arbitrary JSON, and upstream's own jsonata.d.ts types them `any` for that reason; a port that types every value `unknown` and casts at each use has written a different program. What strict-typing weighs is whether the types are load-bearing -- whether anything would break if every annotation were deleted -- not how many `any`s there are."
+  },
+
+  "build_contract": {
+    "driver": "npm",
+    "command": ["npm", "run", "build"],
+    "command_note": "This exact invocation, from the repository root, with no arguments and no environment beyond a working directory, and then `node dist/probe.js` the same way. It is what instruction.md publishes and what all three stages run, so it is also the only path any of them can observe -- a submission that works under some other invocation has been graded on the one that does not. default-path is the gate: it asks whether the documented path works and whether it is the *only* one that was made to work, which is a question about what a second entry point or an environment switch would be for. Also its business: a build that needs an undocumented step first, or one that only succeeds when dist/ already exists, since the grading image deletes dist/ before building.",
+    "script": "a tsc invocation on tsconfig.json, directly or through a script that does no more than invoke it",
+    "script_note": "package.json's `build` script is the entry point and the grader runs `npm run build` and nothing else. State A's script is `node tools/build.js`, which is a hand-rolled copy of the require graph because a JavaScript project has nothing to compile; a port is expected to replace it. Keeping a tools/build.js that shells out to tsc is fine, and so is `tsc -p tsconfig.json` directly. What is not fine is a build that never type-checks: a bundler in place of tsc, `transpileOnly`, or a script that copies src/ to dist/ and renames.",
+    "entrypoints": {
+      "dist/probe.js": "run as `node dist/probe.js`, speaks the protocol in probe_contract. Every stage of grading reaches the submission through this path and no other, so the path is fixed.",
+      "dist/jsonata.js": "the library, requirable on its own, exporting the callable `jsonata` as `module.exports` itself -- not as a `.default` property. package.json's `main` names it.",
+      "dist/jsonata.d.ts": "the declarations for that export, emitted by tsc. package.json's `types` names it. See declarations_contract."
+    },
+    "entrypoints_note": "Three fixed paths in dist/, and nothing else about dist/ is prescribed: tsc emits one .js per input module, so the rest of the graph lands beside them, and how src/ is organised internally is the port's own decision as long as these three names appear.",
+    "dist_self_contained": "dist/ copied to another directory, on its own, still works: `node <copy>/probe.js` speaks the protocol and `require('<copy>/jsonata.js')` gives the library. Nothing in dist/ may reach outside it at run time -- no require of ../src, no read of a file in the repository root.",
+    "idempotent": "two builds of the same tree emit byte-identical output. A build that stamps a timestamp, a hostname, or a random id into its output fails this, and it is measured (`build-idempotent`) rather than asked.",
+    "network_during_build": "none. `npm install` has nothing to fetch and the image has no registry.",
+    "environment_during_build": {
+      "node": "present, and it is both runtimes. This is the fact that shapes this whole task: unlike every other language pair in the benchmark, the old toolchain cannot be withheld from the graders, because it *is* the new toolchain. What keeps State A out of the behavioural image is therefore an allowlist over paths and a sweep for content, not a missing compiler.",
+      "tsc": "5.9.3, vendored. `npx tsc` resolves without a network.",
+      "npm": "present. Used only as the script driver.",
+      "python": "present in the grading images, absent from nothing the submission needs. The submission is not asked to use it."
+    },
+    "in_tree_output_forbidden": false,
+    "in_tree_output_note": "dist/ is where tsc is configured to write, so it exists after a build and its presence proves nothing. What must not be *committed* is a pre-built dist/: the grader deletes dist/ before building, so a committed one is not a way to pass -- it is a way to look like the build works when it does not. build-is-real is the gate."
+  },
+
+  "tsconfig_contract": {
+    "path": "tsconfig.json",
+    "path_note": "The submission writes this file; State A has no tsconfig.json at all, because State A is JavaScript. See submission_must_author.",
+    "required_true": ["strict", "noImplicitAny", "strictNullChecks", "noEmitOnError", "declaration"],
+    "required_values": {"rootDir": "src", "outDir": "dist", "module": "commonjs", "target": "ES2022"},
+    "required_values_note": "rootDir/outDir are what put the three fixed entrypoints at the three fixed paths: src/probe.ts becomes dist/probe.js. `module: commonjs` is required because the consumers and the probe reach the library through `require`, and the type-surface cases compile `import jsonata = require('jsonata')`. `target: ES2022` matches the runtime; it is pinned rather than left open so that nothing is silently downlevelled into a different program.",
+    "declaration_note": "`declaration: true` is in required_true, not merely allowed, because it is the difference between generated declarations and carried-across ones. State A's hand-written jsonata.d.ts passes all 24 type-surface rows unchanged -- it is a correct description of the same API -- so the corpus cannot tell the two apart, and declarations-generated is the gate that can.",
+    "types_must_stay_empty": true,
+    "types_note": "`\"types\": []` keeps the build honest about having no @types packages. Setting it to anything else asks tsc to resolve type packages that are not in the image, which fails the build rather than helping.",
+    "forbidden_relaxations": [
+      "turning off strict, noImplicitAny, strictNullChecks, noEmitOnError or declaration",
+      "a file-wide // @ts-nocheck",
+      "// @ts-ignore or // @ts-expect-error used to silence the compiler in bulk rather than to document one real limitation",
+      "allowJs with the implementation still in .js, or allowJs on with checkJs off",
+      "an include/files list narrowed so the large modules are never compiled",
+      "a declare block that types the engine as any",
+      "a bundler or transpiler in place of tsc, or tsc invoked with --noCheck / transpileOnly"
+    ],
+    "forbidden_relaxations_note": "strict-typing asks whether this is TypeScript or JavaScript wearing a .ts extension. Note that stage 2 does *not* read this file: a fully any-typed port answers every behavioural case correctly and passes all 24 type rows, so every item on this list is invisible to the corpus by construction. That is why the settings are contract here and judgement there."
+  },
+
+  "declarations_contract": {
+    "published_at": "dist/jsonata.d.ts",
+    "state_a_file": "jsonata.d.ts in the repository root, 2,297 bytes, 81 lines, hand-written",
+    "state_a_file_note": "Upstream's own declarations, with one repair: upstream omits `errors()`, which src/probe.js calls, so a declaration without it cannot describe the module the probe compiles against. The file here has it.",
+    "must_be_emitted": "by tsc from the ported source, not copied. A build step that writes, copies or concatenates a .d.ts is the finding declarations-generated exists for.",
+    "surface": {
+      "export_form": "`export =` a callable merged with a namespace, so `import jsonata = require('jsonata')` yields the callable itself",
+      "namespace_members": ["JsonataOptions", "Expression", "ExprNode", "JsonataError", "Environment", "Focus"],
+      "call_signature": "jsonata(expr: string, options?: JsonataOptions) -- a number as the first argument is a type error, not a runtime surprise",
+      "options_closed": "JsonataOptions is a closed object type over the five documented keys, each with its own type. An unrecognised key is a type error and `recover: \"yes\"` is a type error.",
+      "expression_members": ["evaluate", "assign", "registerFunction", "ast", "errors"],
+      "evaluate_forms": "evaluate(input, bindings?) returns a promise; the three-argument form taking a callback returns void",
+      "register_this": "registerFunction's implementation parameter is typed with `this` as the evaluation focus, so `this.input` and `this.environment` resolve inside it",
+      "errors_returns": "the diagnostics of a `recover: true` parse, or undefined for an expression that parsed cleanly"
+    },
+    "surface_note": "These are the properties the 24 type-surface rows compile against: 12 consumers that must compile and 12 that must be rejected. They are stated as consumer-visible properties rather than as declaration text because the port chooses its own type names -- what is graded is that a consumer relying on each property gets what it relied on."
+  },
+
+  "probe_contract": {
+    "note": "The probe is the entire graded interface. JSONata's JavaScript API shape is not graded directly beyond what declarations_contract states -- a TypeScript port has no reason to keep JavaScript's idioms, and the instruction does not ask it to. README.swerefactor.md in State A is the normative version of everything below, at length; this is the summary the graders read.",
+    "spec_document": "README.swerefactor.md",
+    "transport": "NDJSON: one JSON request per line on stdin, one JSON response per line on stdout, in order, until stdin reaches EOF, then exit 0",
+    "modes": {
+      "serve": "no arguments: read stdin, write stdout",
+      "batch": "--batch <in> <out>: read a file, write a file",
+      "selfcheck": "--selfcheck: reach every op once, exit 0"
+    },
+    "modes_note": "batch and serve must write byte-identical output for the same requests. They exist separately because expectations are captured to a file and grading runs over a pipe; a probe whose two modes disagree has a buffering bug, and the equivalence is measured rather than assumed.",
+    "encoding": "UTF-8, LF line endings, no BOM. No whitespace anywhere outside strings -- the comparison is on bytes, so the encoder is part of the protocol and not an implementation detail.",
+    "ops": ["hello", "ast", "eval", "evalcb", "assign", "register"],
+    "hello_result": {
+      "keys": ["engines", "impls", "ops", "protocol"],
+      "protocol": "jsonata-probe/1",
+      "note": "`hello` takes no `expr` and reaches no part of the engine. Its result is exactly these four keys, each list sorted, and `protocol` is the only version marker anywhere on the wire -- a port that emits a different one is wrong on the first line of every session. It is stated here because the rest of this section describes what each op *accepts*, and hello's result is the one that is a fixed document rather than a function of the request: the three lists are the closed vocabulary in fixtures, and everything else validates against them. environment/Dockerfile asserts this whole response byte-for-byte against the built reference, on the grounds that a port has to reproduce it for id 1; tests/check-task.py compares that assertion with the lists declared here, so the two cannot drift apart quietly."
+    },
+    "request_fields": {
+      "id": "integer, required on every request, echoed in the response",
+      "op": "string, required, one of ops[]",
+      "expr": "string, required for every op except hello",
+      "input": "any -- the evaluation input",
+      "bindings": "object (eval, evalcb)",
+      "options": "object -- see options",
+      "clock": "string, \"pinned\" or \"live\"",
+      "repeat": "integer -- evaluate n times, report the last",
+      "assigns": "array, required for assign",
+      "funcs": "array, required for register",
+      "recover": "boolean (ast only)"
+    },
+    "request_field_note": "Exactly the fields the op uses and no others: an unexpected field draws P0006 naming it, and validation walks the *request's own key order*, so a request with two problems reports whichever appears first in the document. That is a property of how the request is read, and a port that validates against its own field order instead reports the wrong one.",
+    "response_ok": "{\"id\":N,\"op\":\"...\",\"ok\":true,\"result\":<per-op>}",
+    "response_err": "{\"id\":N,\"op\":\"...\",\"ok\":false,\"error\":{...}}",
+    "response_note": "Both `id` and `op` are echoed. A request that fails validation still answers under its own id where one could be read; a line that is not JSON has no id to echo and answers under id 0.",
+    "options": {"recover": "boolean", "timeout": "integer, ms", "stack": "integer, max call depth", "sequence": "integer", "engine": "string, one of the fixture engine names"},
+    "options_note": "Four are JSONata's own and pass through untouched. `engine` is this protocol's stand-in for RegexEngine, which is a constructor and cannot travel over a wire, so a case names a fixture instead. An unusable option draws P0010.",
+    "error_kinds": {
+      "JsonataError": "the library raised a coded error. `code` is its code and `message` is its message, interpolated exactly as the library interpolates it -- those come from a data table inside the tree being ported, so they are portable.",
+      "ProtocolError": "the request was not usable. `code` is a P00NN and no library call was made.",
+      "Panic": "something failed with no code -- an exception the library did not raise itself, or a fixture that threw. Carries `cause` from a closed set, and no code."
+    },
+    "error_field_order": "kind first, message last, and in between only the fields that are present, in this fixed order: code, position, token, value, index, type. `value` is an encoded value, not raw JSON. There is deliberately no stack trace.",
+    "protocol_codes": {
+      "P0001": "the line is not valid JSON",
+      "P0002": "the request is not a JSON object",
+      "P0003": "the request has no integer id",
+      "P0004": "the request has no string op",
+      "P0005": "unknown op",
+      "P0006": "unexpected field",
+      "P0007": "field has the wrong type",
+      "P0008": "required field is missing",
+      "P0009": "unknown fixture name",
+      "P0010": "unusable option"
+    },
+    "panic_causes": ["stack-overflow", "range", "type", "syntax", "error", "nonvalue", "thrown-<typeof>"],
+    "panic_message_rule": "A Panic's `message` is published only when the fixtures authored it -- probe-fixtures marks those. Everything else on that path threw with a sentence the runtime composed about its own failure, naming the value and property it happened to be handed, and publishing that would make the JavaScript engine underneath the port part of the graded answer. A JsonataError keeps its message for the opposite reason: those come from JSONata's own table.",
+    "panic_cause_rule": "`cause` is a normalised token, not a class name, for the same reason. `stack-overflow` is declared and is excluded from the corpus: the depth at which a runtime exhausts its stack is a property of the machine.",
+    "recovered_diagnostics_rule": "For `recover: true`, `errors()` publishes every field of each recovered diagnostic *except* `stack`. The parser attaches `stack: (new Error()).stack` in 89 places, and a V8 stack names the absolute path, line and column of every frame -- three things no port can reproduce and which would also bake the build machine's directory layout into a shipped expectation file. Exactly one field is dropped rather than an allowlist being applied, so that a field upstream adds later does not silently stop being graded.",
+    "clock": {
+      "pinned_millis": 1700000000000,
+      "pinned_millis_iso": "2023-11-14T22:13:20.000Z",
+      "now": "$now(picture?, timezone?) formats that instant by delegating to $fromMillis, so both arguments behave exactly as they do there",
+      "random": "$random() is a mulberry32 generator seeded with 0x9E3779B9 and re-seeded per evaluation. The algorithm is written out in exact 32-bit operations in src/probe-fixtures.js, because \"a seeded PRNG\" is not a specification.",
+      "how": "shadowed before every evaluation through registerFunction -- the same route any consumer would take, so a port that implements registerFunction correctly inherits the pinning",
+      "live": "a request may opt out with \"clock\":\"live\". Such a response is compared against nothing, and the option exists so the pinning is observable rather than assumed."
+    },
+    "fixtures": {
+      "impls": ["double", "concat2", "describe", "throwing", "throwingCode", "focusInput", "focusLookup", "asyncDouble", "makeAdder", "counter", "nothing", "hostDate", "hostMap"],
+      "engines": ["native", "caseless", "nomatch", "broken"],
+      "note": "The closed vocabulary that lets a case exercise registered functions and regex engines with no code on the wire. `hello` reports both lists.",
+      "requirements": [
+        "focusInput and focusLookup read this.input and this.environment.lookup -- a registered function is called with the evaluation focus as its receiver, and a port that loses that binding fails both",
+        "asyncDouble returns a promise; the library awaits it, so the answer is the resolved value",
+        "counter holds state across calls within one registration and is rebuilt per registration",
+        "hostDate and hostMap return objects the library has no type for. It passes them through untouched, and they are the only values in reach of the `x` tag: $type says object, $boolean is false, $count is 1, $keys is undefined, and $string differs between them."
+      ]
+    }
+  },
+
+  "behavioral_contract": {
+    "reference": "JSONata 2.2.2 as shipped in State A, built by the pinned node and driven through the same probe protocol",
+    "comparison": "byte-exact on stdout, per response",
+    "note": "Where State A is quirky, arguably wrong, or plainly buggy, State B reproduces the quirk. The graded property is 'the same engine', not 'a correct JSONata', and the difference matters: a port that fixes something is a port that fails.",
+    "pinned_quirks": {
+      "sequences_are_flagged_arrays": "A JSONata sequence is a JavaScript array carrying hidden flags -- singleton, keepSingleton, cons -- that decide whether it collapses to its element on the way out. The flags are not data and are not visible in any answer; what is visible is the collapse, and it is the single most common thing a port gets subtly wrong.",
+      "undefined_is_a_value": "An expression that matches nothing yields undefined, which is *not* JSON null and encodes differently. Nothing that draws no answer at all is distinct again, and the encoder has a tag for each.",
+      "numeric_output_is_javascript_number_formatting": "Numbers come back the way the runtime prints them, including the exponent thresholds and the shortest-round-trip digits. This is portable between JavaScript and TypeScript for free -- it is the same runtime -- and it is stated because it is the sort of thing a port that reformats numbers itself would break.",
+      "validation_follows_request_key_order": "See probe_contract.request_field_note. Which of two bad fields is reported is decided by the order they appear in the incoming JSON, not by the order the validator checks them in.",
+      "signature_errors_report_argument_positions": "The signature validator's diagnostics carry the index of the offending argument, counted the way signature.js counts it, including for the focus-bound forms where the receiver shifts the numbering.",
+      "datetime_picture_edge_cases": "The picture-string formatter has its own ISO week-date arithmetic, roman and word numeral output, and a set of behaviours around out-of-range components that are not what a reading of the XPath spec alone would produce. datetime.js is the specification here."
+    },
+    "surfaces": [
+      "every operator and construct the language defines, at every precedence level",
+      "path navigation: predicates, wildcards, descendants, parent, context and index binding",
+      "the builtin library, including the higher-order functions and the ones whose behaviour depends on argument count",
+      "sequence and singleton semantics, which is where a subtly wrong port shows up",
+      "the transform operator and object constructors",
+      "the diagnostic surface: 101 declared codes, of which the corpus reaches 96",
+      "the public API through the probe's six ops: compile, evaluate, callback form, assign, registerFunction, ast",
+      "recovered parses: `recover: true` and what errors() then reports"
+    ],
+    "not_graded": [
+      "JSONata's internal JavaScript idioms. Class and function names, whether something is a closure or a method, and how src/ is organised into files are all the port's own decisions, except for the three fixed dist/ paths.",
+      "performance. The timeouts in tests/behavioural/suite.toml are one to two orders of magnitude above what the reference needs, deliberately: a correct port that builds an AST per evaluation is still a correct port.",
+      "the wall clock, $random under \"clock\":\"live\", iteration order where the engine does not fix it, and the depth at which the runtime exhausts its stack. These are excluded from the corpus and are on the verification stage's deny list."
+    ]
+  },
+
+  "preserved_paths": {
+    "description": "These exist in State A and must still exist, with the stated property. Paths the submission has to bring into being are in submission_must_author instead.",
+    "paths": [
+      {"path": "LICENSE", "requirement": "byte-identical to State A: 1,035 bytes, MIT, 18 newlines and no trailing one. Note that upstream's file carries no copyright-holder line -- it opens `MIT license` and goes straight into the permission grant, so the sentence about `The above copyright notice` refers to a notice that was never there. That is upstream's own text and preserving it as-is is correct; its absence is not a finding. Adding the port author's own copyright line beside it is correct practice."},
+      {"path": "package.json", "requirement": "still present, still naming the package `jsonata`, with `main` and `types` pointing at the two dist/ paths in build_contract.entrypoints and a `build` script per build_contract. Its dependency sets stay empty. Version and metadata are the port's own business."},
+      {"path": "README.md", "requirement": "still present. Nothing grades its contents: no behavioural check reads it, and the stage 1 gate that used to read it was advisory and has been deleted. Updating it for the port is good practice and leaving it describing the JavaScript install is not a finding."},
+      {"path": "README.swerefactor.md", "requirement": "still present, and still true. It documents the probe protocol, which is a contract the port must meet -- so unlike README.md it describes something that did not change, and leaving it unedited is correct rather than stale."}
+    ]
+  },
+
+  "removable_paths": {
+    "description": "State A material whose purpose ends with the JavaScript. Removing these is expected. They are not forbidden, because this task cannot forbid .js by extension -- see forbidden_paths -- so what weighs their survival is a reader.",
+    "paths": [
+      {"path": "src/jsonata.js", "note": "the evaluator being ported"},
+      {"path": "src/parser.js", "note": "the parser being ported"},
+      {"path": "src/functions.js", "note": "the builtin library being ported"},
+      {"path": "src/datetime.js", "note": "the datetime formatter being ported"},
+      {"path": "src/signature.js", "note": "the signature validator being ported"},
+      {"path": "src/utils.js", "note": "the shared predicates being ported"},
+      {"path": "src/probe.js", "note": "the probe. It is JavaScript too, and it is graded through dist/probe.js, so it is ported like everything else."},
+      {"path": "src/probe-wire.js", "note": "the response encoder -- ported, and its byte-level behaviour preserved exactly"},
+      {"path": "src/probe-fixtures.js", "note": "the fixture vocabulary and the pinned clock -- ported, including mulberry32 in exact 32-bit operations"},
+      {"path": "jsonata.d.ts", "note": "the hand-written declarations. tsc emits these now, so the hand-written file's purpose is gone -- and a copy of it sitting at the path the build emits to is what declarations-generated looks for."},
+      {"path": "tools/build.js", "note": "the hand-rolled build. May be removed, rewritten in TypeScript, or kept as JavaScript that invokes tsc -- all three are fine, because a build script runs before anything is compiled. See build_contract.script_note."}
+    ],
+    "note": "A submission that ported everything correctly and left src/*.js sitting beside the port has not cheated -- but it has not finished either, and no-javascript-implementation is where that is weighed."
+  },
+
+  "forbidden_paths": {
+    "description": "Paths matching these must not exist anywhere under the submission root.",
+    "extensions": [".node", ".wasm", ".so", ".dylib", ".dll", ".exe"],
+    "extensions_note": "A native addon or a wasm module is a way to ship an implementation that no source read finds, which is why the list is what it is -- and why it is short. This task cannot list `.js`, and that is the single biggest structural difference between it and every other language pair in the benchmark: node is both runtimes, `dist/` is full of emitted JavaScript by design, and a build helper in JavaScript is legitimate. An extension scan here would either forbid the build's own output or forbid nothing. The question 'is the original implementation still present as JavaScript' is therefore a reading question, asked by no-javascript-implementation, and stage 2 asserts nothing about it.",
+    "directories": ["node_modules"],
+    "directories_note": "A committed node_modules is how a third-party jsonata arrives without a dependency line in package.json. The build needs nothing from a registry, so there is nothing for a legitimate one to hold.",
+    "also_forbidden": ["*.js.bak", "*.js.orig", "*.ts.orig", "*.orig", "*.rej", "npm-shrinkwrap.json"],
+    "also_forbidden_note": "The backup extensions are listed because they are where the original goes when it is kept 'just in case': they are not scanned by anything a submission would think of as a test, and they are still the implementation.",
+    "exception": "dist/ is not forbidden -- it is where the build writes, and it must contain JavaScript. It must not be *committed*; see build_contract.in_tree_output_note."
+  },
+
+  "verifier_vocabulary": {
+    "description": "Names from the grading harness. A port has no reason to contain any of them, and a branch on one is what no-verifier-awareness is for.",
+    "tokens": ["SRB_", "SWEREFACTOR_", "swerefactor", "/opt/assets", "/opt/state-a", "/opt/original", "/opt/freeze", "/opt/baseline", "/logs", "evaluation.toml", "suite.toml", "probe.toml", "scan.toml", "audit", "verification", "expected.jsonl", "corpus"],
+    "note": "Mentioning a token is not the finding; branching on one is. A port that reads process.env.NODE_ENV or honours a DEBUG flag turns up in the same sweep and is ordinary engineering. What is not ordinary is behaviour that changes when a harness variable is present, or a code path taken only when a grading path exists on disk.",
+    "corpus_note": "expected.jsonl and corpus are on this list for a specific reason: the frozen expectations live at /opt/assets/corpus/*-expected.jsonl inside the behavioural image, and nothing in stage 2 can stop a submission's build from reading them. A port that answers by lookup rather than by evaluation is invisible to the corpus and visible to a reader, so no-reference-relay asks for it explicitly."
+  },
+
+  "state_a_probe": {
+    "description": "State A contains a working probe, in JavaScript, at src/probe.js with src/probe-wire.js and src/probe-fixtures.js beside it. It speaks exactly the protocol in probe_contract against the JavaScript engine, and the frozen expectations this task grades against were captured from it.",
+    "entry": "src/probe.js",
+    "built_to": "dist/probe.js",
+    "run": "node dist/probe.js  (or `npm run probe`)",
+    "selfcheck": "node dist/probe.js --selfcheck  (or `npm run selfcheck`) -- reaches every op once and exits 0",
+    "why_it_ships": "So the protocol has a runnable definition and not only a prose one. Any question about what an op returns for a given request can be settled by asking it, which is a better contract than any amount of prose -- and README.swerefactor.md is 348 lines of prose besides.",
+    "not_a_deliverable": "It is JavaScript, so it goes the way the rest of the JavaScript goes. Reproducing its behaviour in TypeScript is part of the task; keeping it is not. Note that this is unlike its siblings in other tasks: here the probe is written in the language being ported *from*, so the port cannot keep it and must not need to.",
+    "encoder_is_contract": "src/probe-wire.js decides bytes, and bytes are what is compared. Of the three probe files it is the one where a port has the least freedom: the field order, the escaping, the number formatting and the absence of whitespace are all graded directly."
+  },
+
+  "submission_must_author": {
+    "description": "Absent from State A. The TypeScript side is produced from nothing, so each of these is a deliverable, and its mere presence says only that the submission started.",
+    "paths": [
+      {"path": "tsconfig.json", "requirement": "the settings in tsconfig_contract. State A has no tsconfig at all, so there is no baseline to diff against and nothing to inherit."},
+      {"path": "src/*.ts", "requirement": "the ported engine and probe. The two names that are fixed are the ones rootDir/outDir map onto the fixed dist/ entrypoints -- an entry compiling to dist/jsonata.js and one compiling to dist/probe.js. Everything else about the file layout is the port's own decision."}
+    ],
+    "note": "package.json exists in State A and is a preserved path rather than one to author, but its `build` script has to change: State A's is `node tools/build.js`, which compiles nothing because there is nothing to compile."
+  }
+}
+

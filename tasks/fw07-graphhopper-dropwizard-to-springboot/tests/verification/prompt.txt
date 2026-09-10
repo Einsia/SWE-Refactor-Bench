@@ -1,0 +1,135 @@
+You are attacking a port of {{task}}.
+
+GraphHopper -- a routing engine that answers HTTP requests over an imported OpenStreetMap
+extract -- was migrated off Dropwizard onto a different application framework. You have
+the original repository at {{original}} and the rewrite at {{submission}}. Find one
+request the original answers correctly and the rewrite does not.
+
+WHAT THE APPLICATION IS
+
+A Maven reactor. Almost all of it -- the graph storage, the routing algorithms, the map
+matching, the transit engine -- is framework-neutral library code that the migration was
+not supposed to touch. What changed is the web tier: how the process starts, how a
+configuration file becomes objects, how resources are registered, how dependencies reach
+them, and how a thrown exception becomes an HTTP response.
+
+So the interesting question is not "does it compute routes" -- it does, or it would not
+have built -- but "does it still expose the same HTTP surface, and still refuse the same
+requests for the same reasons".
+
+WHERE PORTS LIKE THIS GO WRONG
+
+Read the original's web tier first: the entry point, the place where resources are
+registered, the injection bindings, and the exception mappers. Then check whether the
+rewrite reproduces each one, because these four are where the frameworks disagree.
+
+  - Registration. The original names every resource class explicitly, one call each. A
+    rewrite that relies on its framework's component scanning gets a set that is nearly
+    the same. A resource that was registered but is not discovered is a 404 on a path
+    that used to work, and nothing in a build or a smoke test notices.
+
+  - The error contract. The original turns a rejected request into a JSON document with a
+    `message` and a `hints` array, and it does so through mappers registered by hand. The
+    target framework has its own error machinery with its own default document. A rewrite
+    can easily keep the status code and lose the shape, or keep the shape on one class of
+    error and fall back to the framework's default on another.
+
+  - Conditional wiring. Which endpoints exist depends on the configuration file: the
+    transit resources are registered only when a GTFS feed is configured. A rewrite that
+    made registration unconditional exposes an endpoint that should not exist; one that
+    lost the condition's other half hides an endpoint that should. You have been given
+    one server of each kind, which is what makes this visible.
+
+  - Injection. The original binds concrete instances and named values in one place. A
+    rewrite has to reproduce every binding, including the ones with several candidate
+    implementations for one type, and the ones whose value comes from configuration
+    rather than from a constructor. A binding resolved to the wrong implementation still
+    starts, still answers, and answers differently.
+
+  - The second connector. The original serves monitoring endpoints on a separate port
+    from the application. Reproducing that split is deliberate work, and a rewrite can
+    put a surface on the wrong port, or serve it on both.
+
+None of that is a list of tests to write. It is where to look first, and your round's
+opening says which part of it is yours.
+
+HOW TO RUN A TEST
+
+Write a pytest file. Four servers are already running -- two graph profiles per tree --
+and these fixtures reach them:
+
+  servers        both profiles, by name:
+                   "base"  Andorra. Three routing profiles: `car` prepared for
+                           contraction hierarchies, `bike` for landmarks, `foot` for
+                           neither. No transit.
+                   "pt"    Beatty plus two GTFS feeds. The transit endpoints exist here
+                           and do not exist under "base".
+  server         shorthand for servers["base"]
+  pt             shorthand for servers["pt"]
+  gpx_body       the GPX track /match is fed, byte-identical to the one stage 2 posts
+
+Each client exposes:
+
+  .send(method, target, headers=..., body=..., port="app"|"admin", timeout=...)
+                                 the target goes on the wire VERBATIM -- no normalising,
+                                 no percent-encoding, no collapsing of slashes
+  .get / .head / .post / .options            shorthands on the application port
+  .post_json(target, payload)                a JSON body with the Content-Type
+  .admin(target)                             a GET on the admin connector
+  .profile / .host / .app_port / .admin_port
+
+A response has .status, .reason, .headers (ordered, original case, repeats kept) and
+.body. Three helpers do the normalisation this stage's scope requires: headers_map(resp)
+gives lowercase name -> list of values with order dropped, media_type(resp) gives the
+Content-Type without its charset, and as_json(resp) parses the body and tells you what
+arrived if it was not JSON.
+
+Some coordinates that are inside the imported extracts, so you do not have to guess:
+AD_A, AD_B and AD_C are in Andorra, OFF_MAP is in Paris and therefore outside it,
+BEATTY_A and BEATTY_B are in the transit extract, and PT_DEPARTURE is a timestamp the
+GTFS feeds actually have service on. Import them from `srbcandidate`.
+
+Nothing you do changes what the next test sees: every endpoint here is a reader and the
+graph is imported once at startup, so there is no state to clean up and no ordering to
+worry about.
+
+The first test of a round is slow -- both trees are compiled and all four graphs are
+imported before it can run, which is minutes, not seconds. Every test after it is fast.
+Do not read the first call's latency as a finding, and do not let it discourage you from
+running many.
+
+WHAT COUNTS
+
+A candidate must PASS on the original and FAIL on the rewrite. If it fails on both, the
+test is wrong about the original -- read what the original actually does rather than what
+it ought to do. On this task that happens most often in two ways: assuming an error is a
+400 when GraphHopper answers 500 for it, and assuming a parameter is validated when it is
+in fact ignored. Both are the original's behaviour, and the rewrite is required to
+reproduce it, not to improve on it.
+
+It must also reproduce. Every candidate is run three times per side, and a candidate that
+does not agree with itself is discarded as a flake rather than counted. That is what
+stops a route's `took`, a `Date`, a healthcheck `timestamp` or a GPX `<time>` from
+looking like a defect -- so do not build a claim on one.
+
+Assert on the response. The scope in your instructions is the application's public
+contract; a divergence in log output, in header order, in a charset parameter, in the
+bytes of a protobuf tile, or in the internal structure of the rewrite will be thrown out
+on review and your budget will have bought nothing.
+
+Do not try to work out which tree you are on. You cannot usefully: the servers are on
+random ports and the identity of the tree is not in your test's reach. A candidate that
+established which tree it was running against by any means other than asking a server a
+question would be rejected on sight even if it reproduced perfectly, because it
+demonstrates nothing about the migration.
+
+Run your ideas with `try_test` -- hand it a pytest file and it builds and starts both
+trees, runs your file against each, and tells you the outcome on each separately. It is
+the only way to execute anything here; you have no shell. A candidate that finds nothing
+costs you one call and tells you something, and a test you reasoned about but never ran
+has told you nothing at all.
+
+And if the port is sound, report that you found nothing. That is the correct answer to a
+correct migration. But reach it by running out of ideas rather than by claiming early:
+`report` ends the round whichever way you use it, and a claim the review throws out
+leaves whatever budget you had left unspent.

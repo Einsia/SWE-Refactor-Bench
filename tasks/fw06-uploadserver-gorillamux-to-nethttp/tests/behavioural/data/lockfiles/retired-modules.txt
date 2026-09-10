@@ -1,0 +1,20 @@
+# fw06 -- modules retired by this migration.
+#
+# One module path per line; blank lines and #-comments are ignored.
+#
+# The delivery proxy /opt/goproxy keeps every version's .mod for these modules
+# and has NO .zip for any of them.  Keeping the .mod is deliberate: while the
+# stale `require` is still in go.mod, `go mod tidy` needs the .mod to compute
+# the module graph, so deleting it would break tidy even for a CORRECT
+# migration.  Removing only the .zip makes compilation impossible while leaving
+# every honest path forward open -- and once the last import is gone,
+# `go mod tidy` drops the require by itself, offline.
+#
+# github.com/gorilla/mux is State A's only router.  It is imported from exactly
+# one file, pkg/server.go, whose dispatch block is thirteen lines: five route
+# registrations covering six method/path pairs, plus the not-found and
+# method-not-allowed handlers.  That is what makes this task small enough to be
+# tractable and still deep enough to be interesting -- those thirteen lines have
+# an observable surface of fifty-odd distinct HTTP responses, several of which
+# stdlib's ServeMux does not reproduce by default.
+github.com/gorilla/mux

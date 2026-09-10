@@ -1,0 +1,307 @@
+schema = "swerefactor.evaluation/1"
+task = "pf03-quickjs-byteorder-port"
+title = "QuickJS 2020-11-08: little-endian x86-64 to big-endian s390x, whole interpreter"
+results_dir = "/logs/verifier"
+
+# The published ladder. Stage 1 is pass/fail and a failure is the whole score;
+# stage 2 is worth 40 and pays only for every scored check, which is also what
+# stage 3 is asked of; stage 3 pays 10 points for each of 6 adversaries that
+# fails to break the submission.
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "platform-rewrite"
+state_a = "QuickJS 2020-11-08, ~85k lines of C, with cutils.h:32 unconditionally `#undef WORDS_BIGENDIAN`; builds clean for s390x today and computes wrong answers"
+state_b = "the same interpreter, byte-order correct on s390x: DataView, typed arrays, Float64 layout, the bytecode reader/writer and the cross-compiled qjsc bootstrap all agreeing with the little-endian reference"
+scale = "3 targets (x86-64, s390x, armhf), 2 emulated ABIs, 7 WORDS_BIGENDIAN-conditional sites behind 1 switch, 458 admitted keys per target across 8 programs"
+# The two counts in `scale` are measured, and both were wrong before.
+#
+# Sites: 7, not 8. grep finds eight mentions of WORDS_BIGENDIAN outside tests/ --
+# quickjs.c at 33791 (the BC_VERSION endian tag), 34130 and 34135 (JS_WriteBigNum's
+# limbs), 35057 and 35063 (JS_ReadBigNum's limbs), 53013 (DataView getValue) and
+# 53148 (DataView setValue), plus cutils.h:32. The last is `#undef WORDS_BIGENDIAN`
+# itself: the switch every other site is behind, not a site. Counting it as one made
+# the number look like the work was one edit larger than it is.
+#
+# Keys: 458. The two lines below are what holds that figure.
+# tests/behavioural/suite.toml carries the same counts under [metadata] and its
+# screen-audit module fails if they drift from the screen that shipped.
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Six gates, all required, all read-only.
+#
+# A regex list would be the obvious way to ask these, and the reason it is not one
+# is specific to this task rather than general good taste.  The subject here is a
+# compile-time conditional.  Every property worth gating on -- "the tree detects
+# its target's byte order", "the bootstrap accounts for a host/target mismatch",
+# "nothing was special-cased to make a test pass" -- is a property of what the
+# preprocessor will do, and a regex over C source cannot see that.  `#define
+# WORDS_BIGENDIAN 1` inside `#if 0` matches; a correct detection written with
+# `__BYTE_ORDER__` or with `<endian.h>` or with a build-system probe does not have
+# one spelling to match.  A gate list here would have failed correct ports for
+# choosing a different idiom and passed a submission that wrote the token into a
+# comment, and both of those are worse than no check at all.
+#
+# So the mechanical half is measured as behaviour in stage 2 -- build all three
+# targets and compare what they compute -- and the semantic half is asked here, of
+# a reader with both trees open and no compiler.  The three scan modules below
+# hand it the locations; none of them scores.
+#
+# Where that division is sharper than it first looks: stage 2 grades against
+# expectations recorded from State A, and on the port target State A does not have
+# the behaviour this task is about.  So stage 2 settles "was everything that worked
+# preserved" and "is what you claim to have fixed actually right", and it is the
+# gates here that settle "did the port happen at all".  That is why all six are
+# required and why this stage stops a submission rather than scoring it: a tree that
+# changed nothing scores full marks in stage 2, on the correct reading that it broke
+# nothing, and is stopped here.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+# The read-only scan whose findings are rendered into the review's prompt.  Three
+# modules: which files changed against State A, what build state was delivered,
+# and where byte-order handling appears to live.  `swerefactor.scan` sets
+# required = false on everything it emits and `grade_audit` gates on the
+# required checks, which are the six gates below and nothing else -- so a scan
+# finding costs a submission nothing on its own.  What it buys is that the
+# reviewer does not spend its first minutes diffing 96 files to find the 6 that moved.
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+allowed_commands = []
+# Each stage is its own image because each needs a different capability to be
+# absent.  This one has no compiler at all, so a review cannot start building and
+# grading logs -- which is stage 2's job, in an image that has all three
+# toolchains.  Stage 3 has the toolchains too, because "the original passes this
+# test" is a claim an adversary has to be able to execute.  `context` is the build
+# context relative to this file; `image` is the tag the runner uses.
+image = "swerefactor/pf03-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+"""
+
+[[stages.audit.gate]]
+id = "byte_order_is_detected"
+title = "the tree determines its target's byte order instead of assuming one"
+required = true
+question = """
+State A contains one line that makes this whole task necessary: cutils.h says
+`#undef WORDS_BIGENDIAN` unconditionally, so every byte-order-conditional block in
+the interpreter compiles as though the target were little-endian, on every target.
+Read how the submission decides that question now, and judge whether the answer is
+*determined* or *asserted*.
+Determined looks like: a preprocessor test of the compiler's own byte-order macros;
+including a platform header and comparing its constants; a build-system probe that
+compiles or runs something and defines the macro from the result. Any of these is
+fine and there is no idiom this gate prefers -- what matters is that the same
+source, handed to a different target's compiler, reaches a different conclusion.
+Asserted looks like: `#define WORDS_BIGENDIAN 1` with nothing guarding it; a
+decision keyed on a compiler or distribution name rather than on byte order; a
+detection whose result is computed and then not used by the code that needs it; two
+detections that can disagree with each other.
+You have no compiler here, so do not try to predict flag combinations. Read the
+conditionals and say whether a reader of this source can tell what will be defined
+for each of x86-64, s390x and armhf, and whether that answer is right for each.
+"""
+
+[[stages.audit.gate]]
+id = "byte_order_handling_is_complete"
+title = "every place the byte order matters was found, and none was over-reached"
+required = true
+question = """
+The conditional blocks are not all the same shape and this is where a partial port
+shows. Some are byte swaps of serialized integers. One is a version tag that marks
+which byte order a bytecode file was written in. Two are the `is_swap ^= 1` lines in
+DataView's get and set paths, where the sense of the flip depends on the host --
+those two are conditioned on the *absence* of the macro, so a submission that only
+looked for `#ifdef` sites will have missed them, and a submission that inverted them
+by hand as well as fixing the detection will have flipped them twice.
+Read every site where the byte order is consulted and judge two things: was each one
+reached, and is each one still doing what its surrounding code intends?
+Then look for the opposite failure. A change that swaps bytes somewhere the format
+does not call for it -- in the JSON writer, in string storage, in an atom table, in
+the hash of a property key -- is not a byte-order fix, it is a new bug on all three
+targets. Little-endian behaviour must be exactly what it was; this port is not
+allowed to change what x86-64 computes.
+Be clear about what stage 2 does and does not settle for you, because this gate is
+the only place some of it is seen. Every expectation stage 2 grades against was
+recorded from the original tree, so it charges a submission for a value the original
+itself produced correctly, or for an operation the original could not complete and
+the submission got running. Two consequences:
+It does catch a site that damages little-endian behaviour -- that is measured on two
+targets and 395 keys each -- and it does catch a site that produces a wrong value
+through an operation this submission got working, which is how an incomplete port of
+the bytecode serialiser is caught there.
+It does not catch a site that is wrong on the big-endian target in the same way the
+original is wrong, because there is no expectation to compare against: the original
+does not have that behaviour by premise. Nor does it catch a site that is wrong in a
+way this build happens not to exercise.
+So a missed site is yours to find, not something to defer.
+"""
+
+[[stages.audit.gate]]
+id = "bootstrap_handles_endianness"
+title = "the cross-compiled bootstrap accounts for host and target disagreeing"
+required = true
+question = """
+This tree bootstraps itself. Two C files in the build -- the REPL and the calculator
+-- are not written by hand: they are bytecode blobs produced by compiling JavaScript
+with the interpreter's own compiler, and when the build is cross-compiling that
+compiler runs on the *host*. The bytecode format stores multi-byte integers in the
+writer's native byte order and tags each file with which order that was; a reader
+that finds the wrong tag rejects the file, and a reader that is handed the wrong
+bytes without a tag mismatch reads garbage.
+Read the build rules that generate those blobs and decide whether the submission
+noticed. Does the build know when the host and the target disagree about byte order,
+and does it do something about it -- swapping the output, or building the blob some
+other way that is correct for the target?
+A submission that fixed the runtime and left this alone produces an interpreter that
+cannot start interactively on the big-endian target. A submission that hardcoded the
+swap on breaks the native build instead, which is the same mistake pointing the other
+way. Judge whether the condition is a condition.
+"""
+
+[[stages.audit.gate]]
+id = "semantics_unchanged"
+title = "JavaScript semantics were not adjusted to make a target agree"
+required = true
+question = """
+The contract is that the interpreter computes the same answers on a big-endian
+machine that it computes on a little-endian one -- not that it can be made to
+produce some particular output.
+Look for changes that reach the answer instead of the representation: a numeric
+result rounded or reformatted, a `toString` or `JSON.stringify` path altered, a
+comparison loosened, an object's property order changed, a typed-array element size
+changed, an exception's presence or absence flipped, a feature disabled on one target
+because it was inconvenient there.
+Also look for the version of this that is easier to miss: a code path guarded so it
+only runs on one target, when the language requires it on all of them. A `#ifdef`
+that turns off bignum, or Atomics, or SharedArrayBuffer, or a fast path, for the
+big-endian build, is a submission that stopped porting and started narrowing.
+Documentation, comments and build metadata are not findings here. A test file the
+submission added is not a finding either -- adding tests is allowed. A change to
+the *interpreter* that makes a test pass without making the interpreter right is
+exactly this gate's subject.
+"""
+
+[[stages.audit.gate]]
+id = "port_is_genuine"
+title = "the port is in the interpreter, not around it"
+required = true
+question = """
+Decide whether what was delivered is a port of this interpreter or an arrangement
+that avoids being one.
+Avoidance looks like: a second implementation vendored in and dispatched to; a
+build that produces a little-endian binary and runs it under emulation; the
+big-endian target quietly aliased to a little-endian one; work moved into a
+generated file that is checked in rather than generated; a wrapper script that
+post-processes the interpreter's output; a pre-built object or archive committed to
+the tree so a source file no longer has to compile.
+Adding a source file is not itself a finding -- a detection header or a small
+compatibility unit can be the right shape for this work. What makes it a finding is
+if the added file *replaces* rather than supports: if the interpreter's own
+byte-order handling is bypassed rather than fixed.
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "the interpreter and its build behave the same when nothing is watching"
+required = true
+question = """
+Does anything in the submission change what it does according to how it was
+invoked, where it is running, or what is present on disk?
+Look for: a branch on an environment variable belonging to a harness; a branch on a
+directory or file name that only a test tree would have; code that behaves one way
+under an emulator and another way on hardware; a build target defined only when some
+variable is set; output that differs when stdout is not a terminal in a way the
+language does not call for; a check for whether a particular test file exists.
+Ordinary configuration is not a finding. A build option, a platform branch, a debug
+guard, an `isatty` test in the REPL's own interactive handling -- these are how
+software is written. The distinction is whether the branch is about the target
+platform and the user's choices, or about recognising that it is being graded.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural modules
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+# Two of the three targets execute under qemu-user, which costs roughly 8x native
+# on interpreter startup.  Six builds and ~70 probes per target fit inside this
+# with room for a submission whose build is slower than the reference's.
+timeout_sec = 14400
+image = "swerefactor/pf03-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Twelve modules, one process each, weight-normalised, and every one grades a built
+executable rather than a source file. `build` is required and runs first: it
+compiles the reference and the submission for all three targets into a shared
+workspace the other eleven read, so nothing is measured against a tree the agent
+left behind. The oracle is the reference's own x86-64 answers, computed in this
+run rather than recorded -- there is no golden file to drift, and a reference that
+stopped building fails the image build rather than a submission. Every probe is
+admitted only if the reference agrees with itself across x86-64 and armhf, which
+screens out anything whose output depends on word size rather than byte order.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/pf03-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees, all three toolchains and both
+emulators, and try to write a test the original passes and the submission fails.
+The invariant under attack is agreement: a candidate runs a program on all three
+of a tree's targets and asserts they compute the same thing. The original is
+architecture-neutral for most programs and demonstrably not for byte-order ones,
+so a candidate that leans on State A's s390x brokenness fails on the original and
+is discarded mechanically. A candidate is upheld only if it passes on the original,
+fails on the submission, reproduces three times, and is inside the declared scope.
+Each model that finds nothing is worth 10 points.
+"""

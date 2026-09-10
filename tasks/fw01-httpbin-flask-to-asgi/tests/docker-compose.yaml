@@ -1,0 +1,33 @@
+# The verifier's two extra mounts.  Harbor reads this file for a separate
+# verifier (its environment_dir is tests/) and appends it after its own build
+# compose, so `main` here overrides scalars rather than redefining the service --
+# there is no build: key below, and none is wanted.
+#
+# Relative paths resolve against this file's directory, and Harbor runs compose
+# with --project-directory tests/, so ../environment reaches the task's own
+# environment/ without a copy.
+services:
+  main:
+    volumes:
+      # The socket the driver starts the three stage containers on.  A Docker
+      # socket is root on the host: this is the one privilege the verifier holds
+      # that a single-image verifier would not, and it is held by the
+      # orchestrator, which runs only this repository's code and never the
+      # submission.  Submitted code runs in a stage container, which has no
+      # socket -- and stage 2 has no network either.
+      #
+      # Override SRB_DOCKER_SOCKET for a rootless daemon, e.g.
+      # /run/user/$(id -u)/docker.sock.
+      - ${SRB_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+
+      # State A, read-only, still packed.  The driver unpacks it to scratch and
+      # copies it into each stage at /opt/original.  Mounted rather than COPYd
+      # because it sits outside tests/, which is the verifier's build context --
+      # and mounting the pristine tarball also means the reference tree cannot
+      # be whatever the agent left behind.
+      #
+      # The target path mirrors the repository's own layout under the verifier's
+      # --task-dir, which is /: the driver looks for
+      # <task-dir>/environment/original.tar.gz and does not need to be told
+      # about a mount.
+      - ../environment/original.tar.gz:/environment/original.tar.gz:ro

@@ -1,0 +1,281 @@
+TASK {{task}} -- find what the migration got wrong.
+
+Stylus is a CSS preprocessor written in JavaScript: a lexer, a parser, an
+evaluator and a compiler, about ten thousand lines, plus a built-in library of
+functions written half in JavaScript and half in Stylus itself. The original runs
+on Node and only on Node -- it reads files with `fs`, resolves paths with `path`,
+and its whole public API is synchronous because `fs.readFileSync` is.
+
+The submission is supposed to be the same compiler split in two: a
+platform-neutral core with no Node API in it at all, and a thin Node adapter that
+gives the core the file access it needs and re-exposes the same synchronous
+interface existing consumers already call. Same CSS out, byte for byte, for every
+input. `lib/` deleted.
+
+No `.styl` or `.css` file in the test corpus was allowed to change, and the
+verifier scores against its own pristine copy of them. So this is not a search for
+a bug in the language. It is a search for something the port stopped delivering.
+
+It has already been checked that the migration is real rather than a re-export of
+the old code, and several hundred recorded checks over the corpus, the API surface,
+the CLI and the source maps have already been run. Your job is the part those
+cannot do: find something nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the compiler as it works today, on Node, CommonJS
+  {{submission}}   the submission, which claims to be the same compiler
+                   rehosted onto a platform-neutral core
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack what the package does, not what it looks like. Read the original's `lib/`
+as much as you like -- it is the specification of what the answer should be, and
+reading it is the most productive thing you can do here.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. It is run against each tree
+separately and you are told the outcome on each.
+
+You do not get to spell out how the package is loaded, and this is the centre of
+the stage. The helper installs whichever tree it is handed as
+`node_modules/stylus` in a consumer directory and reaches it with a bare
+`await import('stylus')`. Node's own resolution then honours `exports` if the tree
+publishes one and `main` if it does not, and applies the tree's own `type`. So the
+CommonJS original and an ESM submission are reached by the same line, with no
+branch and no path -- which is also exactly how an npm consumer reaches this
+package. You cannot tell which tree you are on from how it loads. Ask the compiler
+a question instead.
+
+    import srbstylus
+
+    def test_colour_shorthand():
+        t = srbstylus.tree()
+        r = t.render("a\n  color red\n")
+        assert r.ok, str(r)
+        assert r.css == "a {\n  color: #f00;\n}\n"
+
+`npm ci --offline` runs once per tree, paid by the first candidate to arrive and
+cached for every candidate and round after it. A render is milliseconds.
+
+WHAT srbstylus GIVES YOU
+
+Return shapes are stated because getting one wrong costs you a candidate: a test
+that compares bytes to str does not raise, it just quietly fails on both trees and
+is discarded as "does not pass on the original".
+
+    tree() -> Tree
+        Install and prepare the tree under test, cached. Raises BuildFailed if it
+        will not install -- which is not a finding, see below.
+
+    t.project(files: dict[str, str]) -> Project
+        A scratch directory of `.styl` files. Yours; fresh per candidate per tree.
+        p.path, p.file(name) -> Path, p.read(name) -> str, p.listing() -> list[str]
+
+Every call below returns a Result. `r.ok` is the predicate; `str(r)` is what to put
+in an assertion message, and it carries the error when there is one.
+
+    r.css          -> str      the CSS. This is the product; compare it byte for
+                               byte, and note it is str, not bytes.
+    r.deps         -> list[str]
+    r.sourcemap    -> dict | None
+    r.keys         -> list[str]
+    r.was_promise  -> bool     whether the SYNCHRONOUS face returned a Promise
+    r.sync         -> bool     whether a callback ran before the next statement
+    r.name         -> str      the thrown error's constructor name
+    r.message      -> str      its message
+    r.value        -> dict     the whole raw answer, when you want something the
+                               named accessors do not cover
+
+    t.render(src=None, **opts)          -> Result   the synchronous face
+    t.render_callback(src, **opts)      -> Result   render(cb); sets r.sync
+    t.render_top_level(src, **opts)     -> Result   the module-level `render`
+    t.deps(...)                         -> Result
+    t.sourcemap(...)                    -> Result
+    t.convert_css(css)                  -> Result   the CSS-to-Stylus converter
+    t.version()                         -> Result
+    t.api_surface()                     -> Result   r.keys: the published names
+    t.callable_entry()                  -> Result   what the entry point IS
+    t.get(path)                         -> Result   one published name, by
+                                                    dotted path, e.g. "nodes.Unit"
+    t.middleware(project, url, **kw)    -> Result   drive stylus.middleware as
+                                                    Connect does; returns the CSS
+                                                    that landed on disk
+    t.op(kind, **fields)                -> Result   the general form
+    t.ops([...])                        -> list[Result]   many in one Node process
+
+    t.cli(*args, stdin=b"", cwd=None, timeout=120.0) -> Output
+        `bin/stylus`, as package.json publishes it.
+        out.returncode, out.stdout / out.stderr -> bytes, out.ok
+        out.text() / out.err_text() -> str
+        out.diagnostic() -> str    the one line naming the failure,
+                                   e.g. "ParseError: bad.styl:3:1"
+        out.message()    -> str    that plus Stylus's own explanation under it
+
+Options go through as keyword arguments and reach the renderer: `compress=True`,
+`linenos=True`, `paths=[...]`, `filename=...`, `sourcemap={...}`. Pass
+`project=p` when the input has to be on disk.
+
+Two things about the output you get back, both of which are deliberate:
+
+Paths are virtualised. Your project appears as `/proj/...`, and anything inside
+the tree under test collapses to `/tree/<internal>`. The second one is not
+tidiness: §2.1 requires `lib/` to be gone and §1.4 lets the submission put the
+built-in library wherever it likes, so the built-ins' path DIFFERS between the two
+trees by construction. Comparing it would be a break on every correct submission.
+
+A CLI error arrives as a diagnosis and nothing else. The Node uncaught-exception
+framing around it -- the `bin/stylus:NNN` throw site, the source excerpt, the
+stack frames, the `Node.js vNN` footer -- is stripped, because the path in it is
+the staged directory and the frames name internals §1.5 requires to change. What
+is left is what "the error is on stderr" actually asserts.
+
+Do not read the tree under test from inside a test. What is graded is what the
+package does.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+here the first half is a sharper constraint than it looks, because the original is
+NOT held to the instruction the submission was given. The original has no
+`src/core/`, no capability object, no `./web` export and no `renderAsync`. It is
+CommonJS. Its built-in library is at `lib/functions/`. Anything you assert that
+only the submission was asked for fails on the original and is worth nothing,
+however true it is. Those are stage 2's subject, and stage 2 has already measured
+them.
+
+`renderAsync` is worth naming because it is the most likely candidate you will
+waste. §1.5 asks the submission to add an async face; the original has none. So a
+test that calls it fails on the original, and a test shaped "if an async face
+exists it must agree with the sync face" passes on the original only vacuously,
+which is a manufactured break rather than a found one. The SYNCHRONOUS face is
+what is in scope, because it exists on both trees.
+
+So the productive shape is always the same: something a *consumer* of this package
+gets from the original and does not get from the submission. A `.styl` file that
+compiles to different bytes. An error that reports the wrong line. A dependency
+missing from `deps()`. A built-in function that is not there. A source map whose
+mappings are off by one. A flag that stopped meaning what it meant.
+
+Do not guess at what the original does -- ask it. `try_test` gives you the
+original's result on every attempt, so the cheapest way to learn what State A
+produces is to write the assertion you expect and read which way it went.
+
+A note on installs. If the submission does not install, `tree()` raises and your
+candidate fails on the submission -- but a package that does not install is stage
+2's verdict, not a finding here, and the adjudicator knows the difference. Note in
+particular that a submission which added a sixth dependency cannot install
+offline, which §3 forbids for exactly that reason. Do not spend the round on it.
+
+WHERE MIGRATIONS OF THIS KIND ACTUALLY FAIL
+
+Not on "does it compile `a\n  color red`". Everyone gets that. What gets left
+behind:
+
+  * The synchronous face over an asynchronous core. This is the hardest thing the
+    instruction asks for and the likeliest place to find something. The original is
+    synchronous all the way down because `fs.readFileSync` is. A core that cannot
+    do file I/O has to get its imports some other way, and every natural answer --
+    a Promise, an async resolver, a microtask -- is asynchronous. Making it look
+    synchronous again means resolving everything before evaluation starts, and that
+    only works if you know what to resolve before you have parsed it.
+
+    So: does `render()` return a String? Does `render(cb)` call back before the
+    next statement, or a tick later? And -- the case that gets forgotten -- what
+    happens when the compile FAILS? The original throws, synchronously, from the
+    call. A port over an async core naturally rejects instead, or throws on a later
+    tick where no `try` block is still on the stack. `was_promise` and `sync` are
+    on the Result for this, and an error's `name` and `message` are how you tell a
+    throw from a rejection.
+
+  * `@import`, which is where the sync problem becomes concrete. A relative
+    import. One found on `paths`. A directory resolving to `index.styl`. A glob.
+    A transitive chain three deep. A diamond where two files import the same
+    third -- once or twice? A cycle. An import that does not exist, which must
+    fail with the original's message and the original's position. `deps()` returns
+    the list; its ORDER is part of the answer.
+
+  * The built-in library. Half of it is `.styl` source that the original reads off
+    disk at `lib/functions/index.styl`. A core with no filesystem has to carry
+    that text some other way -- inlined, bundled, generated -- and §1.4 lets the
+    submission choose. Every choice can lose something: a file that was not
+    inlined, a stale copy, a whitespace or line-ending change in text that gets
+    parsed, one function of the dozens in `functions/index.styl` left out. Call
+    them. A missing built-in often does not throw; it renders as a literal.
+
+  * The Node libraries the core is not allowed to use. §3 keeps all five
+    dependencies but says the core must do without `glob`, `sax` and `source-map`
+    itself. That means three hand-written replacements, and hand-written
+    replacements of exactly these are where bugs live: glob ordering and its
+    treatment of `**`, VLQ encoding in the source map's `mappings`, and whatever
+    reads SVG dimensions. Compare `mappings` against the corpus's own `.map`
+    fixtures rather than eyeballing it.
+
+  * Path arithmetic without `path`. `path.resolve`, `path.relative`, `path.join`,
+    `path.dirname` all have behaviour a reimplementation gets nearly right: `..`
+    past the root, a trailing separator, an absolute path given where a relative
+    one was expected, a path with no directory part. This shows up in `deps()`,
+    in a source map's `sources`, in `resolve url`, and in the position an error
+    reports.
+
+  * Position arithmetic. Rehosting a lexer is where `line` and `column` go wrong.
+    An error on the first line. An error on the last line of a file with no
+    trailing newline. An error inside an imported file, which must report that
+    file's name and that file's line. Input arriving from stdin with no filename.
+    A file with CRLF endings, or with a BOM.
+
+  * Determinism. A compiler that swapped an object for a Map, or that now iterates
+    a Set where it iterated an array, gets the right answer most of the time. Glob
+    import order. Hoisted `@media` and `@import` order. `@extend` against several
+    matching selectors. Anything that reaches the CSS out of a hash. Render twice
+    in one process; render in two.
+
+  * The exact bytes, which §3 puts no qualifier on. `#f00` and not `red`.
+    `0.5` or `.5`. A trailing newline or not. `compress` with `linenos`. What a
+    unit does when it meets a different unit. Numbers near the precision the
+    formatter rounds at.
+
+  * `bin/stylus`, which is a program and gets less attention than the API. Every
+    flag State A accepts must still mean what it meant: `--compress`,
+    `--line-numbers`, `--include`, `--import`, `--out`, `--print`, `--deps`,
+    `--sourcemap` and its variants, `--watch`. stdin to stdout. A directory as
+    input. Exit 0 for a compile and 1 for a failure, with the diagnosis on stderr
+    -- and `--help` on stderr, `--version` on stdout, both exiting 0.
+
+  * The middleware, which must stay on the Node adapter because it is filesystem
+    and HTTP both. Does it write the CSS where it wrote it before? Does it
+    recompile when the source changed and not when it did not?
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence on
+the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. The install is shared across candidates, so do not
+write into the tree -- `project()` gives you your own directory, and it is fresh
+per candidate per tree.
+
+HOW TO SPEND THE BUDGET
+
+Read the original's `lib/` first -- `lib/renderer.js`, `lib/parser.js`,
+`lib/lexer.js`, `lib/functions/index.js` and `lib/functions/index.styl`. Between
+them they state every behaviour the submission was supposed to reproduce. Read them with a question
+in mind, and run each candidate the moment it is written: a wrong attempt costs
+one call and tells you more than another hour of reading. There is no turn
+limit; the wall clock is the only budget.
+
+Work in this order: pick something the original does that a platform-neutral core
+would have trouble doing, find the input that makes it visible, and write the
+assertion that pins it. Then check the assertion against the original before you
+believe it.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

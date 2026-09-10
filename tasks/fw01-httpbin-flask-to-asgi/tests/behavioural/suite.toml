@@ -1,0 +1,188 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "fw01-httpbin-flask-to-asgi"
+
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing?
+#
+# The reply corpus carries the most because it is the promise the task makes -- 437
+# recorded requests whose answers must survive the rewrite.  `asgi` and `concurrency`
+# come next: they are what distinguishes a real port from a WSGI bridge with an async
+# wrapper, and neither is visible in the corpus, which is replayed one request at a
+# time and would pass against a blocking handler.
+#
+# `install` is first, and the others depend on it.  Everything after it runs against
+# the venv it builds, so a submission that cannot be installed from source leaves them
+# nothing behavioural to measure: each fails its own checks on its own evidence, and
+# the stage pays nothing, because it pays only for a submission that passed every
+# scored check in every weighted module.
+#
+# Every module here builds the submission and then observes it: an HTTP response, a
+# scope driven directly into the application, an import of the installed distribution,
+# a schedule of overlapping requests.  None of them opens a file in the submitted tree
+# -- there is no `repo` fixture to hand them one.  Twenty-six checks that did are in
+# `tests/audit/`, which reads both trees and executes neither.
+
+default_timeout_sec = 1200
+lib_dir = "lib"
+
+[env]
+SRB_WHEELHOUSE = "/opt/wheelhouse"
+SRB_PINS = "/opt/pins/pinned-target.txt"
+
+[metadata]
+runtime = "python3.11"
+target_stack = "starlette 0.41.3 + uvicorn 0.32.1"
+corpus_cases = 437
+
+# --------------------------------------------------------------------------- #
+# The install everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "install"
+title = "offline install from submitted source"
+weight = 0.06
+timeout_sec = 2400
+command = ["python3", "run.py"]
+about = """
+Rebuilds the submission from source into $SRB_SUITE_WORK/venv, offline, against
+the image's COMPLETE wheelhouse -- complete because State A declares Flask and
+State A is the oracle every scored expectation in this suite was recorded from,
+so a wheel set that cannot install it could never show the suite is satisfiable.
+Every other module runs against that venv, so a wheelhouse without Flask would score
+State A near zero across the whole stage. Build artefacts that arrived with the tree are removed from a
+copy first, so a stale egg-info cannot make a broken pyproject.toml look
+installable. One weightless note records whether the tree also installs against the
+agent's own wheelhouse, which carries no Flask -- weightless because that is stage
+1's question and `flask_retired` owns it, so the note stays in this module's own log
+and is deleted at collection rather than reaching the report unpriced.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: State A's answers have to survive
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "corpus"
+title = "recorded request corpus: status, headers, bodies"
+# 0.27, + 0.03 released by `closure` and 0.06 by `asgi` when their checks went to
+# weight 0. Both displaced questions -- "is Flask gone", "is this really ASGI" -- are
+# stage 1's, and the thing this stage can say that stage 1 cannot is "the service
+# still answers what State A answered". `structural`, `streaming` and `flows` took
+# the other 0.08 of `asgi`'s weight for the same reason.
+weight = 0.36
+timeout_sec = 2400
+about = """
+Replays every recorded case once and compares status, headers and body against
+the frozen State A capture. Three files assert on one replay, so all three
+describe the same response rather than three separate ones.
+"""
+
+[[module]]
+id = "structural"
+title = "response shape and negotiated details"
+weight = 0.10
+about = "Guard messages, digest challenges, OPTIONS allow lists, multipart edges."
+
+[[module]]
+id = "openapi"
+title = "the published OpenAPI document"
+weight = 0.06
+about = """
+Per-operation comparison against the frozen spec. The document is part of the
+service's contract, and a rewrite that drops half its operations has changed
+what the service publishes about itself.
+"""
+
+[[module]]
+id = "streaming"
+title = "chunked and incremental delivery"
+weight = 0.09
+about = """
+/stream, /drip and /stream-bytes must arrive incrementally rather than being
+buffered and released at once -- the difference does not show in a body diff.
+"""
+
+[[module]]
+id = "compression"
+title = "content encodings on the wire"
+weight = 0.05
+about = "gzip, deflate and brotli, asserted on the raw bytes."
+
+[[module]]
+id = "flows"
+title = "multi-request flows"
+weight = 0.13
+about = "Redirect chains, cookie jars, auth handshakes, conditional requests."
+
+# --------------------------------------------------------------------------- #
+# Migration: the new stack really replaced the old one
+# --------------------------------------------------------------------------- #
+
+
+[[module]]
+id = "concurrency"
+title = "requests do not contaminate one another"
+weight = 0.10
+timeout_sec = 1800
+about = """
+Determinism, isolation and order-independence under overlap. The corpus is
+replayed sequentially, which is the friendliest possible schedule and hides the
+most common defect in a WSGI port: per-request state parked somewhere that is not
+per-request. Every check here compares the submission against itself.
+"""
+
+[[module]]
+id = "closure"
+title = "the retired stack has left the built artefact"
+weight = 0.01
+about = """
+What pip resolved into the venv, what is importable from it, and what the built
+distribution declares it needs -- asked through importlib.metadata rather than by
+grepping the tree. The wheelhouse contains no Flask, so this is measuring a build
+that could not have installed it. Whether Flask left the *source* is stage 1's
+question.
+
+Almost all of this module carries weight 0.0 -- so it runs, its findings stay in the
+module's own log, and it is deleted at collection rather than reported as worth
+nothing -- and the module's own weight is down from 0.04 to 0.01. Every check whose
+subject is the retired stack -- Flask is
+not installed, its modules are not importable, the declared requirements are inside
+an allowlist that excludes it -- is a statement about whether the migration
+happened, and State A fails all of them by construction: State A *is* the Flask
+app, and State A is also the capture that `data/` was recorded from and that every
+scored module here compares a submission against. A stage that charges for a check
+its own oracle fails is no longer measuring the submission against State A.
+`flask_retired` in stage 1 asks the same question over both trees with a reviewer,
+and a stage-1 gate failure scores the whole submission zero before this image runs.
+
+The 0.01 that is left buys the one check here that is not about the retired stack:
+the project still installs under its own name at version 0.10.2. This is a
+migration, not a release, and `install` records that httpbin is a distribution
+without asserting which version it is.
+"""
+
+[[module]]
+id = "entrypoint"
+title = "the service starts from something it publishes"
+weight = 0.02
+about = """
+Three observations of the running process: that a published entry point could
+start it at all (httpbin.bash, a console script, or the Procfile's web: line --
+whichever, not a named file), that the process answering does not identify itself
+as the retired server, and that importing the installed package does not pull the
+retired modules in with it.
+"""
+
+[[module]]
+id = "differential"
+title = "the same answers whoever is asking"
+weight = 0.02
+about = """
+Re-issues requests the corpus also makes, disguised behind four User-Agents, and
+requires the same answer; then asks for 40-odd neighbouring inputs the corpus
+never visits, which a lookup table keyed on the recorded paths cannot answer.
+Deliberately small in the weighting: this is corroboration for stage 1, not the
+place where cheating is decided.
+"""

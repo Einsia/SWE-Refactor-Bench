@@ -1,0 +1,50 @@
+# Variant: the connectors move.
+#
+# Identical to config-base.yml except that the ports substituted in are not the
+# ones the capture used.  A submission whose ports are compiled in, or which reads
+# them only from an environment variable its own framework happens to define,
+# cannot be reached here — and being reachable is the whole observation.
+#
+# The graph directory is shared with the base profile's on purpose: nothing about
+# the graph changes, so the launch is warm and costs a second rather than a minute.
+
+graphhopper:
+  datareader.file: @REPO_ROOT@/core/files/andorra.osm.pbf
+  graph.location: @GRAPH_DIR@
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+    - name: foot
+      custom_model_files: [foot.json]
+    - name: bike
+      custom_model_files: [bike.json]
+  profiles_ch:
+    - profile: car
+  profiles_lm:
+    - profile: bike
+  graph.encoded_values: car_access, car_average_speed, foot_access, foot_priority, foot_average_speed, bike_priority, bike_access, roundabout, bike_average_speed, average_slope, max_slope, road_class, road_environment, road_access, hike_rating, mtb_rating, foot_network, bike_network, get_off_bike, smoothness, surface, track_type, country, max_speed, road_class_link, lanes, toll, hazmat, hazmat_tunnel, hazmat_water, max_height, max_weight, max_width, max_length, max_axle_load, urban_density, foot_road_access, bike_road_access
+  graph.urban_density.threads: 1
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 1
+  routing.non_ch.max_waypoint_distance: 1000000
+  import.osm.ignored_highways: ""
+  graph.dataaccess.default_type: RAM_STORE
+
+server:
+  application_connectors:
+    - type: http
+      port: @APP_PORT@
+      bind_host: 0.0.0.0
+      max_request_header_size: 50k
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: @ADMIN_PORT@
+      bind_host: 0.0.0.0
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

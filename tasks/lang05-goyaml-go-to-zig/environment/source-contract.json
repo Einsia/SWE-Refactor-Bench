@@ -1,0 +1,369 @@
+{
+  "forbidden_paths": {
+    "description": "No file matching these patterns may exist anywhere under the submission root, at any depth, under any name. The Go implementation and its module metadata leave the source closure. Build outputs (zig-out/, .zig-cache/, zig-cache/) are excluded from the check and are discarded before grading.",
+    "extensions": [
+      ".go",
+      ".c",
+      ".h",
+      ".cc",
+      ".cpp",
+      ".hpp",
+      ".m",
+      ".o",
+      ".a",
+      ".so",
+      ".dylib",
+      ".dll",
+      ".obj",
+      ".lib",
+      ".wasm"
+    ],
+    "names": [
+      "go.mod",
+      "go.sum",
+      "go.work",
+      "go.work.sum",
+      "vendor",
+      "Makefile.go",
+      ".golangci.yml"
+    ],
+    "note": "The Go sources are State A's implementation; a submission that still contains them has not finished migrating. LICENSE, NOTICE and README.md stay -- see retained_paths."
+  },
+  "graded_builds": {
+    "description": "How this stage builds the tree it is given.  It resolves one entry from `drivers` by looking at the tree, then runs that entry's steps and grades the binary they produce.  Two entries exist because two trees are valid inputs: the repository as it was handed over, which builds with Go, and a finished port, which builds with Zig.  A submission is graded on whether the library still behaves the way it did -- not on which toolchain answered -- so the entry that matches decides the commands and nothing else about the score.",
+    "drivers": [
+      {
+        "binaries": [
+          {
+            "name": "yaml-probe",
+            "path": "bin/yaml-probe",
+            "role": "NDJSON library-surface probe defined in instruction.md"
+          }
+        ],
+        "build_steps": [
+          {
+            "invoked_as": [
+              "go",
+              "build",
+              "-o",
+              "bin/yaml-probe",
+              "./cmd/yaml-probe"
+            ],
+            "produces": "bin/yaml-probe",
+            "step": "install"
+          },
+          {
+            "invoked_as": [
+              "go",
+              "test",
+              "./..."
+            ],
+            "optional": true,
+            "step": "test"
+          }
+        ],
+        "detect": {
+          "any_glob_matches": [
+            "*.go"
+          ],
+          "any_path_exists": [
+            "go.mod"
+          ]
+        },
+        "detect_note": "Both predicates must hold.  `go.mod` alone is not enough: a completed Zig port that forgot to delete go.mod would resolve here, fail `go build` for want of the sources it had correctly removed, and score zero on the required build module.  A go.mod beside no Go source is a stray file, which stage 1's `no-go-sources` gate judges.",
+        "id": "state-a-go",
+        "language": "Go",
+        "note": "The commands `state_a.build_toolchain.commands` declares, with the install step naming an output path so the probe binary is at a fixed place.  `go test ./...` is the repository's own test suite and it runs offline: the module cache is primed in the image.",
+        "provenance_checks_not_scored": [
+          "shim-clean",
+          "no-go-in-binary",
+          "binaries-are-zig"
+        ],
+        "provenance_note": "Three of the four provenance checks ask whether the Go toolchain was kept.  Against a tree that is still Go the answer is yes by construction, so they are recorded and not scored: charging for them would mean the reference repository could not pass the stage built from it, and the question they exist to answer is stage 1's `no-go-sources` gate, which is required.  `no-runtime-spawn` is scored on both paths -- a probe that shells out is a defect in either language.",
+        "removes_go_toolchain_before_build": false,
+        "state": "state_a",
+        "toolchain": "go",
+        "toolchain_version": "go1.23.4"
+      },
+      {
+        "binaries": [
+          {
+            "name": "yaml-probe",
+            "path": "zig-out/bin/yaml-probe",
+            "role": "NDJSON library-surface probe defined in instruction.md"
+          }
+        ],
+        "build_steps": [
+          {
+            "invoked_as": [
+              "zig",
+              "build"
+            ],
+            "produces": "zig-out/bin/yaml-probe",
+            "step": "install"
+          },
+          {
+            "invoked_as": [
+              "zig",
+              "build",
+              "test"
+            ],
+            "optional": true,
+            "step": "test"
+          }
+        ],
+        "id": "state-b-zig",
+        "language": "Zig",
+        "note": "The published State B build, and the one every submission is expected to resolve to.  The Go toolchain is deleted from the container before this build runs and its absence is a scored case, so nothing downstream of it can reach a Go compiler.",
+        "provenance_checks_not_scored": [],
+        "removes_go_toolchain_before_build": true,
+        "state": "state_b",
+        "toolchain": "zig",
+        "toolchain_version": "0.14.1"
+      }
+    ],
+    "migration_note": "Resolving to `state-a-go` is not a passing outcome for a migration.  It means the tree still contains go.mod, which stage 1's `no-go-sources` and `no-go-in-build` gates both fail -- and a required gate failure zeroes the submission, whatever this stage measured.  What it buys is that this stage grades behaviour and only behaviour, so the reference repository scores full marks here and every point lost is a behavioural difference.",
+    "resolution": "The first entry whose `detect` block matches the submission root wins; the last entry has no `detect` and is the fallback.  A block may name two predicates -- `any_path_exists`, at least one of these relative paths exists, and `any_glob_matches`, at least one file matches one of these root-level globs -- and each is an \"any\" within itself and a conjunction against the other, so a driver naming both matches only a tree satisfying both.  Detection reads the tree only, never an environment variable and never a flag, so a submission cannot select its own driver by anything but its contents."
+  },
+  "graded_surface": {
+    "api": [
+      "yaml.Node (Kind, Style, Tag, Value, Anchor, Alias, Content, HeadComment, LineComment, FootComment, Line, Column)",
+      "yaml.Node.Decode into *yaml.Node only",
+      "yaml.Unmarshal into *yaml.Node",
+      "yaml.Marshal of *yaml.Node",
+      "yaml.NewDecoder / Decoder.Decode into *yaml.Node",
+      "yaml.NewEncoder / Encoder.Encode of *yaml.Node / Encoder.SetIndent / Encoder.Close",
+      "yaml.Kind constants (DocumentNode, SequenceNode, MappingNode, ScalarNode, AliasNode)",
+      "yaml.Style constants (TaggedStyle, DoubleQuotedStyle, SingleQuotedStyle, LiteralStyle, FoldedStyle, FlowStyle)",
+      "yaml.TypeError",
+      "error strings of the form 'yaml: [line N: ]<problem>'"
+    ],
+    "description": "The public API a submission is scored against. Everything here is graded; nothing outside it is.",
+    "not_graded": [
+      {
+        "reason": "reproducing it means reproducing Go's reflect type lattice and struct tag rules, which is a Go runtime port, not a YAML port",
+        "surface": "typed Marshal/Unmarshal (any type other than *yaml.Node)"
+      },
+      {
+        "reason": "same as above; the Node-to-Node paths are graded instead",
+        "surface": "yaml.Node.Decode into typed values, yaml.Marshal of typed values"
+      },
+      {
+        "reason": "only reachable from typed Marshal, which is not graded",
+        "surface": "sorter.go (map key ordering for the reflect encoder)"
+      },
+      {
+        "reason": "the resolved *tag* is graded; the Go time.Time value it decodes to is not, because that is Go's calendar library",
+        "surface": "!!timestamp values as time.Time"
+      },
+      {
+        "reason": "unreachable through the graded surface: unmarshal() returns early for *yaml.Node, so the decoder's alias budget is never charged.  It is a Go resource heuristic, not YAML behaviour",
+        "surface": "the 'document contains excessive aliasing' guard"
+      },
+      {
+        "reason": "part of the typed-decode surface above",
+        "surface": "yaml.IsZeroer, yaml.ObsoleteUnmarshaler, the yaml.v2 compatibility shims"
+      },
+      {
+        "reason": "only reached from the reflect encoder's stringv(); the Node emit path takes its style from the parsed node instead",
+        "surface": "isOldBool / isBase60Float quoting in encode.go"
+      }
+    ]
+  },
+  "native_code_policy": {
+    "allowed_zig_dependencies": "the Zig standard library only.  No entries in build.zig.zon's .dependencies, no vendored third-party Zig packages, no C sources, no @cImport, no translate-c.",
+    "description": "Every byte of executable code in the delivered binary must be produced by the pinned Zig toolchain from Zig sources inside the submission.",
+    "forbidden_build_actions": [
+      "running go, gofmt or any Go toolchain binary at build time or at run time",
+      "invoking @cImport or `zig translate-c`, or compiling C, C++ or Objective-C sources",
+      "linking a prebuilt object file, static archive or shared library that ships inside the submission",
+      "vendoring or embedding an existing YAML implementation in any language",
+      "embedding a table of expected probe responses",
+      "reaching the network"
+    ],
+    "min_zig_logic_lines": 4000,
+    "min_zig_logic_lines_note": "State A is 7609 non-blank non-comment lines of graded Go. The floor is well under that: a good Zig port is shorter in some places and longer in others, and the number exists only to reject a shim that delegates the work elsewhere.",
+    "zig_toolchain": "0.14.1"
+  },
+  "probe_protocol": {
+    "binary": "yaml-probe",
+    "error_kinds": [
+      "YamlError",
+      "ProtocolError",
+      "Panic"
+    ],
+    "handshake_op": "hello",
+    "operations": [
+      "node",
+      "emit",
+      "emit_indent",
+      "stream",
+      "emit_stream",
+      "roundtrip"
+    ],
+    "protocol_family": {
+      "cases": "protocol-cases.json",
+      "covers": [
+        "hello",
+        "emit_indent with no indent",
+        "emit_indent with a negative indent",
+        "unknown and absent op",
+        "a line that is not valid JSON",
+        "an empty line, which is skipped and not answered",
+        "ids out of order and repeated"
+      ],
+      "matched_by": "position",
+      "matched_by_reason": "a malformed line is answered with id 0, so ids do not identify those responses; position also grades the one-response-per-request-in-order rule that ids do not",
+      "requests": "protocol.ndjson"
+    },
+    "request_keys": [
+      "id",
+      "op",
+      "source",
+      "indent"
+    ],
+    "response_key_order": [
+      "id",
+      "ok",
+      "result",
+      "error"
+    ],
+    "specification": "instruction.md, section 'The probe protocol'",
+    "transport": "NDJSON on stdin/stdout, one request per line, one response per line, in order, flushed per line"
+  },
+  "product": {
+    "import_path": "gopkg.in/yaml.v3",
+    "name": "go-yaml",
+    "state_a_language": "Go",
+    "state_b_language": "Zig",
+    "upstream_archive_sha256": "cf05411540d3e6ef8f1fd88434b34f94cedaceb540329031d80e23b74540c4e5",
+    "upstream_repository": "https://github.com/go-yaml/yaml",
+    "upstream_version": "v3.0.1"
+  },
+  "retained_paths": {
+    "description": "These files must survive the migration unchanged in intent. The library is MIT and Apache-2.0 licensed and the notices travel with the port.",
+    "required": [
+      "LICENSE",
+      "NOTICE",
+      "README.md"
+    ]
+  },
+  "schema_version": "swerefactor-source-contract-v1",
+  "state_a": {
+    "anchor_files": [
+      "scannerc.go",
+      "parserc.go",
+      "emitterc.go",
+      "decode.go",
+      "encode.go",
+      "resolve.go",
+      "apic.go",
+      "yaml.go",
+      "yamlh.go",
+      "readerc.go",
+      "writerc.go",
+      "yamlprivateh.go"
+    ],
+    "archive_sha256": "4a9603dd8ad249177cd87b1f01ba6fe1794ddec017766ed371bba1df03b46ab2",
+    "build_toolchain": {
+      "commands": [
+        [
+          "go",
+          "build",
+          "./..."
+        ],
+        [
+          "go",
+          "test",
+          "./..."
+        ]
+      ],
+      "driver": "go",
+      "note": "State A builds and tests with the Go toolchain in the agent image.  It is there so the reference can be built and studied; State B must not need it."
+    },
+    "content_bytes": 487972,
+    "exclusions": [
+      ".DS_Store",
+      ".git",
+      ".git/*",
+      ".gitattributes",
+      ".github",
+      ".github/*",
+      ".gitignore",
+      ".hg",
+      ".hg/*",
+      ".svn",
+      ".svn/*",
+      ".travis.yml",
+      "CVS",
+      "CVS/*",
+      "_darcs",
+      "_darcs/*"
+    ],
+    "file_count": 33,
+    "go_logic_lines": 7609,
+    "go_logic_lines_per_file": {
+      "apic.go": 204,
+      "decode.go": 875,
+      "emitterc.go": 1765,
+      "encode.go": 487,
+      "parserc.go": 943,
+      "readerc.go": 260,
+      "resolve.go": 258,
+      "scannerc.go": 1768,
+      "writerc.go": 19,
+      "yaml.go": 412,
+      "yamlh.go": 503,
+      "yamlprivateh.go": 115
+    },
+    "graded_sources": [
+      "apic.go",
+      "decode.go",
+      "emitterc.go",
+      "encode.go",
+      "parserc.go",
+      "readerc.go",
+      "resolve.go",
+      "scannerc.go",
+      "writerc.go",
+      "yaml.go",
+      "yamlh.go",
+      "yamlprivateh.go"
+    ]
+  },
+  "state_b": {
+    "binaries": [
+      {
+        "name": "yaml-probe",
+        "path": "zig-out/bin/yaml-probe",
+        "role": "NDJSON library-surface probe defined in instruction.md"
+      }
+    ],
+    "build_driver": "zig build",
+    "build_script": "build.zig",
+    "build_steps": [
+      {
+        "invoked_as": [
+          "zig",
+          "build"
+        ],
+        "produces": "zig-out/bin/yaml-probe",
+        "step": "install"
+      },
+      {
+        "invoked_as": [
+          "zig",
+          "build",
+          "test"
+        ],
+        "optional": true,
+        "step": "test"
+      }
+    ],
+    "manifest": "build.zig.zon",
+    "source_root": "src",
+    "zig_version": "0.14.1"
+  },
+  "submission_root": "/workspace/repo",
+  "task": "lang05-goyaml-go-to-zig"
+}

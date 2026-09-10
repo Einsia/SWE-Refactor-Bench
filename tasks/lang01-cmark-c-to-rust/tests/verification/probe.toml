@@ -1,0 +1,157 @@
+schema = "swerefactor.verification-probe/1"
+task = "lang01-cmark-c-to-rust"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file run against a tree this script configures,
+# builds and installs.  Both trees are built and installed the same way -- the
+# published CMake argv, into a prefix of their own -- so a candidate sees only an
+# installed libcmark and an installed cmark(1), and cannot tell which tree it is
+# testing except by the answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two
+# implementations of a 400-page specification differ somewhere.  The allow list is
+# cmark's own published contract -- what the CommonMark specification requires,
+# what cmark.h declares, and what 0.31.1 does where the specification is silent.
+# The deny list is what instruction.md told the agent is explicitly not compared.
+# They have to agree: a scope that forbids what the instruction promised would
+# make the task unwinnable, and a scope that permits what the instruction excluded
+# would make it unlosable.
+[scope]
+allow = [
+  "rendered output byte for byte, in every format the CLI and the library expose: html, xml, man, latex, commonmark, plaintext",
+  "conformance with the CommonMark 0.31.2 specification, including every example in its own test suite and any document composed from those constructs",
+  "the effect of every documented option, alone and in combination: CMARK_OPT_SOURCEPOS, HARDBREAKS, NOBREAKS, SAFE, UNSAFE, VALIDATE_UTF8, SMART, NORMALIZE, and the width argument to the renderers",
+  "sourcepos values: the exact line and column ranges attached to every node type, which are part of the xml output and of the sourcepos option",
+  "named and numeric character references: the full HTML5 entity set, decimal and hexadecimal forms, malformed and unterminated forms, and references that decode to characters requiring replacement",
+  "UTF-8 handling: invalid sequences, overlong encodings, surrogates, NUL bytes, a BOM, and what VALIDATE_UTF8 replaces them with",
+  "case folding in link reference definitions and label matching, including the non-ASCII cases",
+  "the streaming interface: cmark_parser_feed with arbitrary chunk boundaries, including boundaries inside a multi-byte character, a line ending, or an entity, must produce the same tree as a single feed",
+  "the node tree API declared in cmark.h: every accessor and setter, cmark_node_new/free/unlink/insert_before/insert_after/prepend_child/append_child, cmark_consolidate_text_nodes, cmark_node_check, and the errors they return on invalid arguments",
+  "the iterator API: cmark_iter_next event order, cmark_iter_reset, and mutation during iteration",
+  "the custom allocator: cmark_mem must be honoured for every allocation the library makes, including cmark_parser_new_with_mem and cmark_node_new_with_mem",
+  "the ABI as cmark.h declares it: symbol presence, signatures, struct and enum values, CMARK_VERSION and cmark_version_string(), and the values of CMARK_OPT_* and cmark_node_type constants",
+  "the installed artifacts as a downstream package consumes them: libcmark.so.0.31.1 with its SONAME and symlinks, libcmark.a, libcmark.pc's fields, and that a C program compiles and links against them with nothing but pkg-config",
+  "the command-line interface: every flag cmark(1) documents, --help and --version output, exit statuses, reading from stdin and from named files, multiple input files, and its behaviour on a file that does not exist",
+  "resource behaviour on verification input: deeply nested constructs, pathological emphasis and link patterns, and very long lines must not crash, hang past a generous timeout, or exhaust memory where 0.31.1 does not",
+]
+deny = [
+  "wall-clock performance: a submission may be slower than the C, and any assertion of the form 'this must complete in N milliseconds' is out of scope. A hang that outlives the run timeout is in scope, as above; a constant factor is not.",
+  "peak memory as a number, and allocation counts, sizes or ordering -- cmark_mem must be *called*, which is in scope; how many times is not",
+  "the internal layout of any struct cmark.h does not define, and the value of any pointer",
+  "symbols beyond those cmark.h declares: a Rust build's private symbols, its panic and unwinding machinery, its allocator's own exports",
+  "the contents of the build directory, the names of intermediate artifacts, compiler or linker diagnostics, and anything in a build log",
+  "the internal structure of the submission: crate layout, module names, function names, file names, and whether any given piece of the port lives where the C did",
+  "text written to stderr on a successful run, and the exact wording of any diagnostic the CLI prints on failure -- exit status is in scope, prose is not",
+  "the presence, absence or content of C source, which stage 1 and the provenance module already judge",
+  "anything requiring a C compiler, or the C implementation, to be present in the submission",
+  "behaviour on input the original also gets wrong -- a candidate must pass on the original, which is what makes it a migration defect rather than an upstream bug",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Almost nothing here is timing
+# adjacent, but a flake that costs a submission ten points is a bug in the
+# benchmark, not a finding -- and the pathological-input cases are exactly where a
+# borderline timeout could produce one.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Configure + build + install + pytest, for one candidate, on one tree.  The
+# install is built once per tree and cached, so only the first candidate pays for
+# it; 900s is the ceiling for that first one, on a cold Rust build.
+candidate_timeout_sec = 1500.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a
+# candidate that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one document, one API call or
+one command line that the C answers correctly and the Rust does not. A round that
+finds nothing pays the submission 10 points; a round that errors pays nothing and
+is reported as an error rather than as either verdict.
+
+A candidate may be a pure-Python test driving the installed cmark(1), or a C
+program the helper compiles against the installed library -- the latter is how the
+ABI, the allocator and the streaming parser get attacked, because none of them is
+reachable from the command line.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds
+# converge on the same three obvious constructs; six pointed ones cover the
+# library.  It is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-positions-and-stress"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = "sourcepos and parser robustness together: the exact line and column ranges on every node type, in xml output and under CMARK_OPT_SOURCEPOS, especially where a construct's extent is not obvious -- setext headings, lazy continuation lines, list items with irregular indentation, unclosed fences, anything containing a tab. Then the input the C has upstream regression tests for: deeply nested brackets and blockquotes, long emphasis runs, many unclosed constructs, enormous link reference tables, very long lines. A crash or a hang is the finding, not the time taken."
+
+[[adversary]]
+id = "a02-text-encoding"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = "character references, UTF-8 and case folding: the full HTML5 named entity set including the multi-codepoint ones, decimal and hex forms at their boundaries, unterminated and malformed references, invalid UTF-8 under and without VALIDATE_UTF8, overlong encodings, surrogates, NUL bytes, a BOM, characters that need replacing, and label matching in link reference definitions where the fold is not ASCII"
+
+[[adversary]]
+id = "a03-c-api"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = "the library's C API rather than its output: cmark_parser_feed with chunk boundaries inside a CRLF, a multi-byte character, an entity, a fence, a link reference definition and an HTML block, each of which must give the same tree as feeding the document whole; then every node accessor on a node of the wrong type, every setter's return value, unlink and insert on a node with no parent, cmark_node_check's repairs, cmark_consolidate_text_nodes, freeing a tree with an unlinked subtree, and cmark_iter_next's event order under reset and under mutation during iteration"
+
+[[adversary]]
+id = "a04-installed-package"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = "the artifacts as a downstream package consumes them, and the allocator behind them: pkg-config's cflags and libs, the SONAME and .so symlink chain, linking a C program against libcmark.a as well as the shared library, every symbol cmark.h declares present with the right linkage, the numeric values of the CMARK_OPT_* and cmark_node_type constants, and a custom cmark_mem passed to cmark_parser_new_with_mem or cmark_node_new_with_mem receiving every allocation and free for that tree -- including those made by the renderers and by cmark_consolidate_text_nodes"
+
+[[adversary]]
+id = "a05-inline-and-writers"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = "inline parsing and the writers that get less attention than HTML: the delimiter-run rules at their edges -- intraword underscores, mixed and nested runs, the length-mod-3 rule, unmatched brackets, nested and unbalanced link text, images inside links, autolinks against raw HTML, backslash escapes at construct boundaries -- and then man, latex, plaintext and commonmark, their escaping rules, the width argument and where it wraps, and whether rendering to commonmark and parsing the result gives the same tree"
+
+[[adversary]]
+id = "a06-options-cli-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = "the knobs a user actually turns, then anything at all. Option combinations: SAFE with UNSAFE, HARDBREAKS with NOBREAKS, SMART's quote and dash rules in adversarial positions, NORMALIZE, and every option against raw HTML blocks, comments, CDATA, declarations and processing instructions. cmark(1) itself: every documented flag, --help and --version, unknown flags, a flag given twice, --to with an unknown format, multiple input files, a missing file, a directory as input, an empty file, a closed stdin, and the exit status in each case. When those are spent, read the C and follow whatever looks weakest -- this round is the one not told where to look."

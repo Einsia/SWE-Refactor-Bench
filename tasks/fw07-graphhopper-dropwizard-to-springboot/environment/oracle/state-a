@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+# Start, stop and query the oracle: State A, prebuilt and runnable.
+#
+#   state-a start [base|pt]   start in the background, wait until it answers
+#   state-a stop              stop it
+#   state-a log               follow its log
+#   state-a status            is it up, and under which configuration
+#   state-a verify            are its files the ones that shipped
+#   state-a restore           put the configs back the way they shipped
+#
+# Exit 3 means one thing only: the oracle is not the reference it claims to be.
+# Exit 2 is misuse, exit 1 an operational failure such as a launch that did not
+# come up.  Nothing here exits 3 for any other reason, so a 3 is always worth
+# reading the message for.
+# ---
+# Everything below this separator is background, not usage: the `*)` branch prints
+# the comment block down to the `# ---` and stops.  It used to print lines 2 to 9 by
+# number, which had to be kept in agreement with the text by hand and was already
+# wrong -- adding two subcommands pushed the first line of the prose into the help.
+#
+# Why a prebuilt jar rather than `mvn package`.  The local Maven repository in
+# this image has had the retired framework's jars removed -- that omission IS the
+# dependency ban -- so State A's web layer cannot be compiled here.  The jar was
+# therefore built during the image build, before the retirement, and stashed
+# outside the repository.  It is a fat jar, so it carries its own dependencies and
+# needs nothing from ~/.m2 to run.
+#
+# The jar is NOT part of your solution and is not collected: it lives in /opt,
+# nothing under /opt is taken out of this container, and loose jars are excluded
+# anyway.  Do not copy it into the repository, and do not unpack it to recover the
+# retired jars -- putting them back is judged as keeping the framework.
+set -euo pipefail
+
+ORACLE_DIR=/opt/oracle
+JAR="$ORACLE_DIR/state-a.jar"
+MANIFEST="$ORACLE_DIR/.manifest.sha256"
+PRISTINE="$ORACLE_DIR/.pristine"
+RUN_DIR="$ORACLE_DIR/run"
+LOG="$RUN_DIR/state-a.log"
+PIDFILE="$RUN_DIR/state-a.pid"
+WHICHFILE="$RUN_DIR/state-a.config"
+APP_PORT=8989
+ADMIN_PORT=8990
+READY_TIMEOUT=${READY_TIMEOUT:-900}
+
+mkdir -p "$RUN_DIR"
+
+alive() { [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
+
+# Unlink before creating, rather than truncating in place.
+#
+# `: > "$LOG"` needs write permission on the FILE, and a log left by an earlier
+# run belongs to whoever made that run -- root, if the image build or a setup
+# step started the oracle before the agent phase dropped to its own uid.  A
+# writable run/ does NOT make a root-owned 0644 log truncatable, so the redirect
+# failed with EACCES on a line that names the oracle,
+#
+#   state-a: line NNN: /opt/oracle/run/state-a.log: Permission denied
+#
+# which reads as a broken reference rather than as a stale file.  Removing the
+# file is governed by the DIRECTORY's mode instead, which is the one thing run/
+# is given, so this works at either uid and in either order.
+fresh() {
+    rm -f "$1" 2>/dev/null || :
+    : > "$1" || {
+        echo "cannot create $1 as uid $(id -u): is $RUN_DIR writable?" >&2
+        exit 1; }
+}
+
+# --------------------------------------------------------------------------- #
+# is this still the reference?
+# --------------------------------------------------------------------------- #
+# `start` used to check only that the config and the jar EXIST, which cannot
+# distinguish the shipped reference from one that has been edited.  You run as root
+# and /opt/oracle is writable, so that distinction is not academic: on the run this
+# was written for, config-pt.yml was repointed at a private graph directory and then
+# put back with `sed -i`.  The restore happened to be byte-correct, so the only
+# trace left anywhere was an mtime -- and had it been off by a character, the oracle
+# would have disagreed with itself for the rest of the run while still answering
+# every query confidently.  A wrong reference is worse than a missing one: you would
+# have compared your work against it and believed the answer.
+#
+# So this verifies rather than prevents.  Root defeats any permission here; the goal
+# is only that a change cannot pass unnoticed and that an accidental one is
+# recoverable.  Restoring costs nothing -- the configs are text, and .pristine holds
+# the originals.
+verify() {
+    # An image built before the manifest existed has none.  That is not a failure:
+    # it just means this check has nothing to compare against, and saying so is
+    # honest where inventing a pass would not be.
+    if [ ! -f "$MANIFEST" ]; then
+        echo "note: no $MANIFEST in this image, so the oracle's files cannot be" >&2
+        echo "      checked against what shipped.  Treat the reference as unverified." >&2
+        return 0
+    fi
+    local out
+    # `|| true` on the capture, then branch on the content: sha256sum exits non-zero
+    # on a mismatch and `set -e` would kill the script before it could say which
+    # file moved, which is the only useful thing it has to report.
+    out="$( cd "$ORACLE_DIR" && sha256sum -c --quiet "${MANIFEST##*/}" 2>&1 )" || {
+        echo "the oracle is NOT the one that shipped:" >&2
+        printf '%s\n' "$out" | sed 's/^/  /' >&2
+        echo >&2
+        echo "  the configs can be put back with:  state-a restore" >&2
+        echo "  the jar cannot -- it has no pristine copy, so a jar mismatch means" >&2
+        echo "  this container's oracle is unusable as a reference and any" >&2
+        echo "  comparison already made against it should be discarded." >&2
+        echo >&2
+        echo "  set ORACLE_SKIP_VERIFY=1 to start anyway, knowing the above." >&2
+        [ "${ORACLE_SKIP_VERIFY:-0}" = "1" ] || return 1
+        echo "  ORACLE_SKIP_VERIFY=1 -- starting against an altered reference." >&2
+    }
+    return 0
+}
+
+do_restore() {
+    [ -d "$PRISTINE" ] || {
+        echo "no $PRISTINE in this image; nothing to restore from" >&2; exit 2; }
+    # Only root can write here, and at any other uid that is the answer rather
+    # than an obstacle: the same permissions that stop the restore also stop the
+    # edit it would undo, so there is nothing for it to put back.  Said outright,
+    # because `cp: Permission denied` on a command the verify message recommends
+    # reads as a broken oracle, which is the one conclusion it must not produce.
+    if [ ! -w "$ORACLE_DIR" ]; then
+        echo "$ORACLE_DIR is not writable by uid $(id -u), so there is nothing to" >&2
+        echo "restore: the configs are not writable by this uid either, which means" >&2
+        echo "they cannot have been changed from inside this container.  If verify" >&2
+        echo "reported a mismatch anyway, it is the image that differs, not the run." >&2
+        exit 2
+    fi
+    if alive; then
+        echo "the oracle is running; 'state-a stop' first so it rereads the config" >&2
+        exit 1
+    fi
+    local n=0
+    for src in "$PRISTINE"/*.yml; do
+        [ -f "$src" ] || continue
+        # Only report the ones that actually differed: "restored 0 file(s)" after an
+        # accidental edit is the answer that tells you the edit was somewhere else.
+        if ! cmp -s "$src" "$ORACLE_DIR/${src##*/}"; then
+            cp -p "$src" "$ORACLE_DIR/${src##*/}"
+            echo "  restored ${src##*/}"
+            n=$((n + 1))
+        fi
+    done
+    echo "restored $n config file(s) from $PRISTINE"
+    # Deliberate, not inherited.  This was `verify && echo ...` as the function's
+    # last statement, so the exit code was whatever verify happened to return and a
+    # tampered JAR -- which restore cannot fix -- came back as a plain failure with
+    # no statement of what was still wrong.  Restore having run is not the same as
+    # the oracle being the reference again, and the two need different exits.
+    if verify; then
+        echo "the oracle now matches its manifest"
+    else
+        echo "the oracle STILL does not match its manifest; see above." >&2
+        echo "restore only covers the configs, so this is a jar mismatch." >&2
+        exit 3
+    fi
+}
+
+do_stop() {
+    if alive; then
+        pid=$(cat "$PIDFILE")
+        kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+        for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+        kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+        echo "oracle stopped"
+    else
+        echo "oracle was not running"
+    fi
+    rm -f "$PIDFILE" "$WHICHFILE"
+}
+
+do_start() {
+    which=${1:-base}
+    case "$which" in
+        base|pt) ;;
+        *) echo "unknown configuration '$which'; use base or pt" >&2; exit 2 ;;
+    esac
+    cfg="$ORACLE_DIR/config-$which.yml"
+    test -f "$cfg" || { echo "no such config: $cfg" >&2; exit 2; }
+    test -f "$JAR" || { echo "the oracle jar is missing: $JAR" >&2; exit 2; }
+    # Before launching, not after: an oracle that has been edited answers queries
+    # just as confidently as one that has not, so the moment to find out is the one
+    # moment nothing has been compared against it yet.
+    verify || exit 3
+
+    if alive; then
+        echo "oracle already running under '$(cat "$WHICHFILE" 2>/dev/null || echo ?)'." >&2
+        echo "run 'state-a stop' first to switch configuration." >&2
+        exit 1
+    fi
+
+    # All three for the same reason; see fresh().  The pidfile and the config
+    # marker are removed by `stop`, so they are usually absent -- but a container
+    # that was killed rather than stopped leaves them, and then they are owned by
+    # whoever ran last.
+    fresh "$LOG"
+    fresh "$PIDFILE"
+    fresh "$WHICHFILE"
+    # setsid so the whole JVM process group can be signalled on stop; the jar is
+    # launched exactly the way State A documents it, `server <config>`.
+    setsid java -jar "$JAR" server "$cfg" >> "$LOG" 2>&1 &
+    echo $! > "$PIDFILE"
+    echo "$which" > "$WHICHFILE"
+
+    echo "starting the oracle under config-$which.yml (pid $(cat "$PIDFILE"))"
+    echo "the first launch on a new graph cache imports the extract and runs the"
+    echo "CH/LM preparations before the port binds; later launches reuse the cache."
+
+    for i in $(seq 1 "$READY_TIMEOUT"); do
+        if ! alive; then
+            echo "the oracle died during startup; last 40 lines:" >&2
+            tail -40 "$LOG" >&2
+            exit 1
+        fi
+        if curl -sS -m 2 "http://localhost:$APP_PORT/info" >/dev/null 2>&1; then
+            echo "oracle ready after ${i}s"
+            echo "  application: http://localhost:$APP_PORT   (/route /isochrone /nearest /info /health ...)"
+            echo "  admin:       http://localhost:$ADMIN_PORT   (/healthcheck /ping /tasks /metrics /threads)"
+            echo "  log:         $LOG"
+            exit 0
+        fi
+        sleep 1
+    done
+    echo "the oracle did not answer within ${READY_TIMEOUT}s; last 40 lines:" >&2
+    tail -40 "$LOG" >&2
+    exit 1
+}
+
+case "${1:-}" in
+    start)  shift; do_start "${1:-base}" ;;
+    stop)   do_stop ;;
+    log)    tail -f "$LOG" ;;
+    status)
+        if alive; then
+            echo "up, config-$(cat "$WHICHFILE" 2>/dev/null || echo '?').yml, pid $(cat "$PIDFILE")"
+        else
+            echo "down"
+        fi ;;
+    verify)
+        if verify; then
+            echo "the oracle matches its manifest"
+        else
+            exit 3
+        fi ;;
+    restore) do_restore ;;
+    *)
+        # Was `sed -n '2,9p'`, which meant the usage text and the line numbers had
+        # to be kept in agreement by hand -- adding the two commands above shifted
+        # the prose up into the help output.  Read to the `# ---` separator instead,
+        # so moving or adding a line cannot desynchronise anything.
+        awk 'NR == 1     { next }
+             /^# ---$/   { exit }
+             /^#/        { sub(/^# ?/, ""); print; next }
+                         { exit }' "$0"
+        exit 2 ;;
+esac

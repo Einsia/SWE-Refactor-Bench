@@ -1,0 +1,69 @@
+{
+ "classifiers": [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: BSD License",
+  "License :: Public Domain",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: Unix",
+  "Programming Language :: Python :: 2",
+  "Programming Language :: Python :: 2.7",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.5",
+  "Programming Language :: Python :: 3.6",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Topic :: Security :: Cryptography"
+ ],
+ "fields": {
+  "author": "Helder Eijs",
+  "author-email": "helderijs@gmail.com",
+  "classifier": [
+   "Development Status :: 5 - Production/Stable",
+   "License :: OSI Approved :: BSD License",
+   "License :: OSI Approved :: Apache Software License",
+   "License :: Public Domain",
+   "Intended Audience :: Developers",
+   "Operating System :: Unix",
+   "Operating System :: Microsoft :: Windows",
+   "Operating System :: MacOS :: MacOS X",
+   "Topic :: Security :: Cryptography",
+   "Programming Language :: Python :: 2",
+   "Programming Language :: Python :: 2.7",
+   "Programming Language :: Python :: 3",
+   "Programming Language :: Python :: 3.5",
+   "Programming Language :: Python :: 3.6",
+   "Programming Language :: Python :: 3.7",
+   "Programming Language :: Python :: 3.8",
+   "Programming Language :: Python :: 3.9",
+   "Programming Language :: Python :: 3.10",
+   "Programming Language :: Python :: 3.11",
+   "Programming Language :: Python :: 3.12"
+  ],
+  "home-page": "https://www.pycryptodome.org",
+  "license": "BSD, Public Domain",
+  "license-file": [
+   "LICENSE.rst",
+   "AUTHORS.rst"
+  ],
+  "metadata-version": "2.1",
+  "name": "pycryptodome",
+  "platform": "Posix; MacOS X; Windows",
+  "project-url": [
+   "Source, https://github.com/Legrandin/pycryptodome/",
+   "Changelog, https://www.pycryptodome.org/src/changelog"
+  ],
+  "requires-python": ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*",
+  "summary": "Cryptographic library for Python",
+  "version": "3.20.0"
+ },
+ "name": "pycryptodome",
+ "requires_python": ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*",
+ "version": "3.20.0"
+}

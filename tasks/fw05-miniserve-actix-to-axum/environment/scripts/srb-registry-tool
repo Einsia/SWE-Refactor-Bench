@@ -1,0 +1,417 @@
+#!/usr/bin/env python3
+"""Operations on the offline cargo local-registry.
+
+Four subcommands, all used at image build time.  One file, copied into three
+build contexts -- environment/scripts/, tests/behavioural/data/scripts/ and
+tests/verification/data/scripts/ -- because a Docker build context cannot reach
+outside itself.  The three copies must stay byte-identical, and `swerefactor
+validate` fails the task if they drift; the last drift was this docstring and
+`retiredprobe`, added to the stage-2 copy alone.  So the subcommand list below is
+the union: `retiredprobe` is called only by tests/behavioural/Dockerfile, and
+`assert-retired` only by the two verifier images.  An image that does not call
+one is not evidence that its copy should lack it -- the copies are the same file,
+and which subcommands each Dockerfile invokes is that Dockerfile's business.
+
+  retire    Delete every crate named in the retired list from a registry,
+            both its .crate payloads and its index entry. This is what turns
+            the shipped full closure into the delivery closure. Removal has to
+            hit the index as well as the payloads: cargo reads availability from
+            the index, so a name that still has an index entry but no payload
+            fails with a confusing "failed to download" instead of the clear
+            "no matching package named" that tells the agent what is going on.
+
+  verify    Compare a registry against registry-manifest.json by sha256. The
+            agent image and the verifier image build from separate contexts, so
+            without this check the two could drift and a submission could fail
+            in the verifier for reasons the agent could never have seen.
+
+  closuretoml
+            Emit a throwaway package manifest covering the union of the target
+            stack and the baseline's own dependencies, so the whole closure can
+            be compiled once. That build is both an assertion -- a registry
+            missing a crate, or one whose optional dependency is feature-gated
+            off and therefore absent, fails here rather than in a no-network
+            trial container -- and the warm cache the agent's first build reuses.
+
+            Three details matter:
+
+            * The target list is written to be spliced into miniserve's own
+              [dependencies], where several packages need renamed entries to
+              avoid colliding with the baseline's (tokio, rustls, base64).
+              Standing alone those renames collide with each other instead, and
+              cargo refuses to depend on one crate under two names -- so entries
+              are merged by package with the union of their features.
+            * Retired names are dropped rather than erroring, since the baseline
+              manifest is the pre-migration one and still lists them.
+            * [profile.release] is copied verbatim from the baseline. miniserve
+              builds releases with lto, codegen-units=1, opt-level='z' and
+              panic='abort'; artifacts compiled under any other profile would
+              not be reused, making the warm cache worthless for the build that
+              takes longest.
+
+  retiredprobe
+            Emit a throwaway package manifest depending on exactly the retired
+            crates the baseline manifest names, with the baseline's own version
+            requirements and feature choices. Resolving it says whether State A
+            can be installed from a registry; nothing else in the image asks that
+            question, because the closure the warm cache builds is assembled with
+            the retired names dropped.
+
+            It has to read the requirements rather than carry them, and it has to
+            read them from the baseline. A literal in a Dockerfile is a second
+            copy of a fact that lives in the manifest: `= "4"` was true of
+            actix-web and never of actix-files 0.6.5, actix-multipart 0.6 or
+            actix-web-httpauth 0.8. And the retired *list* is wider than anything
+            the baseline pins -- it bans routes back to the old stack as well as
+            the old stack itself, so `awc` is on it and in no lockfile. Demanding
+            that a registry resolve a crate State A never depended on asserts
+            something about the ban list, not about whether State A can be graded.
+
+Index paths follow the crates.io sharding scheme, which is not uniform: names
+of 1, 2 and 3 characters are special-cased before the usual two-by-two split.
+"""
+
+import argparse
+import hashlib
+import json
+import pathlib
+import shutil
+import sys
+
+
+def index_path(name: str) -> str:
+    n = name.lower()
+    if len(n) == 1:
+        return f"1/{n}"
+    if len(n) == 2:
+        return f"2/{n}"
+    if len(n) == 3:
+        return f"3/{n[0]}/{n}"
+    return f"{n[:2]}/{n[2:4]}/{n}"
+
+
+def read_retired(path: pathlib.Path) -> list[str]:
+    names = []
+    for line in path.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            names.append(line)
+    return names
+
+
+def cmd_retire(args) -> int:
+    root = pathlib.Path(args.registry)
+    if not root.is_dir():
+        print(f"FATAL: {root} is not a directory", file=sys.stderr)
+        return 1
+    retired = read_retired(pathlib.Path(args.retired))
+    removed_payloads = 0
+    removed_index = 0
+    for name in retired:
+        for payload in root.glob(f"{name}-*.crate"):
+            # Guard against prefix collisions: actix-web-codegen must not be
+            # deleted by the entry for actix-web. The version suffix is always
+            # digits after the final dash.
+            stem = payload.name[: -len(".crate")]
+            version = stem[len(name) + 1 :]
+            if stem.startswith(name + "-") and version[:1].isdigit():
+                payload.unlink()
+                removed_payloads += 1
+        idx = root / "index" / index_path(name)
+        if idx.exists():
+            idx.unlink()
+            removed_index += 1
+    print(
+        f"retire: {len(retired)} names -> removed {removed_payloads} payloads, "
+        f"{removed_index} index entries"
+    )
+    # A retired name that was never present at all means the list and the
+    # registry have diverged; that is a construction bug worth failing on.
+    if removed_index == 0 and retired:
+        print("FATAL: no index entries matched the retired list", file=sys.stderr)
+        return 1
+    return _assert_absent(root, retired)
+
+
+def _assert_absent(root: pathlib.Path, retired: list[str]) -> int:
+    """Every retired name resolves to nothing: no index entry, no payload.
+
+    Shared by `retire` (as its post-condition) and `assert-retired` (as its
+    whole job) so the two can never disagree about what "retired" means.
+    """
+    for name in retired:
+        if (root / "index" / index_path(name)).exists():
+            print(f"FATAL: index entry for {name} survived", file=sys.stderr)
+            return 1
+        if list(root.glob(f"{name}-[0-9]*.crate")):
+            print(f"FATAL: payload for {name} survived", file=sys.stderr)
+            return 1
+    return 0
+
+
+def cmd_assert_retired(args) -> int:
+    """Check an ALREADY-retired registry, without modifying it.
+
+    The verifier ships the delivery registry as-is rather than deriving it from
+    the full closure, because tests/ is COPYed into the image wholesale after
+    the no-actix assertion runs -- shipping the full closure would smuggle the
+    retired payloads into /tests/registry past that gate. So the verifier cannot
+    call `retire` (it would find nothing to remove and fail); it asserts the
+    absence directly and then checks the same manifest the environment checks.
+    """
+    root = pathlib.Path(args.registry)
+    if not root.is_dir():
+        print(f"FATAL: {root} is not a directory", file=sys.stderr)
+        return 1
+    retired = read_retired(pathlib.Path(args.retired))
+    if not retired:
+        print("FATAL: the retired list is empty", file=sys.stderr)
+        return 1
+    rc = _assert_absent(root, retired)
+    if rc == 0:
+        print(f"assert-retired: {len(retired)} names absent from {root}")
+    return rc
+
+
+def cmd_verify(args) -> int:
+    root = pathlib.Path(args.registry)
+    man = json.loads(pathlib.Path(args.manifest).read_text())
+    want = man["crates"]
+    have = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in root.glob("*.crate")}
+    missing = sorted(set(want) - set(have))
+    extra = sorted(set(have) - set(want))
+    bad = sorted(n for n in set(want) & set(have) if want[n] != have[n])
+    if missing or extra or bad:
+        print("FATAL: registry does not match the manifest", file=sys.stderr)
+        for label, items in (
+            ("missing", missing),
+            ("unexpected", extra),
+            ("digest mismatch", bad),
+        ):
+            if items:
+                print(f"  {label} ({len(items)}): {', '.join(items[:12])}", file=sys.stderr)
+        return 1
+    idx_root = root / "index"
+    idx_count = sum(1 for p in idx_root.rglob("*") if p.is_file())
+    if idx_count != man["index_paths"]:
+        print(
+            f"FATAL: index has {idx_count} entries, manifest says {man['index_paths']}",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"registry matches manifest: {len(have)} payloads, {idx_count} index entries")
+    return 0
+
+
+def _collect_dep(entries: dict, key: str, spec, retired: set[str]) -> None:
+    if isinstance(spec, str):
+        spec = {"version": spec}
+    if "path" in spec or "git" in spec:
+        return
+    pkg = spec.get("package", key)
+    if pkg in retired or "version" not in spec:
+        return
+    entries.setdefault(pkg, []).append(spec)
+
+
+def cmd_closuretoml(args) -> int:
+    import tomllib
+
+    retired = (
+        set(read_retired(pathlib.Path(args.retired))) if args.retired else set()
+    )
+
+    entries: dict[str, list[dict]] = {}
+    n_entries = 0
+
+    raw = pathlib.Path(args.deps).read_text()
+    for key, spec in tomllib.loads("[dependencies]\n" + raw)["dependencies"].items():
+        n_entries += 1
+        _collect_dep(entries, key, spec, retired)
+    pinned_by_target = set(entries)
+
+    profile = ""
+    if args.baseline:
+        base = tomllib.loads(pathlib.Path(args.baseline).read_text())
+        for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+            for key, spec in base.get(section, {}).items():
+                n_entries += 1
+                _collect_dep(entries, key, spec, retired)
+        for cfg in base.get("target", {}).values():
+            for section in ("dependencies", "dev-dependencies"):
+                for key, spec in cfg.get(section, {}).items():
+                    n_entries += 1
+                    _collect_dep(entries, key, spec, retired)
+        rel = base.get("profile", {}).get("release")
+        if rel:
+            body = []
+            for k, v in rel.items():
+                body.append(f"{k} = " + (f"'{v}'" if isinstance(v, str) else str(v).lower()))
+            profile = "\n[profile.release]\n" + "\n".join(body) + "\n"
+
+    merged: dict[str, dict] = {}
+    for pkg, specs in entries.items():
+        if pkg in pinned_by_target:
+            # The target list is authoritative for anything it names. It is what
+            # generated the lock the registry was vendored from, so its version
+            # and its default-features choice describe what actually exists here.
+            # Turning defaults back on because a looser baseline entry did not
+            # disable them would ask for crates that were never vendored --
+            # rustls 0.23 with defaults reaches for aws-lc-rs, which is not in
+            # the closure at all.
+            base_spec = specs[0]
+            version = base_spec["version"]
+            defaults = base_spec.get("default-features", True)
+            features = set(base_spec.get("features", []))
+            # Features from other entries are still safe to union in: they were
+            # requested somewhere, so they resolved.
+            for s in specs[1:]:
+                if s.get("version") == version:
+                    features.update(s.get("features", []))
+        else:
+            version = sorted({s["version"] for s in specs})[-1]
+            defaults = any(s.get("default-features", True) for s in specs)
+            features = set()
+            for s in specs:
+                features.update(s.get("features", []))
+        merged[pkg] = {"version": version, "features": features, "defaults": defaults}
+
+    lines = [
+        "[package]",
+        'name = "srb-closure"',
+        'version = "0.0.0"',
+        'edition = "2021"',
+        "publish = false",
+        "",
+        "[dependencies]",
+    ]
+    for pkg in sorted(merged):
+        spec = merged[pkg]
+        parts = [f'version = "{spec["version"]}"']
+        if spec["features"]:
+            feats = ", ".join(f'"{f}"' for f in sorted(spec["features"]))
+            parts.append(f"features = [{feats}]")
+        if not spec["defaults"]:
+            parts.append("default-features = false")
+        lines.append(f"{pkg} = {{ {', '.join(parts)} }}")
+
+    out = pathlib.Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines) + "\n" + profile)
+    src = out.parent / "src"
+    src.mkdir(exist_ok=True)
+    (src / "main.rs").write_text("fn main() {}\n")
+    print(f"closuretoml: {n_entries} entries -> {len(merged)} packages, wrote {out}")
+    return 0
+
+
+def cmd_retiredprobe(args) -> int:
+    import tomllib
+
+    retired = set(read_retired(pathlib.Path(args.retired)))
+    base = tomllib.loads(pathlib.Path(args.baseline).read_text())
+
+    # Same filters as _collect_dep, inverted on the retired test: a path or git
+    # dependency does not come from a registry, and an entry with no version
+    # requirement has nothing for the resolver to match.
+    found: dict[str, dict] = {}
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        for key, spec in base.get(section, {}).items():
+            if isinstance(spec, str):
+                spec = {"version": spec}
+            pkg = spec.get("package", key)
+            if pkg not in retired or "version" not in spec:
+                continue
+            if "path" in spec or "git" in spec:
+                continue
+            found.setdefault(pkg, spec)
+    for cfg in base.get("target", {}).values():
+        for section in ("dependencies", "dev-dependencies"):
+            for key, spec in cfg.get(section, {}).items():
+                if isinstance(spec, str):
+                    spec = {"version": spec}
+                pkg = spec.get("package", key)
+                if pkg in retired and "version" in spec \
+                        and "path" not in spec and "git" not in spec:
+                    found.setdefault(pkg, spec)
+
+    if not found:
+        print(
+            f"FATAL: {args.baseline} names none of the {len(retired)} retired "
+            f"crates. Either the baseline is not the pre-migration manifest or "
+            f"the retired list does not describe this migration; in both cases "
+            f"the probe would assert nothing.",
+            file=sys.stderr,
+        )
+        return 1
+
+    lines = [
+        "[package]",
+        'name = "srb-retired-probe"',
+        'version = "0.0.0"',
+        'edition = "2021"',
+        "publish = false",
+        "",
+        "[dependencies]",
+    ]
+    for pkg in sorted(found):
+        spec = found[pkg]
+        parts = [f'version = "{spec["version"]}"']
+        if spec.get("features"):
+            feats = ", ".join(f'"{f}"' for f in spec["features"])
+            parts.append(f"features = [{feats}]")
+        if not spec.get("default-features", True):
+            parts.append("default-features = false")
+        lines.append(f"{pkg} = {{ {', '.join(parts)} }}")
+
+    out = pathlib.Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines) + "\n")
+    src = out.parent / "src"
+    src.mkdir(exist_ok=True)
+    (src / "main.rs").write_text("fn main() {}\n")
+    print(
+        f"retiredprobe: baseline pins {len(found)} of {len(retired)} retired "
+        f"crates ({', '.join(sorted(found))}), wrote {out}"
+    )
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("retire")
+    p.add_argument("--registry", required=True)
+    p.add_argument("--retired", required=True)
+    p.set_defaults(fn=cmd_retire)
+
+    p = sub.add_parser("assert-retired")
+    p.add_argument("--registry", required=True)
+    p.add_argument("--retired", required=True)
+    p.set_defaults(fn=cmd_assert_retired)
+
+    p = sub.add_parser("verify")
+    p.add_argument("--registry", required=True)
+    p.add_argument("--manifest", required=True)
+    p.set_defaults(fn=cmd_verify)
+
+    p = sub.add_parser("closuretoml")
+    p.add_argument("--deps", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--baseline", help="baseline Cargo.toml to fold in")
+    p.add_argument("--retired", help="names to drop while folding in the baseline")
+    p.set_defaults(fn=cmd_closuretoml)
+
+    p = sub.add_parser("retiredprobe")
+    p.add_argument("--baseline", required=True)
+    p.add_argument("--retired", required=True)
+    p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_retiredprobe)
+
+    args = ap.parse_args()
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

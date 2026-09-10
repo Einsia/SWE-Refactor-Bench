@@ -1,0 +1,20 @@
+# Offline NuGet feed contents, seeded into /opt/nuget-offline at image build.
+#
+# Test frameworks only.  The jsonnet implementation itself must build against the
+# .NET base class library alone -- that is in source-contract.json and the
+# verifier publishes with nothing but this feed available -- but a port that
+# ships tests should not have to hand-roll a harness because `dotnet add package
+# xunit` fails offline.
+#
+# Exact versions, never floating ranges: a range makes the image irreproducible
+# and every result incomparable.  Format is "<id> <version>", one per line.
+#
+# The same file is used by the verifier image, so a submission's test project
+# restores there too.  It is copied into both build contexts and must stay
+# identical between them.
+xunit 2.6.6
+xunit.runner.visualstudio 2.5.6
+Microsoft.NET.Test.Sdk 17.9.0
+NUnit 4.0.1
+NUnit3TestAdapter 4.5.0
+FluentAssertions 6.12.0

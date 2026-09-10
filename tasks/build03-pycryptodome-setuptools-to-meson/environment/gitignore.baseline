@@ -1,0 +1,41 @@
+# Build output, so that `git status` stays readable while working.
+#
+# The upstream sdist ships no .gitignore (it is excluded from the release
+# tarball), so this file is supplied by the task rather than taken from the
+# snapshot. Ignoring a path does not exempt it from the contract: the verifier
+# rebuilds from source in a clean container and discards every build directory,
+# wheel and egg-info the agent leaves behind.
+/build/
+/dist/
+*.egg-info/
+.eggs/
+
+# meson / meson-python
+/builddir/
+/_build/
+.mesonpy-*/
+.meson-*/
+meson-logs/
+meson-info/
+meson-private/
+compile_commands.json
+.ninja_deps
+.ninja_log
+build.ninja
+
+# compiled artefacts, in-tree
+*.o
+*.so
+*.abi3.so
+*.pyd
+*.a
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# editors, OS
+*.swp
+*~
+.DS_Store

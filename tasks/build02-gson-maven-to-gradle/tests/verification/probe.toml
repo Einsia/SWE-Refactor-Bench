@@ -1,0 +1,287 @@
+schema = "swerefactor.verification-probe/1"
+task = "build02-gson-maven-to-gradle"
+prompt = "prompt.txt"
+
+# One command, both trees.  The role travels as its last argument -- the harness
+# appends it, the script reads $1 -- and this is the one task in the set where the
+# script has to look at it: a Maven reactor and a Gradle multi-project are asked to
+# build in different words, so something has to translate.  That translation lives
+# in lib/srbgson.py, is written once per configuration, and is not reachable from a
+# candidate.  A candidate names a configuration; it never spells a goal.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+[scope]
+# Three paired runs.  A build system is the most nondeterministic thing this
+# benchmark tests -- timestamps, jar entry order, parallel task scheduling, a
+# HashMap iteration that leaks into a generated file -- and a candidate that
+# discriminates once in three tries is measuring the scheduler.
+#
+# These three live inside [scope] because that is where ScopeRules.from_dict reads
+# them.  At the top level they parse without error and are silently ignored, which
+# would leave reruns at its default and require_deterministic unstated -- a
+# difference no run would report.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+allow = [
+    "The class files a build ships: their presence, their names, their package, their class-file major version, the constants compiled into them, and the members they declare. A consumer resolves these and nothing else, so a class that upstream shipped and this build does not is a defect no matter which build system was asked to produce it.",
+
+    "The non-class content of the four jars: resources, service files, license files, the multi-release layout under META-INF/versions, and whether an entry that upstream shipped is present with the bytes upstream shipped.",
+
+    "The manifest headers that a consumer or a container reads: the OSGi bundle headers, Export-Package and its per-package version attributes, Import-Package and its ranges, Automatic-Module-Name, Multi-Release, and the main-class and classpath headers if the artifact declares them.",
+
+    "The module descriptor: its name, its version, what it requires, what it exports, whether it is compiled at the release the descriptor's own class-file version claims, and whether it sits where a release-9 descriptor has to sit for a release-8 jar to remain loadable on 8.",
+
+    "What the built jars do when a consumer compiles against them and runs. A program that compiles and runs against one build and does not against the other is the strongest finding available here, and the one this stage exists to reward.",
+
+    "The project's own test suite, as the build's test task ran it: which cases ran, which passed, and whether a case upstream runs is absent. Gson's suite is upstream's statement about upstream's behaviour, and a migration that silently stops running part of it has changed what the build guarantees.",
+
+    "What the publish configuration writes into a repository: the artifacts a consumer resolving com.google.code.gson:gson:2.10.1 would fetch, the coordinates they are filed under, the sidecars beside them, and the dependency list, scopes and exclusions in the published POM. A POM that omits a dependency produces a NoClassDefFoundError in a consumer that resolved it.",
+
+    "Whether the build is a function of its inputs: whether building the same sources twice produces the same artifacts, and whether building them at a different absolute path produces the same artifacts. A build that bakes in its own directory is a build that works on one machine.",
+
+    "Whether the build has rules rather than an inventory. Add a source file that did not exist when anything was frozen and ask where it lands: which jar, which package, whether it is compiled at the right release, whether the thing that computes the OSGi exports noticed it. Every property in this list is satisfiable by a build that enumerates what it was told to produce; this one is not.",
+
+    "Whether the version is one input. Both builds are asked for the same version and no other, so this is not about overriding it -- it is about whether the value that reaches the manifest, the module descriptor, the published POM and the compiled-in constant is the same value in the same places. Stage 2 measures what happens when it changes; here you may measure that it agrees.",
+
+    "The dependency closure a consumer inherits: the compile and runtime dependencies the published POM declares, their scopes, and whether a dependency the original kept off the compile classpath is now on it. A dependency that became compile-scope changes what every downstream build resolves.",
+
+    "The four artifacts as a set: that there are four, that each is the project it claims to be, and that none of them bundles the others or bundles a dependency. A shaded jar satisfies a classpath check and changes what consumers resolve.",
+]
+
+deny = [
+    "The build system's own files, their contents, their organisation, their number, and the names of anything inside them. A task, a plugin, a profile, an execution id, a property name, a convention block -- none of it is a consumer's business, and stage 1 already reviewed the code by reading it. Here the only admissible evidence is what a build produced.",
+
+    "The identity of the tree under test, however it is learned. One tree has a pom.xml and the other has a settings.gradle, and a candidate that branches on which -- or on the dialect the harness recorded, or on anything else that names the role -- can pass on one and fail on the other every time. Such a candidate meets every mechanical condition for a break and establishes nothing about the migration, and it is rejected on sight rather than weighed.",
+
+    "The build's console output: its wording, its task or goal names, its ordering, its progress reporting, its warnings, and its exit code beyond the fact that the build succeeded. Two build systems narrate differently and are entitled to.",
+
+    "Intermediate output. Where a build puts a class before it packages it, what it calls its output directory, whether it keeps a staging copy, whether an obfuscated copy survives on disk beside the plain one -- all of it is layout, and a submission that packages the right jar by a different route has done nothing wrong. Read the jar.",
+
+    "Jar entry order, entry timestamps, the compression method chosen for an entry, and the byte-level identity of a whole archive. A jar is a set of named entries to every consumer that reads one. Compare entries and their bytes, not archives and their digests.",
+
+    "Timing, task counts, parallelism, incremental behaviour, and whether a second build reuses the first one's work. A build that is slower is not a build that is wrong.",
+
+    "The absolute paths that appear anywhere in the two builds, and the layout of the two staging directories the harness copied them into. Those are the harness's, not the submission's.",
+
+    "The version the build is asked for. State A's parent POM carries a literal <version>2.10.1</version> with no property indirection, so there is no Maven equivalent of -Pversion=X and any assertion involving an overridden version fails against the original -- which the runner reads as a broken test rather than a defect found. Stage 2 already builds the submission at a probe version and measures every place the value lands. Ask here whether the two builds agree at the version they are both given.",
+
+    "The behaviour of anything the offline dependency closure provides. bnd, proguard, protoc and the surefire or Gradle test runner are pinned inputs both builds share, and a difference in what one of them emitted for reasons of its own is not a difference between the trees.",
+
+    "A submission that does not build. That is stage 2's verdict and it has already been rendered; a broken build must not be punished six times over here. If a configuration will not build for the submission, say so in your report and stop -- do not file it as six findings.",
+
+    "Anything that requires the network. The image has none, the dependency closure is complete and vendored, and a candidate that reaches out fails against both trees.",
+
+    "Warnings, deprecation notices, and diagnostic wording from javac. A build that compiles the same sources at the same release with the same flags may still be told different things by the compiler about them, and none of it reaches a consumer.",
+
+    "Anything you had to write into a build file to observe. lib/srbgson.py refuses to write one for this reason: the two trees do not have the same build files, so a mutation only one dialect can receive is not a comparison. Mutate sources and ask what each build did with them.",
+]
+
+[metadata]
+# A `full` build runs gson's own suite -- 1,468 cases across four projects -- and
+# `publish` runs a deploy.  A round that asks for three configurations and reruns
+# each three times is inside this; one that asks for all four and mutates sources
+# on top is close to it, which is why the prompt says to reuse a configuration
+# rather than to collect them.
+candidate_timeout_sec = 2400.0
+run_timeout_sec = 900.0
+allowed_commands = []
+about = """
+Six rounds against the same pair of trees.  Each has a focus so the six do
+not converge on the manifest, and each is scored alone: a round finds a defect or
+it does not, and what the other five did has no bearing on it.
+
+The instrument is lib/srbgson.py.  It builds the tree in front of the round in one
+of four configurations, hands back the four jars, the published repository, the
+test run, and the ability to compile a consumer program against what was built and
+run it.  It does not hand back a path to the tree, and it does not name the build
+system -- not because either is secret, but because a candidate that reads the
+repository or branches on the dialect has stopped measuring the migration.
+
+The single most productive thing a round can do here is `Tree.with_sources`: add a
+source file that did not exist when anything was frozen and ask where the build put
+it.  Every frozen entry name, checksum and manifest header in this task is
+satisfiable by a build that enumerates its outputs.  A new source file is not.
+"""
+
+# ---------------------------------------------------------------------------
+# The six rounds.
+#
+# `focus` is an assignment and not a restriction: a round that finds something
+# outside its focus has found something.  Splitting them this way stops six
+# rounds from spending their first four candidates rediscovering the same
+# Export-Package header, which is what happens when six identical prompts meet
+# one pair of trees.
+# ---------------------------------------------------------------------------
+
+[[adversary]]
+id = "a01-classes-and-resources"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+The compiled classes, as a consumer sees them. Every class upstream ships,
+present, in its package, at the class-file version its position in the jar
+implies: release 8 for the main tree, release 9 for what sits under META-
+INF/versions/9. The interesting failures here are a source directory the
+migration did not wire up at all -- so a whole package is missing and nothing
+else notices -- and a release setting applied to one source set but not
+another, which produces a jar that loads on 17 and not on 8.
+`class_bytes_major` on every entry costs one candidate.
+
+Then the non-class content: resources, service-loader files, licences, and the
+bytes of each. A resource directory left out of a source set is the single
+most common casualty of a build migration, because nothing fails to compile
+and no test necessarily reads it. Compare the two jars' full entry sets first,
+then the bytes of every entry present in both -- a resource that was filtered
+when it should have been copied verbatim, or copied when it should have been
+filtered, shows up as a byte difference in a file whose name is identical.
+"""
+
+[[adversary]]
+id = "a02-manifest-osgi-and-jpms"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+The manifest, and the OSGi headers in particular. These are computed by bnd
+from a bnd.bnd instruction file plus whatever the build tells bnd about the
+project, and the two dialects tell it through different plugins. Export-
+Package with its per-package version attributes, Import-Package with its
+ranges, Bundle-Version, Bundle-SymbolicName, Multi-Release, Automatic-Module-
+Name. A build that ran bnd with the right instructions and the wrong classpath
+produces plausible headers with wrong ranges, which is invisible until a
+container refuses to resolve the bundle.
+
+Then the module descriptor. It is compiled at release 9, it lives under META-
+INF/versions/9, and it must not be in the root of a jar that claims to work on
+8. Its name, its version, its requires, its exports. `class_module` decodes
+it. The sharpest instrument you have is `Tree.java(..., module_path=...)`:
+compile a tiny module that `requires com.google.gson` and run it, which either
+resolves or does not and is not a matter of interpretation. A descriptor whose
+exports are right and whose requires omit java.sql fails only when something
+calls the code path that needs it.
+"""
+
+[[adversary]]
+id = "a03-runtime-and-suite"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+What the library does. Compile consumer programs against the built jars and
+run them: serialise and deserialise, reflect over a generic type, hit the
+paths that read GsonBuildConfig.VERSION and throw with it in the message,
+exercise @SerializedName and @Since and @Expose, drive the streaming reader
+and writer. This is the primitive the whole stage is built on and the one
+whose findings are impossible to argue with -- a program that prints one thing
+against the original and another against the submission has settled the
+question. Prefer many small probes in one program over many programs.
+
+Then upstream's own test suite, via `Tree('full').tests()`. Which cases ran,
+which passed, which are absent. A migration that wired up the main source set
+correctly and the test source set partly runs a subset of the suite and
+reports every case it ran as passing, which looks like success in every
+summary line. Compare the case id sets, not the counts -- and note that a case
+which is absent from one side is a finding while a case that is skipped on
+both is upstream's decision. The four projects each have their own suite; the
+metrics and proto projects are the ones a migration is likeliest to have left
+with no test task at all.
+"""
+
+[[adversary]]
+id = "a04-publication-and-new-sources"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+The publish configuration, and the POM it writes. A consumer resolving
+com.google.code.gson:gson:2.10.1 gets the jar, the sidecars, and a POM that
+names its dependencies -- and the POM is where migrations quietly fail,
+because a build that produces a perfect jar can publish a POM with no
+dependencies at all and nothing in the artifact reveals it. Check the
+coordinates, the file names, the sidecars, and then every dependency, its
+scope, its optional flag and its exclusions. A test-scoped dependency that
+became compile-scope is as much a defect as a missing one.
+
+Then `Tree.with_sources`. Add source files that did not exist when anything
+was frozen, in each of the four projects, and ask the build where they went:
+which jar, which package, compiled at which release, visible to the thing that
+computes the OSGi exports, present in the module descriptor's exports if the
+package is exported. Add a resource in a directory that has resources and in
+one that does not. Add a test case and see whether the test task runs it. This
+is the assignment that distinguishes a build with rules from a build that
+enumerates outputs, and no frozen inventory can substitute for it.
+"""
+
+[[adversary]]
+id = "a05-reproducible-and-multirelease"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+Whether each build is a function of its inputs. `Tree.build_again` builds the
+same configuration a second time from a fresh copy, and `Tree('relocated')`
+builds it at a deeper absolute path. Compare each tree against ITSELF across
+those two -- an entry whose bytes change between one tree's two builds, or a
+compiled-in string that carries an absolute path, is a defect in that tree
+regardless of what the other one did. Watch the sharp edge here: jar entry
+timestamps and entry order are out of scope, so compare the bytes of named
+entries, never archive digests.
+
+Then the multi-release layout, which is where the two dialects diverge most. A
+multi-release jar is a release-8 jar with release-9 classes overlaid under
+META-INF/versions/9 and Multi-Release: true in the manifest, and every part of
+that has to be true at once: the root classes must load on 8, the overlay must
+be compiled at 9, the manifest must say so, and a class must not appear in
+both places with different content. Run a consumer on the default JDK and
+check which copy of an overlaid class wins; a jar whose overlay is shadowed by
+a root copy compiled at the wrong release is broken in a way no entry listing
+shows.
+"""
+
+[[adversary]]
+id = "a06-artifact-set-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+The four artifacts as a set, and the boundaries between them. Four projects,
+four jars, each containing its own classes and nobody else's. A migration that
+flattened the reactor into one project produces one jar with everything in it
+and satisfies any check that only ever looked at gson. So: does each project
+have an artifact, does each artifact contain only what belongs to it, has any
+dependency's class leaked in, and is anything shaded. The proto project is the
+one to look at first: it has a protoc code-generation step and a jar name that
+carries no version, so it is the likeliest to have been dropped, renamed, or
+merged into another.
+
+Then, with whatever budget remains, no focus at all. Read both trees'
+artifacts, decide what the other five rounds are least likely to have looked
+at, and go there. Things that have paid off on tasks like this one: a consumer
+that uses the library the way its own README does rather than the way a test
+does; the interaction between two properties that are each correct alone; an
+entry that is present, named right, and empty; a jar that is fine until a
+second one is on the classpath beside it. If nothing is left, say so -- a
+report of "no defect found" from a round that spent its budget honestly is the
+outcome this stage is designed to produce most of the time.
+"""

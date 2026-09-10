@@ -1,0 +1,121 @@
+---
+# Jinja braces inside quoted scalars, the whole yes/no/true/false
+# spelling set as values, and sequences of maps at three depths.
+- name: Provision application servers
+  hosts: app
+  become: yes
+  gather_facts: true
+  serial: 2
+  any_errors_fatal: no
+  vars:
+    app_user: deploy
+    app_root: /srv/app
+    app_version: "2.14.0"
+    enable_tls: True
+    debug_mode: False
+    keep_backups: ON
+    prune_logs: off
+    listen_addr: "{{ ansible_default_ipv4.address }}"
+    upstreams:
+      - name: api
+        host: "{{ groups['api'] | first }}"
+        port: 8000
+      - name: auth
+        host: "{{ groups['auth'] | first }}"
+        port: 8001
+    template_vars:
+      greeting: "Hello, {{ app_user }}!"
+      path_expr: "{{ app_root }}/releases/{{ app_version }}"
+      empty_default: "{{ undefined_var | default('') }}"
+  vars_files:
+    - vars/common.yml
+    - "vars/{{ ansible_os_family | lower }}.yml"
+  pre_tasks:
+    - name: Verify connectivity
+      ansible.builtin.ping:
+      tags: [always]
+  tasks:
+    - name: Create application user
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        shell: /bin/bash
+        home: "{{ app_root }}"
+        create_home: yes
+        system: no
+      register: user_result
+
+    - name: Install packages
+      ansible.builtin.package:
+        name:
+          - git
+          - curl
+          - python3-venv
+        state: present
+      retries: 3
+      delay: 5
+      until: package_result is succeeded
+      register: package_result
+
+    - name: Render configuration
+      ansible.builtin.template:
+        src: app.conf.j2
+        dest: "{{ app_root }}/etc/app.conf"
+        owner: "{{ app_user }}"
+        mode: "0640"
+        backup: "{{ keep_backups }}"
+      notify:
+        - restart app
+      when:
+        - enable_tls | bool
+        - not debug_mode | bool
+
+    - name: Write the unit file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/app.service
+        content: |
+          [Unit]
+          Description=App {{ app_version }}
+          After=network-online.target
+
+          [Service]
+          User={{ app_user }}
+          ExecStart={{ app_root }}/bin/app --listen={{ listen_addr }}:8080
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: restart app
+
+    - name: Run the smoke test
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -sf "http://{{ listen_addr }}:8080/healthz" | grep -q ok
+      args:
+        executable: /bin/bash
+      changed_when: false
+      failed_when: smoke.rc not in [0, 22]
+      register: smoke
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          {{ app_user }} on {{ inventory_hostname }} is running
+          {{ app_version }} (tls={{ enable_tls }}, debug={{ debug_mode }})
+  handlers:
+    - name: restart app
+      ansible.builtin.systemd:
+        name: app
+        state: restarted
+        daemon_reload: yes
+        enabled: true
+
+- name: Collect reports
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Aggregate
+      ansible.builtin.assemble:
+        src: reports/
+        dest: reports/all.txt
+        delimiter: "--- 8< ---"

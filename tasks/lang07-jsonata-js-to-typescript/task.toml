@@ -1,0 +1,331 @@
+# =============================================================================
+# SWERefactorBench -- language rewrite
+#
+#   State A : JSONata 2.2.2 -- a query and transformation language for JSON, and
+#             its reference implementation: a lexer, a Pratt parser, a tree-walking
+#             evaluator with tail-call handling and a configurable stack limit, a
+#             builtin library of about a hundred functions, an XPath-style
+#             picture-string datetime formatter with its own ISO-week arithmetic,
+#             and a signature validator that type-checks calls at run time from a
+#             compact letter grammar.  Nine JavaScript files under src/ totalling
+#             358,338 bytes -- six library modules at 5,665 logic lines, and a
+#             three-file differential probe at 711 -- plus a hand-written
+#             jsonata.d.ts and a zero-dependency build in tools/build.js.  Fifteen
+#             files, 9,706 lines, 6,376 of them JavaScript that is neither blank
+#             nor comment.  No tsconfig.json: the submission authors it from
+#             nothing.
+#   State B : the same engine in TypeScript, compiled by the pinned tsc under
+#             `strict` with `noEmitOnError`, answering all 13,940 frozen cases
+#             byte-identically, with a declaration file *generated from the ported
+#             source* rather than carried across, and no dependencies.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository inside
+# independent verifier containers that the agent never touches and whose tests/
+# tree the agent never sees.
+#
+# Nothing the agent built is carried over.  Stage 2 deletes `dist/` from its own
+# copy before running the build the submission's own package.json declares, so "the
+# delivered source compiles to a working engine" is a fact about the repository
+# rather than a claim about a directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission: ten gates, all of them required.  Failing one is a zero and
+#      nothing after it runs.
+#   2. fifteen behavioural modules, 40 points.  Fourteen score; `build` carries no
+#      weight, because it produces what the other fourteen measure and its
+#      failure is priced through them.  No single module is a veto: the whole
+#      stage is, because the points are paid only for a submission that passed
+#      every scored check in all fourteen.  Short of that the ladder stops here
+#      with nothing from this stage.
+#   3. six adversaries with an hour each to write a request the JavaScript
+#      reference answers and this port does not.  60 points, 10 for every
+#      adversary that finds nothing.
+#
+# ---------------------------------------------------------------------------
+# Why this task's shape differs from every other language pair here
+# ---------------------------------------------------------------------------
+# A note on one name before the argument: this task's files explain themselves by
+# contrast with a C#-to-TypeScript pair, the compiled-reference shape this design
+# was settled against.  The comparisons are kept concrete rather than paraphrased
+# as "some compiled-reference task", because the reason for each decision here is
+# the specific thing that shape can do and this one cannot.  It is called `tommy`
+# below, after its slug, and never by number.
+#
+# Every other task in this category can exclude the old implementation from a
+# stage by withholding a toolchain.  tommy deleted the .NET SDK; lang02 has no C
+# compiler in stage 2.  That option does not exist here.  `node` runs State A and
+# State B, and stage 2 cannot run the submission at all without it.
+#
+# So the boundary is drawn by allowlist and by content instead of by toolchain:
+# stage 2's sweep rejects any `.js/.ts/.cjs/.mjs/.mts/.cts` outside
+# /usr/local/lib/nodejs and /opt/assets/consumers, and rejects any file carrying
+# twenty or more of jsonata's 101 `[TDS]NNNN` diagnostic codes.  Two consequences
+# follow, and both are easy to get wrong:
+#
+#   * `forbidden_paths` cannot list `.js`.  `dist/` is required to be full of it --
+#     that is what tsc emits.  This is the single biggest structural difference
+#     between this task and the rest of the category, and environment/
+#     source-contract.json says so at length so that no future reviewer "fixes" it.
+#
+#   * The cheat to defend against is not a subprocess, it is a *rename*.  Renaming
+#     all nine src/*.js to .ts, adding `// @ts-nocheck` to each, writing a
+#     strict-looking tsconfig and running `tsc -p .` takes full marks -- measured,
+#     not estimated.  A control that changes one line of behaviour fails a scored
+#     check and is paid nothing.
+#     Behaviourally a rename *is* the original, so the behavioural stage cannot be
+#     asked to catch it and is not asked to.  "Was this rewritten" lives entirely
+#     in stage 1, where three independent readers answer it against the original,
+#     and in stage 3, which does not care how the answer was reached.
+#
+# That division is the point rather than a compromise.  Stage 2 measures behaviour
+# and is forbidden from asserting anything about how the source looks; stage 1 reads
+# source and is given no toolchain, because a review that can build grades a build
+# log instead of an implementation; stage 3 is the only image holding both trees and
+# both builds, because "the original answers this request" is a claim that has to be
+# executed.
+#
+# One more property worth naming: State A stays in the image and the instruction
+# tells the agent to run it.  `npm run build` and `node dist/probe.js` work offline
+# and are the most reliable way to answer a question about what the original does.
+# So no gate and no check may treat the mere presence or mention of JavaScript as
+# evidence of anything.  What is asked instead -- in stage 1 by reading, in stage 2
+# by sweeping the delivered tree -- is whether the *delivered implementation* is
+# still the original wearing a new extension.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions are build debris only, and for this task the first entry is the
+# one that carries the weight.  `dist/` is where tsc puts the emitted JavaScript;
+# carrying a stale copy from the agent container into the verifier would let a
+# stage grade JavaScript the submitted TypeScript no longer produces -- which,
+# when the graded question is "did the TypeScript become this", is the whole ball
+# game.  Stage 2 deletes it again on its own copy regardless; excluding it here
+# means the deletion is a second line of defence rather than the only one.
+#
+# Everything else is cache and bytecode.  `*.tsbuildinfo` is listed because
+# incremental builds keyed on a previous tree are a source of "it compiled for me"
+# that nobody can reproduce.
+#
+# Note what is *not* excluded: no source extension appears here.  A submission
+# that checked JavaScript into src/ keeps it, and stage 1 and stage 2's sweep get
+# to see it.  Excluding the evidence would turn a specific finding into "the probe
+# did not run" -- a zero with no reason attached.
+#
+# Solutions must therefore live in tracked source files, never inside these paths,
+# a rule instruction.md states outright.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "dist",
+    "node_modules",
+    ".npm",
+    ".cache",
+    "*.tsbuildinfo",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+]
+
+[task]
+name = "swerefactor/lang07-jsonata-js-to-typescript"
+description = "Reimplement the JSONata 2.2.2 engine -- lexer, Pratt parser, tree-walking evaluator, ~100-function builtin library, XPath-style datetime formatter and run-time signature validator -- in TypeScript under strict with no dependencies, answering 13,940 frozen differential cases byte-identically, preserving all 101 diagnostic codes with their positions and tokens, and generating the public declaration file from the ported source instead of carrying the hand-written one across."
+authors = []
+keywords = [
+    "swe-refactor",
+    "language-migration",
+    "javascript",
+    "typescript",
+    "node",
+    "jsonata",
+    "query-language",
+    "interpreter",
+    "byte-exact-output",
+    "diagnostic-fidelity",
+    "offline",
+]
+
+[metadata]
+category = "language-rewrite"
+difficulty = "hard"
+license = "MIT"
+upstream = "https://github.com/jsonata-js/jsonata"
+upstream_version = "2.2.2"
+source_repository = "https://github.com/jsonata-js/jsonata"
+source_version = "2.2.2"
+state_a = "JSONata: a JSON query and transformation language -- lexer, Pratt parser, evaluator, 100-function builtin library, XPath-style datetime formatter and signature validator -- in 9 JavaScript files under src/, 358,338 bytes -- six library modules and a three-file differential probe -- plus a hand-written jsonata.d.ts and a zero-dependency build in tools/build.js; 15 files"
+state_b = "the same engine in TypeScript compiled by tsc 5.9.3 under strict, emitting byte-identical answers to all 13,940 frozen cases and a declaration file generated from the ported source rather than carried across; no dependencies"
+scale = "15 files, 358,338 bytes of implementation, 6,376 non-comment lines; a 6-operation probe protocol with 10 protocol codes, 13 host callables and 4 regex engines; 101 engine diagnostic codes, of which the corpus reaches 96; 24 type-surface rows"
+tags = [
+    "whole-repository",
+    "language-rewrite",
+    "same-runtime",
+    "byte-exact-output",
+    "differential-testing",
+    "dynamic-language-implementation",
+    "diagnostic-fidelity",
+    "declaration-generation",
+    "oracle-in-tree",
+    "offline",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 12h wall clock.  Start from the scale -- the two neighbours that set it:
+#
+#   lang04  6,549 JS logic lines -> Rust        30h
+#   lang03  ~4k Python logic lines -> Go        15h
+#   tommy  1,572 C# logic lines -> TypeScript  12h
+#
+# This tree is 6,376 JavaScript logic lines, within 3% of lang04's volume, so the
+# reading and porting load is lang04's.  The target language is not: TypeScript is
+# a superset of the source language, and none of the work that makes lang04 a
+# 30-hour task -- ownership, lifetimes, no GC, error values instead of exceptions,
+# rebuilding a dynamic value model in a static one -- has an analogue here.
+#
+# But it is emphatically not tommy scaled up either, and the reason is what the
+# grader measures.  This is a *dynamic* language implementation: the values flowing
+# through JSONata are arbitrary JSON, its functions are first-class and curried,
+# and its own error surface is 101 diagnostic codes each carrying a position, a
+# token and sometimes a value.  Typing that under `strict` with `noImplicitAny`
+# means making decisions upstream never had to make, on every one of ~100 builtins,
+# while the graded property is that not one byte of the answer changes.  Add the
+# datetime formatter's own ISO-week arithmetic, four regex engine shapes, tail-call
+# handling and a stack limit that has to trip at the same depth, and the scale
+# argument puts the honest figure between the two clusters rather than at either
+# end.
+#
+# That argument produced 30h, which was this task's figure until the whole
+# suite's budgets were reset after its first full run.  12h is what replaced it:
+# the reasoning above is why this task is cheaper than its volume suggests, and
+# the ceiling now says so directly instead of splitting the difference.  It is a
+# ceiling, not an expectation.
+#
+# no-network: there is no npm registry, so "no dependencies" is enforced by the
+# environment rather than audited afterwards.  The pinned tsc is vendored into the
+# image, and `npm view` fails immediately with `cache mode is 'only-if-cached'`
+# rather than hanging on DNS -- which matters, because a 12-hour budget spent in
+# DNS timeouts is a silently different task.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 43200.0
+network_mode = "no-network"
+user = "agent"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 2400.0
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+# These mirror environment/Dockerfile's own ENV rather than adding to it, so that a
+# stage invoked by hand behaves like the delivered image.  NODE_OPTIONS is the one
+# with a reason beyond hygiene: the evaluator recurses, the stack limit is a graded
+# behaviour, and pinning the old-space size keeps "how deep can it go before it
+# reports S0114" from depending on how much memory the host happened to have.
+[environment.env]
+NODE_OPTIONS = "--max-old-space-size=2048"
+npm_config_offline = "true"
+npm_config_audit = "false"
+npm_config_fund = "false"
+PYTHONDONTWRITEBYTECODE = "1"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 7200 + 21600 + 28800 = 57600s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them or
+# stage 2 came in short of full marks.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes early
+# returns early, and the hour is a limit on one round rather than a quota to be
+# spent.
+#
+# One arithmetic point, stated so it is not mistaken for an oversight.  The sixteen
+# per-module timeouts in behavioural/suite.toml sum to 26,400s, above stage 2's own
+# 21,600s.  The stage budget binds first, by design and by convention here -- the
+# same sums in tommy overshoot its stage budget by 3.0x where these overshoot by
+# 1.2x.  Module timeouts are per-module ceilings sized one to two orders of
+# magnitude above what the reference needs, because a port that reparses inside a
+# loop can be fifty times slower while being completely correct; they are not a
+# schedule.  The only way to approach the sum is for most modules to hang, which
+# requires a build that produced something unrunnable -- and `build` runs first, so
+# the families that would hang have nothing to run against.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 64800.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+# The behavioural image builds the JavaScript reference, generates all 13,940 cases
+# across four families and freezes every expectation, then runs identity.py over
+# the whole frozen corpus and fails the build at any rate below 1.0.  That is the
+# slowest build of the three stages and slower than the agent environment's.
+build_timeout_sec = 7200.0
+cpus = 4
+# Above the agent's 8192.  Stage 3 holds both trees and both builds at once, and
+# stage 2 walks 13,940 frozen cases across fifteen modules; headroom is cheap here
+# and a verifier OOM is a zero with no reason attached.
+memory_mb = 16384
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+NODE_OPTIONS = "--max-old-space-size=2048"
+PYTHONDONTWRITEBYTECODE = "1"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a smoke
+# test that the suite can pass at all.
+#
+# That smoke test exists anyway, and it runs on every build rather than when someone
+# remembers to.  tests/behavioural/lib/identity.py grades State A's own JavaScript
+# probe against the frozen corpus through the same executor, request encoder and
+# byte comparison the graded modules use, and fails the image build at any rate
+# below 1.0.
+#
+# Be precise about what that buys.  It establishes that every frozen expectation is
+# answerable and that `serve` and `--batch` agree -- so a red sweep at grading time
+# is a fact about the submission and not about the corpus.  What it does not
+# establish is that the tree was ported at all: stage 2 judges behaviour as
+# behaviour, so State A renamed to .ts under `@ts-nocheck` answers identically, at
+# full marks.  That question belongs to stages 1 and 3, and they answer it the
+# expensive way -- three readers with the original in front of them, and six models
+# spending an hour each hunting for a behaviour nobody thought to record.

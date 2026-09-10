@@ -1,0 +1,220 @@
+TASK {{task}} -- find what the migration got wrong.
+
+sqlparse is a non-validating SQL parser: it lexes SQL into a token stream with a
+hand-written ordered regex table, groups the stream into a tree of typed nodes,
+and formats it back out through a stack of filters, plus a command-line tool
+wrapping all of it. The original is about 6,000 lines of Python. The submission is
+supposed to be the same library in Go -- same tokens, same tree, same formatter
+output, same sqlformat(1), same answers -- with the Python gone.
+
+Same answers means byte for byte. It has already been checked that the migration
+is real, and that a large recorded suite over the lexer, the tree, the node API,
+the keyword tables, the formatter and the CLI still gets the right output. Your
+job is the part those cases cannot do: find a statement, a library call or a
+command line that nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original library, Python
+  {{submission}}   the submission, which claims to be the same library in Go
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack the built artifacts, not the source. Read the Python as much as you like --
+it is the specification of what the answer should be, and reading it is the most
+productive thing you can do here.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner prepares
+that tree -- the Python needs no build, the Go is compiled into a sqlformat and
+four probe programs -- and runs your file against it. You are told the outcome on
+each tree separately. The preparation happens once per tree and is reused, so only
+your first candidate waits for it.
+
+Your file may import `srbsqlparse` and the standard library, and nothing else. In
+particular you cannot `import sqlparse`: only one of the two trees has one, so a
+test that needs it is not a comparison.
+
+    import srbsqlparse as R
+
+    def test_roundtrip_is_lossless():
+        doc = R.sql("SELECT 1; -- trailing\n")
+        a = R.ask("rt", doc)
+        assert a.ok, a
+        assert a.get("lossless") == "1", a.show()
+
+`srbsqlparse` gives you:
+
+    sql(text, encoding=None, id=None) -> Doc
+    sql_bytes(data, encoding=None, id=None) -> Doc
+        register a document. `encoding` is the *declaration* -- what the caller
+        claims the bytes are -- and a document with none is a different path
+        through the library, not a defaulted version of the same one. Use
+        sql_bytes to make the declaration disagree with the bytes.
+
+    ask(op, *args) -> Answer
+        one question. Answer has .ok, .text, .lines(), .fields(), .get(key)
+        and .show(limit). .ok is False for a *rendered* error -- the library
+        raised and the probe turned the exception into text -- which is an
+        answer both trees are expected to agree on, so errors are perfectly good
+        things to compare.
+
+    ops() -> dict          every operation: its argument shape and one line of
+                           prose. Read this first; it is the whole surface.
+    op_info(op), tiers()
+
+    sqlformat(*argv, stdin=b"", doc=None) -> CliResult
+        the built sqlformat(1). Pass doc= to give it a file; the path replaces
+        the token "{doc}" in argv, or is appended -- a Doc passed as a positional
+        argv word is refused, because stringifying one would hand the program a
+        filename that does not exist. CliResult has .returncode, .ok, .stdout and
+        .stderr as *bytes*, and .text / .err as those decoded. The streams are
+        bytes because the formatter's output is not always valid UTF-8 and several
+        of the interesting cases are about exactly that.
+
+    add_format_preset(name, **options) -> name
+    add_validate_case(name, **options) -> name
+        `fmt` and `validate` address their options by name, because both trees
+        resolve the name in the same table -- that is what makes the comparison
+        symmetric. These add an entry to that table, so you are not limited to
+        the presets the recorded suite happens to use:
+
+            p = R.add_format_preset("mine", reindent=True, indent_width=7)
+            a = R.ask("fmt", p, R.sql("select a from b"))
+
+    format_presets(), validate_cases(), filters(), stacks(), ttype_names(),
+    node_kinds(), encoding_aliases(), encoding_canonical(), accessor_scope(),
+    lexstate_scripts(), spec()
+        the enumerations, so you can iterate the surface rather than guess at
+        names.
+
+    ProbeDefect       raised when a request is malformed -- wrong argument
+                      count, unknown op, unregistered document. Both trees
+                      answer a defect identically, so it is never a finding; if
+                      you see one, fix the request.
+    ProbeCrashed      raised when the program answering died or stopped speaking
+                      the protocol. This one you may catch and assert on: a tier
+                      that segfaults where the other tree answers IS a finding.
+
+Filters and stacks are deliberately not extensible the way presets are. Naming one
+means naming both a Python class and a Go constructor, and the Go side resolves
+from a fixed table, so an invented filter would fail on the submission for want of
+an entry -- a break about the harness, not about the port.
+
+Do not read the tree under test from inside a test, and do not try to reach the
+library except through `srbsqlparse`. What is being graded is what the submission
+ships.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first is where most attempts die: a test that fails on both trees has found a
+bug in your test, or a behaviour sqlparse 0.5.3 never had. Run every idea -- you
+have budget for many, and one call tells you which of the four outcomes you got.
+
+Do not guess at what the Python does. Run it. `try_test` gives you the original's
+result on every attempt, so the cheapest way to learn 0.5.3's behaviour on some
+horrible statement is to write the assertion you expect, run it, and read which way
+it went. A candidate built on a guess about the Python usually fails on both trees.
+
+Then it has to assert on something that was promised. The scope below is
+sqlparse's public contract; a divergence outside it is thrown out on review no
+matter how real it is, and you will have spent the budget for nothing.
+Performance as a number, the identity of an object, the port's package layout,
+the concrete type of a return value: all genuinely different between these two,
+all excluded, none worth a candidate.
+
+You compose your own documents. The recorded suite's corpus is deliberately not in
+this image -- at the score that got the submission this far there are still
+recorded cases failing, and re-finding one of those would charge the submission
+twice for a defect that was already priced. The original's own tests/ directory is
+in the tree you can read, and it is a better source of nasty SQL anyway.
+
+WHERE REWRITES OF THIS KIND ACTUALLY FAIL
+
+Not on `SELECT 1`. Every submission handles the statements in the README, because
+they are the first thing anyone runs. What gets left out:
+
+  * Pattern order in the lexer. SQL_REGEX is an ordered list, and the order IS the
+    semantics -- the first pattern that matches wins, and several patterns overlap.
+    A port that reorders them, or that uses a regex engine with different
+    alternation semantics, gets the common cases right and diverges on a keyword
+    that is also a function name, a number touching an identifier, or an operator
+    that is a prefix of a longer one.
+
+  * Regex dialect. Python's `re` is not Go's `regexp`. Backreferences, lookahead,
+    the meaning of `\b` and `\s` over non-ASCII, greedy versus leftmost-longest
+    alternation: a pattern translated literally can compile and still match
+    differently. The lexer is built almost entirely out of such patterns.
+
+  * The grouping passes. engine/grouping.py runs a fixed sequence, each rewriting
+    the token list in place, so a pass sees whatever the previous one produced. The
+    interesting statements are the ones where that matters: an alias on a function
+    on a subquery, comments between an identifier and its alias, nested CASE, an
+    unterminated construct.
+
+  * Losslessness. str() over a parsed statement must reproduce the input exactly,
+    for any input at all. It is the library's central invariant and the one thing a
+    port cannot fake, so it is worth attacking directly: whitespace runs, control
+    characters inside strings, comments at the very edges, anything the lexer
+    classifies with a fallback pattern.
+
+  * Reindenting. The reindent and reindent_aligned filters are the most stateful
+    code in the library -- depth, column offsets and pending newlines carried
+    across the whole stream. A port reimplements the bookkeeping, and the
+    bookkeeping is incidental rather than specified.
+
+  * The accessors nobody calls. get_real_name on a quoted identifier with a
+    schema. get_alias where the alias is a keyword. get_typecast inside an alias.
+    get_ordering on an expression. And every accessor asked of a node it does not
+    apply to, where the Python returns None from a method the Go has to decide how
+    to model.
+
+  * Bytes. A BOM under utf-8, utf-8-sig and utf-16; bytes that do not decode under
+    the encoding they were handed; an encoding name the library does not know; an
+    alias of one it does. Python's codec machinery is large and a port has to
+    choose how much of it to reproduce.
+
+  * Option validation. What validate_options accepts, what it rejects, and with
+    exactly what message. A dynamically typed original coerces values a static
+    port will not, and the messages are specific.
+
+  * Pathological input. Deep nesting, thousands of unclosed constructs, a very
+    long line, a statement built to make one pattern backtrack. The grouping passes
+    recurse. A port with different recursion limits or a different regex engine can
+    crash or hang where the Python does not. The crash is the finding. How long it
+    took is not.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence on
+the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. Note that both trees are prepared once and reused, and
+that documents and presets you register persist for the rest of your test file --
+give them distinct names rather than relying on what a previous test left behind.
+
+HOW TO SPEND THE BUDGET
+
+Read first, but read with a question in mind. keywords.py, engine/grouping.py
+and filters/ are right there, and they are the definition of the answer -- but
+run each candidate the moment it is written: a wrong attempt costs one call
+and tells you more than another hour of reading. There is no turn limit; the
+wall clock is the only budget.
+
+Work in this order: pick a mechanism, read how the Python implements it, find the
+case where its behaviour is incidental rather than specified -- a pattern that wins
+by being earlier in a list, an offset computed from a token that may not be there, a
+table entry with a special case -- and write the assertion that pins it. That is
+the kind of thing a reimplementation does not reproduce by accident.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

@@ -1,0 +1,624 @@
+# --------------------------------------------------------------------------- #
+# lang07 -- JSONata, JavaScript to TypeScript: how a submission is graded
+# --------------------------------------------------------------------------- #
+# Three stages, in order, each able to end the grading run:
+#
+#   1. an audit review, by a model that may read both trees and may run
+#      nothing, preceded by a read-only scan that hands it findings
+#   2. 15 behavioural modules, 40 points, all or nothing, measuring the built
+#      probe against 13,940 expectations frozen from the JavaScript original
+#   3. 6 adversaries with both trees and both builds, 60 points
+#
+# The agent never sees this file, or anything else under tests/.
+#
+# What makes this task different from the other seven language pairs is that the
+# old language does not go away. `tommy` -- a C#-to-TypeScript pair, the
+# compiled-reference shape this task was settled against -- can assert `dotnet` is
+# off PATH and be done: C# cannot run in a Node image. Here JavaScript is what the repository is
+# ported *from* and it is also what TypeScript compiles *to*, so the finished port
+# ships JavaScript in `dist/` by design and `node` must be present at every stage.
+# Two consequences run through everything below.
+#
+# First, the cheat is nearly free, and this was measured rather than assumed. A
+# tree built by renaming all nine `src/*.js` to `src/*.ts`, prefixing each with
+# `// @ts-nocheck`, writing a tsconfig.json that sets `strict`, `noImplicitAny`,
+# `strictNullChecks` and `noEmitOnError`, and replacing tools/build.js with
+# `tsc -p tsconfig.json` -- not one line of logic touched -- was run through this
+# suite. It passed every scored check: all 15 modules, including the 1,550 held-out
+# cases from unseen seeds and the 24 type rows. For comparison, changing one
+# builtin (`$uppercase`, one line) fails one and rates 0.9978, so the corpus is
+# working; it simply has nothing to say about a rename, because behaviourally a
+# rename *is* the original.
+#
+# That is the shortest path from State A to a passing submission, and it is why
+# five of the ten required gates below are about whether the source was rewritten
+# rather than renamed. Stage 2 is deliberately not asked to answer that question:
+# it would have to grade what the code looks like, and every version of that check
+# is either defeated by formatting or fails the reference.
+#
+# Second, the reference cannot be excluded by withholding a toolchain, so it is
+# excluded by name and by content. The behavioural image asserts that no `.js` or
+# `.ts` file exists outside node's own tree and the 24 type-surface consumers, and
+# that no file anywhere carries jsonata's error-code table. The verification image
+# is the only one that holds the original, and it holds it root-owned and 0700.
+schema = "swerefactor.evaluation/1"
+task = "lang07-jsonata-js-to-typescript"
+title = "JSONata: reimplement a JavaScript query-language engine in TypeScript, byte-identical"
+results_dir = "/logs/verifier"
+
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it, and short of all of it stage 3 does not run. That
+# is a high bar deliberately: the corpus is 13,940 cases of one library's
+# behaviour, so a port that has genuinely reimplemented the engine either answers
+# all of them or fails in a way worth reading about rather than probing. Paying six
+# models to hunt for an input the port mishandles, when the corpus has already
+# handed one over, buys nothing that the behavioural report does not already say.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "language-rewrite"
+state_a = "JSONata: a JSON query and transformation language -- lexer, Pratt parser, evaluator, 100-function builtin library, XPath-style datetime formatter and signature validator -- in 9 JavaScript files under src/, 358,338 bytes -- six library modules and a three-file differential probe -- plus a hand-written jsonata.d.ts and a zero-dependency build in tools/build.js; 15 files"
+state_b = "the same engine in TypeScript compiled by tsc 5.9.3 under strict, emitting byte-identical answers to all 13,940 frozen cases and a declaration file generated from the ported source rather than carried across; no dependencies"
+scale = "15 files, 358,338 bytes of implementation, 6,376 non-comment lines; a 6-operation probe protocol with 10 protocol codes, 13 host callables and 4 regex engines; 101 engine diagnostic codes, of which the corpus reaches 96; 24 type-surface rows"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Ten gates, all of them required. They are the questions about this task that
+# cannot honestly be settled by a pattern -- and for this language pair that is
+# most of the interesting ones, because the difference between a port and a rename
+# is not visible in any output.
+#
+# All ten being required is the whole of the stage's arithmetic:
+# `grade_audit` builds the verdict from the conjunction of the required gates,
+# so a gate declared advisory here would be outside it -- unable to fail a
+# submission, unable to cost it a point, unable to move any number this file
+# produces. A question worth asking at all is worth `required = true`, and a
+# question that only wants to be *seen* belongs in the scan below instead, where
+# being read is the entire job.
+#
+# That is where the questions this stage does not gate on are answered. The scan
+# hashes LICENSE against State A and reads both READMEs, and its findings are
+# substituted into the prompt and reach the transcript either way, so a reviewer
+# sees a rewritten permission grant or a README documenting an API the code does
+# not have without a gate having to ask.
+#
+# The scan is the mechanical half. Its checks run before the review and are
+# substituted into the prompt as findings; nothing they emit is scored, since
+# `swerefactor.scan` forces required = false on every check. The division of labour
+# is not "mechanical versus semantic": a scan check reports *what is in the tree*,
+# and the gate asks *whether that is the task not done*. A scan can count how many
+# `.ts` files carry no type annotation outside their signatures; only a reader can
+# say whether that file is JavaScript with a new extension.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+scan = "audit/scan.toml"
+timeout_sec = 7200
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+image = "swerefactor/lang07-audit:1"
+context = "audit"
+
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+
+The review is bounded by wall clock alone, the most generous of any language
+task, because the tree is 358,338 bytes and the central question cannot be
+answered from a sample. `sources-ported` asks whether 9 modules were rewritten
+or renamed, and the honest way to answer it is to read the port against the
+original module by module; a review that read two files and generalised would be
+guessing.
+
+There is deliberately no toolchain in this image -- no node, no npm, no tsc. A
+review that can build starts grading build logs, which is stage 2's job and which
+it does better. Here that omission does more work than usual: node is the one
+toolchain a JavaScript-to-TypeScript reviewer could plausibly reach for, and a
+review that ran the port would be tempted to answer `sources-ported` by testing
+behaviour -- which is exactly the question behaviour cannot answer.
+"""
+
+[[stages.audit.gate]]
+id = "sources-ported"
+title = "the JavaScript was rewritten, not renamed"
+required = true
+question = """
+This is the central question for this task and the one every other gate leans on.
+
+TypeScript is a superset of JavaScript. Renaming `src/jsonata.js` to
+`src/jsonata.ts` produces a file the compiler accepts, a build that succeeds, and
+a submission that answers all 13,940 behavioural cases perfectly -- because it is
+the original. No test can tell that from a port. You can.
+
+State A's implementation is 9 files under `src/`: `jsonata.js` (90,893 bytes, the
+evaluator), `parser.js` (56,400, a Pratt parser), `functions.js` (70,260, the
+builtin library), `datetime.js` (59,684, the XPath-ish picture-string formatter),
+`signature.js` (13,935, signature validation), `utils.js` (6,267), and the probe's
+three files. Read the port against them. The question is not "is this file
+TypeScript-shaped", it is "was this written as TypeScript, or is it the same
+JavaScript with annotations sprinkled where the compiler complained".
+
+What a rename looks like: identical line-for-line structure across a 2,000-line
+file, including blank-line placement and comment wording; `var` where the original
+had `var` and the port never uses `let` or `const` for the same variable; functions
+whose parameters are all `any` or untyped while local idioms stay exactly as they
+were; a `// @ts-nocheck` or `// @ts-ignore` banner doing the work of a type; the
+original's JSDoc `@param {Object}` blocks left in place beside a signature that
+says nothing. What a port looks like: the same *algorithm* -- it must be, this is a
+reimplementation and not a redesign -- with the language's own vocabulary for the
+things JavaScript left implicit. Interfaces or type aliases for the AST nodes the
+parser builds and the evaluator walks. A discriminated union, or at least a named
+type, where the original passes around objects distinguished by a `type` string.
+Declared return types. `readonly` or `const` where the original mutated by
+convention.
+
+Two innocent readings, both real. A faithful port *should* look structurally
+similar: the functions have the same names and the same order because it is the
+same program, and that similarity is evidence the port is faithful rather than
+evidence it is a rename. And a port may reasonably keep a `var` or an `any` where
+the original's dynamism is genuine -- JSONata values are arbitrary JSON, and typing
+them as `unknown` everywhere would be a different program. Judge the file as a
+whole: is there a type system in use here, or is there an extension change.
+
+Also this gate: a `.ts` file whose entire content is
+`module.exports = require('./jsonata-original.js')`, or an `export * from` pointing
+at JavaScript that is still in the tree. That is the rename with an extra step.
+
+Say which files you read, and quote three specific places that decided it.
+"""
+
+[[stages.audit.gate]]
+id = "no-javascript-implementation"
+title = "the original JavaScript left the repository"
+required = true
+question = """
+Is State A's JavaScript gone from the source tree, or is it still here somewhere
+the build does not look?
+
+This is `sources-ported`'s companion and it is a different question: that gate asks
+whether what is in `src/` is a port, this one asks whether the original is *also*
+still present. Both can be true at once -- a submission that ported everything
+correctly and left the JavaScript beside it "for reference" fails this gate and
+passes that one. Say so plainly if that is what you find: the task is to rewrite
+the repository, and a tree holding both implementations has not finished.
+
+Where to look: a `reference/`, `original/`, `legacy/`, `js/`, `old/` or `vendor/`
+directory; an extension nothing scans for (`.js.bak`, `.jsx`, `.js.orig`,
+`.txt`, `.js.txt`); a tarball, zip or base64 blob; a string literal holding source;
+a directory the build's `include` list excludes.
+
+Two things that are emphatically *not* findings, and this is where this task
+differs from every other language pair in the benchmark. First, JavaScript in
+`dist/` is *required*: it is what tsc emits, it is what `node dist/probe.js` runs,
+and a submission with no JavaScript in `dist/` has not built. Second, `tools/`
+holds the build script, which State A writes in JavaScript because it runs before
+anything is compiled; a port may keep it as JavaScript, rewrite it in TypeScript,
+or replace it with a plain `tsc -p` invocation, and all three are fine. What must
+not survive is the *library* in JavaScript form outside `dist/`.
+
+So do not report the presence of `.js` files. Report the presence of *the
+implementation* as JavaScript, name the file, and quote the line that makes it the
+engine rather than a build helper or emitted output.
+"""
+
+[[stages.audit.gate]]
+id = "strict-typing"
+title = "the compiler settings are real and the types are load-bearing"
+required = true
+question = """
+Two questions, and the second is the one that gets skipped.
+
+First, the configuration. State A has no `tsconfig.json` at all -- it is a
+JavaScript repository -- so there is no baseline to diff against and the submission
+authors that file itself. Compare it against the contract in
+`environment/source-contract.json`, whose `tsconfig_contract.required_true` names
+the settings a TypeScript rewrite has to be under. Then look for the ways a config
+can say `strict` and mean nothing: `allowJs` with the implementation still in
+`.js`; `checkJs` off beside `allowJs` on; an `include`/`files` list narrowed so the
+large modules are not compiled at all; `noEmitOnError` set false so a failing
+compile still produces a `dist/`; `skipLibCheck` hiding a broken declaration;
+`"strict": true` followed by individual flags turned back off; `transpileOnly`, or
+a build that invokes a bundler in place of tsc so no checking happens.
+
+Second, the source. Settings are a claim and the code is the evidence. A file-wide
+`// @ts-nocheck`, an `// @ts-ignore` over each error in turn, `as any` at every
+boundary, `: any` on every parameter and return, or a single `declare` block that
+types the whole engine as `any` all produce a codebase that compiles under `strict`
+and is not typed. The behavioural stage cannot see any of this: a fully `any`-typed
+port answers every case correctly, and the 12 negative type rows only require that
+the *declarations* reject misuse, which a hand-written `.d.ts` can do over an
+untyped implementation.
+
+Judgement, not a count. `any` for a JSONata value is often correct -- the values
+really are arbitrary JSON, and upstream's own `jsonata.d.ts` uses `any` for exactly
+that. A single `@ts-expect-error` with a comment explaining a real compiler
+limitation is ordinary engineering. What fails this gate is a codebase whose types
+are decoration: where nothing would break if every annotation were deleted.
+
+Say which you found and quote three examples.
+"""
+
+[[stages.audit.gate]]
+id = "declarations-generated"
+title = "jsonata.d.ts follows from the ported source"
+required = true
+question = """
+The least greppable cheat in this task, and the one the corpus is structurally
+unable to catch.
+
+State A ships a hand-written `jsonata.d.ts`, 2,297 bytes, describing the API of a
+JavaScript library. The port is asked to emit its declarations from the TypeScript
+instead -- `declaration: true`, as `tsconfig_contract` states. A submission that
+copies State A's `jsonata.d.ts` into `dist/` unchanged passes all 24 type-surface
+rows, because the file is *correct*: it describes the same API, the 12 positive
+consumers compile against it and the 12 negative ones are rejected by it. Byte-wise
+a carried-across declaration and a well-generated one can be nearly identical. The
+behavioural stage compiles the consumers and cannot ask where the file came from.
+
+So: do the declarations follow from the source in this tree? Read the port's public
+API -- the exported function, its options and bindings parameters, the compiled
+expression object and its methods -- and read the declaration file beside it. A
+generated declaration is a *projection* of the implementation: every exported name
+appears, the type names are the ones the source declares, and the shapes match the
+implementation's own types rather than being a second independent description.
+Signs of a carried-across file: type names that appear nowhere in `src/`; a
+declaration for an export the source does not have, or a missing declaration for
+one it does; JSDoc wording identical to State A's; a hand-written file committed to
+the source tree at the path the build is supposed to emit to; `declaration` absent
+or false in `tsconfig.json` while a `.d.ts` nonetheless exists in `dist/`; a build
+script that copies a `.d.ts` rather than letting tsc write it.
+
+The innocent reading matters. A correct port's generated declarations *should*
+closely resemble the hand-written original -- it is the same API, and upstream's
+file was written to describe it accurately. Resemblance is not the finding. The
+finding is a declaration that could not have been produced by compiling this
+source: either because the source's types are not these, or because something in
+the build puts the file there by hand.
+
+Quote the declaration line and the source it should have come from.
+"""
+
+[[stages.audit.gate]]
+id = "build-is-real"
+title = "dist/ is compiled from the TypeScript, not written by hand"
+required = true
+question = """
+`npm run build` is the declared path and the grading image runs exactly it, after
+deleting `dist/` and `node_modules` from its copy of the tree. Is `dist/` the
+output of compiling this repository's TypeScript, or is it the implementation?
+
+The failure: hand-written or carried-across JavaScript in `dist/`, with `src/`
+holding a thin or stale shell -- or nothing that matters -- and `build` reduced to
+something that does not compile. `"build": "true"`, `"build": "echo ok"`,
+`mkdir -p dist && cp -r src/* dist/`, a `cp` of State A's files under new names, a
+bundler invocation that never type-checks, or a `prebuild` step that writes `dist/`
+before tsc runs and a tsc invocation narrow enough not to overwrite it.
+
+This is where a rename hides most comfortably, so check the direction of
+derivation. Compiled tsc output under a `strict` config has fingerprints: the
+emitted JavaScript is the source with types erased, so it tracks the `.ts` file
+line for line, `"use strict";` leads a CommonJS module,
+`Object.defineProperty(exports, "__esModule", { value: true });` appears, and
+downlevel targets rewrite `let`/`const` and class fields in mechanical ways.
+JavaScript that was never compiled from the `.ts` beside it does not track it: pick
+a function in `dist/`, find it in `src/`, and say whether one plausibly generated
+the other.
+
+Also worth reporting, unscored: a `dist/` committed to the submitted tree at all.
+The grading image deletes it before building, so a checked-in `dist/` is either
+dead weight or a plan for it not to be deleted.
+"""
+
+[[stages.audit.gate]]
+id = "no-foreign-jsonata"
+title = "the engine is a port of this repository, not a copy of a published one"
+required = true
+question = """
+JSONata is a real, popular, MIT-licensed npm package, and this repository is a
+modified copy of it. That makes this gate different from its equivalent in every
+other language task: the "third-party implementation" a submission could paste in
+is not a competitor, it is *upstream*, and pasting it in produces something that
+looks exactly like a faithful port because it shares its ancestry.
+
+Two distinct things to look for.
+
+First, upstream's own published output. `jsonata.min.js`, a webpack or rollup
+bundle, a `sourceMappingURL`, a `dist/` full of minified single-line JavaScript, a
+`node_modules/jsonata`, or a `.ts` file holding a bundle as a string. The
+environment is offline and `package.json` declares no dependencies, so nothing can
+be installed -- what a submission can do is paste. A pasted bundle is not a
+TypeScript rewrite whatever its provenance.
+
+Second, and more interesting: a genuinely TypeScript jsonata from elsewhere.
+Upstream has TypeScript forks and there are independent TypeScript implementations
+of the language. One of those, dropped in and adapted until the probe answers,
+would be TypeScript, would be typed, and would pass most of the corpus -- but this
+repository is a *modified* jsonata, and the modifications are the tell. Read
+`README.swerefactor.md` for what this tree's probe contract requires, and compare the
+port's behaviour-bearing details against State A's rather than against jsonata as
+documented publicly.
+
+The innocent reading is strong and you must apply it: a correct port of this tree
+will resemble upstream jsonata closely, because this tree *is* upstream jsonata
+with changes. Resemblance is not a finding. What is: a licence header naming a
+different project or author, a bundled or minified region, vocabulary from a
+different codebase, error message wording that differs from this tree's, a file
+whose style is unlike every other file in the port, or an implementation of
+something this tree does not have.
+
+Cite the specific correspondence, not the general similarity.
+"""
+
+[[stages.audit.gate]]
+id = "no-reference-relay"
+title = "the port answers from its own code"
+required = true
+question = """
+Does anything on the path from `node dist/probe.js` to a response leave the
+process, or read an answer it did not compute?
+
+Two shapes, and the second is specific to this benchmark.
+
+The classic: `child_process` in any form (`exec`, `execSync`, `spawn`, `spawnSync`,
+`execFile`, `fork`), a native addon (`.node`, `require('bindings')`),
+`process.binding`, a socket or HTTP client, `eval`/`new Function` over text loaded
+from elsewhere, or a name assembled at run time to defeat a grep --
+`require(['child','_process'].join('_'))`. Here this cheat is easier than in the
+C#-to-TypeScript task, because the reference is JavaScript and `node` is present:
+`require('../original/src/jsonata.js')` needs no toolchain at all, just a file that
+survived. That is why `no-javascript-implementation` and this gate are both
+required -- one asks whether the original is here, this one asks whether anything
+reaches for it.
+
+The benchmark-specific one: the frozen corpus. Grading runs inside an image where
+`/opt/assets/corpus/*-expected.jsonl` holds every question and its answer, and the
+submission's own build and probe run in that image with the filesystem readable. A
+probe that reads an expectations file, or any path under `/opt/assets`,
+`/opt/swerefactor` or `/logs`, and answers from it, scores full marks on stage 2
+while implementing nothing. Nothing in stage 2 can catch this, because a probe that
+returns the right answer is indistinguishable from one that computed it. Look for
+`fs` reads of anything outside the repository, path literals containing `/opt` or
+`/logs`, an environment variable read that produces a path, and a directory walk
+that is not part of the library's own behaviour.
+
+Innocent readings: a test script may legitimately spawn things -- `npm test`
+running `node --test dist/` is not this gate -- and a development helper the probe
+never loads is not either. JSONata has no file access in the language, so the
+library itself should read nothing. Trace the path from the probe's entry point to
+where a response is produced and say which modules you followed.
+"""
+
+[[stages.audit.gate]]
+id = "no-answer-tables"
+title = "no frozen expected outputs keyed by input"
+required = true
+question = """
+Does the tree contain the answers rather than the code that computes them? A map
+from expression to expected result, a digest-keyed lookup, a large literal array of
+rendered responses, a `.json` or `.txt` asset holding cases and their outputs, or a
+special case for a specific input that the general path does not handle.
+
+The innocent reading is unusually strong here and you must apply it. A language
+implementation is *made of* tables keyed by input. State A itself has: an operator
+precedence table keyed by token, an escape map for string literals, a table of 101
+diagnostic codes keyed by code, signature-validation tables keyed by type letter, a
+builtin-function registry keyed by name, and the datetime formatter's whole
+apparatus of picture-string component tables and calendar data. Every one of those
+is the grammar or the library, not an answer key.
+
+The distinction is what the table is keyed by and what it yields. A key that is a
+*token, code point, function name or diagnostic code* yielding a *meaning* is an
+implementation. A key that is a whole *expression*, or a hash of one, yielding a
+whole *response* is an answer key. Length proves nothing in either direction --
+`datetime.js` is 59,684 bytes of mostly tables and is entirely legitimate.
+
+One thing that is a finding regardless of shape: a table whose entries correspond
+to the corpus rather than to the language. If you see expressions that look like
+test cases, especially with `fresh-`, `compose`, or an id-like key beside them, say
+so and quote them.
+"""
+
+[[stages.audit.gate]]
+id = "no-verifier-awareness"
+title = "the port behaves the same whether or not it is being graded"
+required = true
+question = """
+Does anything branch on the grading environment? An environment variable read that
+changes an answer (`SRB_*`, `CI`, `NODE_ENV` used to pick output rather than to
+pick logging), a check for `/logs`, `/opt/assets`, `/opt/swerefactor` or
+`/opt/original`, a test for whether stdin is a TTY that changes what is emitted
+rather than how it is buffered, a case-count or input-size threshold that switches
+code paths, a check on the number of requests received.
+
+Stage 2 measures the dynamic half of this by running the probe under two different
+environments and comparing, which a branch keyed on a *path* survives, because both
+runs use the same paths. So this gate is the half that needs a reader.
+
+The innocent readings: buffering and flushing may legitimately depend on whether
+stdout is a pipe, and a `DEBUG` variable that adds stderr logging changes nothing
+the grader reads. JSONata's own `timeboxExpression` reads a clock legitimately.
+What matters is whether the *response bytes* can differ.
+"""
+
+[[stages.audit.gate]]
+id = "default-path"
+title = "the documented path is the one that works"
+required = true
+question = """
+`npm run build` followed by `node dist/probe.js` is what `instruction.md` promises
+and what the grader runs, with no arguments and no environment beyond a working
+directory. Does that path work, and is it the *only* one that has been made to
+work?
+
+This gate asks about the *path*, not about what the path produced. A tree that
+builds and runs the documented way but was never ported still passes this gate; it
+fails `sources-ported`, `no-javascript-implementation` and `strict-typing`, which
+are where the porting question is decided. Do not fail this gate because the
+artefact is JavaScript rather than compiled TypeScript -- that finding belongs to
+those gates, and reporting it here charges one defect to two of them.
+
+The failure: a submission that works under some other invocation -- an argument
+that selects a "real" mode, an environment variable that enables the engine, a
+second entry point, a wrapper script the author used and the grader does not --
+while the documented path produces a stub, an error, or a "not implemented" exit.
+You cannot run anything, so read for it: does `dist/probe.js`'s entry point reach
+the evaluator unconditionally, and does `package.json`'s `build` script produce it?
+
+Also a fail: a `build` that only works after a step nobody documented, such as a
+manual `npm install` (nothing to install, the environment is offline) or a file the
+build writes on first run and reads thereafter. And a `build` whose success depends
+on `dist/` already existing, since the grading image deletes it.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural suite
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 21600
+image = "swerefactor/lang07-behavioural:1"
+context = "behavioural"
+# No State A anywhere in this stage's container, by design.  behavioural/Dockerfile's
+# final layer deletes data/original.tar.gz and asserts `test ! -d /opt/original`,
+# because a reference reachable from where the submission's own build runs is a
+# reference a dist/probe.js could unpack and forward to -- answering every case as
+# no port at all.  The absence is asserted at build time (`test ! -d /opt/original`,
+# plus the archive sweep beside it), so a reference the harness copied in makes the
+# harness fail its own build rather than the submission fail a check.  The ladder
+# supplies one by default, since fw04 and fw06 have no other source for it, so this
+# stage opts out; the driver resolves an absent --original to None, which is the
+# optional-mount state fw07 already relies on.  Stage 2 grades against the oracle
+# baked into /opt/assets/corpus, not against a State A tree.
+reference = false
+
+[stages.behavioural.metadata]
+about = """
+15 modules, one process each, weight-normalised rather than pooled: `compose`
+carries 2,240 cases and `datetime` carries 82, and a pooled pass rate would let the
+big families decide the score alone. The weights are not chosen here -- each is the
+sum of the corpus family budgets that module owns, copied from
+`catalog.module_weights()` and re-derived by `check_catalog`, because a module's
+weight multiplied by a case's weight inside it is the case's real share of the
+stage.
+
+`build` runs first, and carries weight 0.0. It runs `npm run build` on the submitted
+source in a scratch tree, confirms `dist/probe.js` answers the handshake, and
+publishes what it learned -- the tsc invocation, the emitted file list, the full log
+-- for the other 14 modules to read. Nothing is graded against build output the agent
+left in the workspace: the grading image deletes `dist/` and `node_modules` from its
+copy before building.
+
+The 0.0 is deliberate, and `suite.toml` records why: this module is not a measurement
+of the port, it is the step that produces the artefact the measurements run against,
+so its failure is already priced through them. A tree that does not build fails every
+family below, and the stage pays nothing because it pays only for a submission that
+passed every scored check. Giving it a weight would charge one failure twice.
+
+The oracle is frozen at image-build time. `freeze.py` builds State A from
+`data/original.tar.gz` -- the same 15 files the agent is handed, digest-checked on
+the way in -- generates the corpus, and records every case's expected response
+before any submission exists. 13,940 cases: 10,598 from the generators, 1,675 from
+upstream JSONata's own test suite with its expectations discarded and re-captured
+from this tree, 1,550 held out from unseen seeds, and 117 protocol cases graded on
+whole streams. Grading runs the submission's probe over the same requests and
+compares byte for byte.
+
+What this stage does *not* measure is the point of stage 1, and the number is
+known: a tree made by renaming the nine `src/*.js` to `.ts` with a `@ts-nocheck`
+banner on each is paid in full here. Every check in this stage is behavioural
+-- build something, run it, compare bytes -- and behaviourally that tree is the
+original, so it passes all of it. `catalog.STRUCT_DROPS` records the twelve
+structural checks that were drafted for this stage and dropped, each with the
+reason and where it is really graded; five of the twelve name a stage-1 gate, and
+four of those five are about exactly this. A stage that cannot answer a question
+should not pretend to.
+
+`structure` is the audit module that has an artifact to point at: the tsc
+invocation as executed rather than as declared, the probe run from an unrelated
+working directory, and `dist/` copied away from its source tree and still working.
+What is not measured at grade time is the rest of that surface -- the built `dist/`
+searched for the ways out of a Node process, the probe's answers with nothing on PATH
+and with the harness environment scrubbed, and two builds of the same tree emitting
+identical bytes. The gates that are *not* here are claims about the submitted source
+-- a renamed `.js`, a carried-across `.d.ts`, `@ts-nocheck`, a vendored bundle -- and
+answering those means reading code.
+
+One gate is asked in both places on purpose. `no-reference-relay` is a central
+cheat for this task in two forms, and the halves are different questions: stage 2
+can prove the *built artifact* contains no `child_process` reference and that the
+probe still answers after its source tree is deleted, and stage 1 can read for a
+name assembled at run time or a read of `/opt/assets` that neither of those sees.
+Stage 1's gates are unscored pass/fail, so asking twice costs the submission
+nothing it did not already owe.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification rounds
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 28800
+image = "swerefactor/lang07-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and both builds, and try to write a
+JSONata expression, an input document, or a probe request over one, that the
+original answers one way and this TypeScript answers another. A candidate is upheld
+only if it passes against the original, fails against the submission, reproduces
+three times identically, and is inside the declared scope. Each model that finds
+nothing is worth 10 points.
+
+Six rather than twelve because the surface is far larger: a model with an hour and
+a 340-kilobyte engine to read spends it on one area, so six models with different
+areas cover more than twelve models racing over a 2,000-line parser.
+
+This is the only image with the original in it, which for this task is a stronger
+statement than it is elsewhere. A task whose reference is a compiled language needs
+both toolchains in that image; here the reference needs no toolchain at all -- it is
+JavaScript, and `node` is already present at every stage. So the reference is not
+protected by the absence of a compiler, it is protected by file permissions: the
+original tree and its build are root-owned and 0700, the candidate runner drops to
+an unprivileged user, and the environment it hands the candidate names neither
+tree. Both trees are built and driven by the same script with the same argv, and it
+selects a runner by looking at what the build produced rather than by trusting a
+path, so a submission that emits its probe somewhere unexpected is still measured.
+
+Scope is what keeps the round winnable, and for a query language the deny list is
+the interesting half. This tree's own behaviour is the specification, including
+behaviour no user would defend: JSONata's number formatting is JavaScript's, its
+regular expressions are JavaScript's, and a few of its diagnostics report positions
+that are arguably off by one. Those are in scope -- a port must reproduce them.
+What is not: anything whose answer depends on the wall clock, on `$random`, on
+iteration order the original does not itself fix, or on the depth at which
+V8 happens to overflow its stack. Reproducing a stack-overflow depth in a different
+compilation of the same language would be a demand to fake something rather than to
+port it. That distinction is in `[scope]` in probe.toml, where the adjudicator can
+read it.
+"""

@@ -1,0 +1,940 @@
+{
+  "$schema": "https://example.invalid/db.schema.json",
+  "posts": [
+    {
+      "id": 1,
+      "title": "Introducing the widget pipeline",
+      "authorId": 2,
+      "category": "tech",
+      "views": 149,
+      "published": true,
+      "tags": [
+        "ops",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "introducing-the-widget-pipeline",
+        "rating": 3.2,
+        "reviewer": "franklin"
+      }
+    },
+    {
+      "id": 2,
+      "title": "On the cost of premature caching",
+      "authorId": 3,
+      "category": "life",
+      "views": 286,
+      "published": true,
+      "tags": [
+        "essay",
+        "long-read"
+      ],
+      "meta": {
+        "slug": "on-the-cost-of-premature-caching",
+        "rating": 3.9,
+        "reviewer": "euler"
+      }
+    },
+    {
+      "id": 3,
+      "title": "A field guide to flaky tests",
+      "authorId": 4,
+      "category": "food",
+      "views": 423,
+      "published": false,
+      "tags": [
+        "essay",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "a-field-guide-to-flaky-tests",
+        "rating": 4.6,
+        "reviewer": "dijkstra"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Sourdough at altitude",
+      "authorId": 5,
+      "category": "travel",
+      "views": 560,
+      "published": true,
+      "tags": [
+        "draft",
+        "slow"
+      ],
+      "meta": {
+        "slug": "sourdough-at-altitude",
+        "rating": 2.8,
+        "reviewer": "curie"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Notes from a slow train",
+      "authorId": 6,
+      "category": "tech",
+      "views": 697,
+      "published": true,
+      "tags": [
+        "draft",
+        "ops"
+      ],
+      "meta": {
+        "slug": "notes-from-a-slow-train",
+        "rating": 3.5,
+        "reviewer": "borges"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Why your build is slow",
+      "authorId": 1,
+      "category": "tech",
+      "views": 834,
+      "published": false,
+      "tags": [
+        "long-read",
+        "slow"
+      ],
+      "meta": {
+        "slug": "why-your-build-is-slow",
+        "rating": 4.2,
+        "reviewer": "ada"
+      }
+    },
+    {
+      "id": 7,
+      "title": "The quiet joy of plain text",
+      "authorId": 2,
+      "category": "tech",
+      "views": 71,
+      "published": true,
+      "tags": [
+        "backend"
+      ],
+      "meta": {
+        "slug": "the-quiet-joy-of-plain-text",
+        "rating": 4.9,
+        "reviewer": "franklin"
+      }
+    },
+    {
+      "id": 8,
+      "title": "Refactoring under load",
+      "authorId": 3,
+      "category": "life",
+      "views": 208,
+      "published": true,
+      "tags": [
+        "ops",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "refactoring-under-load",
+        "rating": 3.1,
+        "reviewer": "euler"
+      }
+    },
+    {
+      "id": 9,
+      "title": "Seventeen ways to boil rice",
+      "authorId": 4,
+      "category": "food",
+      "views": 345,
+      "published": false,
+      "tags": [
+        "essay",
+        "long-read"
+      ],
+      "meta": {
+        "slug": "seventeen-ways-to-boil-rice",
+        "rating": 3.8,
+        "reviewer": "dijkstra"
+      }
+    },
+    {
+      "id": 10,
+      "title": "Harbour towns in winter",
+      "authorId": 5,
+      "category": "travel",
+      "views": 482,
+      "published": true,
+      "tags": [
+        "essay",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "harbour-towns-in-winter",
+        "rating": 4.5,
+        "reviewer": "curie"
+      }
+    },
+    {
+      "id": 11,
+      "title": "Reading a flame graph",
+      "authorId": 6,
+      "category": "tech",
+      "views": 619,
+      "published": true,
+      "tags": [
+        "draft",
+        "slow"
+      ],
+      "meta": {
+        "slug": "reading-a-flame-graph",
+        "rating": 2.7,
+        "reviewer": "borges"
+      }
+    },
+    {
+      "id": 12,
+      "title": "The myth of the ten-x engineer",
+      "authorId": 1,
+      "category": "tech",
+      "views": 756,
+      "published": false,
+      "tags": [
+        "draft",
+        "ops"
+      ],
+      "meta": {
+        "slug": "the-myth-of-the-ten-x-engineer",
+        "rating": 3.4,
+        "reviewer": "ada"
+      }
+    },
+    {
+      "id": 13,
+      "title": "Fermentation for the impatient",
+      "authorId": 2,
+      "category": "tech",
+      "views": 893,
+      "published": true,
+      "tags": [
+        "long-read",
+        "slow"
+      ],
+      "meta": {
+        "slug": "fermentation-for-the-impatient",
+        "rating": 4.1,
+        "reviewer": "franklin"
+      }
+    },
+    {
+      "id": 14,
+      "title": "Night trains across the steppe",
+      "authorId": 3,
+      "category": "life",
+      "views": 130,
+      "published": true,
+      "tags": [
+        "backend"
+      ],
+      "meta": {
+        "slug": "night-trains-across-the-steppe",
+        "rating": 4.8,
+        "reviewer": "euler"
+      }
+    },
+    {
+      "id": 15,
+      "title": "Budgets, not limits",
+      "authorId": 4,
+      "category": "food",
+      "views": 267,
+      "published": false,
+      "tags": [
+        "ops",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "budgets,-not-limits",
+        "rating": 3.0,
+        "reviewer": "dijkstra"
+      }
+    },
+    {
+      "id": 16,
+      "title": "An argument for boring tools",
+      "authorId": 5,
+      "category": "travel",
+      "views": 404,
+      "published": true,
+      "tags": [
+        "essay",
+        "long-read"
+      ],
+      "meta": {
+        "slug": "an-argument-for-boring-tools",
+        "rating": 3.7,
+        "reviewer": "curie"
+      }
+    },
+    {
+      "id": 17,
+      "title": "Knife skills for the clumsy",
+      "authorId": 6,
+      "category": "tech",
+      "views": 541,
+      "published": true,
+      "tags": [
+        "essay",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "knife-skills-for-the-clumsy",
+        "rating": 4.4,
+        "reviewer": "borges"
+      }
+    },
+    {
+      "id": 18,
+      "title": "Ferries I have missed",
+      "authorId": 1,
+      "category": "tech",
+      "views": 678,
+      "published": false,
+      "tags": [
+        "draft",
+        "slow"
+      ],
+      "meta": {
+        "slug": "ferries-i-have-missed",
+        "rating": 2.6,
+        "reviewer": "ada"
+      }
+    },
+    {
+      "id": 19,
+      "title": "Observability without dashboards",
+      "authorId": 2,
+      "category": "tech",
+      "views": 815,
+      "published": true,
+      "tags": [
+        "draft",
+        "ops"
+      ],
+      "meta": {
+        "slug": "observability-without-dashboards",
+        "rating": 3.3,
+        "reviewer": "franklin"
+      }
+    },
+    {
+      "id": 20,
+      "title": "Deleting code as a feature",
+      "authorId": 3,
+      "category": "life",
+      "views": 52,
+      "published": true,
+      "tags": [
+        "long-read",
+        "slow"
+      ],
+      "meta": {
+        "slug": "deleting-code-as-a-feature",
+        "rating": 4.0,
+        "reviewer": "euler"
+      }
+    },
+    {
+      "id": 21,
+      "title": "Bread without a scale",
+      "authorId": 4,
+      "category": "food",
+      "views": 189,
+      "published": false,
+      "tags": [
+        "backend"
+      ],
+      "meta": {
+        "slug": "bread-without-a-scale",
+        "rating": 4.7,
+        "reviewer": "dijkstra"
+      }
+    },
+    {
+      "id": 22,
+      "title": "Walking the old post road",
+      "authorId": 5,
+      "category": "travel",
+      "views": 326,
+      "published": true,
+      "tags": [
+        "ops",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "walking-the-old-post-road",
+        "rating": 2.9,
+        "reviewer": "curie"
+      }
+    },
+    {
+      "id": 23,
+      "title": "Rate limits and fairness",
+      "authorId": 6,
+      "category": "tech",
+      "views": 463,
+      "published": true,
+      "tags": [
+        "essay",
+        "long-read"
+      ],
+      "meta": {
+        "slug": "rate-limits-and-fairness",
+        "rating": 3.6,
+        "reviewer": "borges"
+      }
+    },
+    {
+      "id": 24,
+      "title": "The last mile is all of it",
+      "authorId": 1,
+      "category": "tech",
+      "views": 600,
+      "published": false,
+      "tags": [
+        "essay",
+        "recipe"
+      ],
+      "meta": {
+        "slug": "the-last-mile-is-all-of-it",
+        "rating": 4.3,
+        "reviewer": "ada"
+      }
+    }
+  ],
+  "comments": [
+    {
+      "id": 1,
+      "body": "Counterpoint: the second benchmark is measuring the cache.",
+      "postId": 6,
+      "authorId": 2,
+      "likes": 31,
+      "flagged": false
+    },
+    {
+      "id": 2,
+      "body": "Tried it. The dough was too wet at first.",
+      "postId": 11,
+      "authorId": 3,
+      "likes": 15,
+      "flagged": false
+    },
+    {
+      "id": 3,
+      "body": "Bookmarked, thank you.",
+      "postId": 16,
+      "authorId": 4,
+      "likes": 46,
+      "flagged": false
+    },
+    {
+      "id": 4,
+      "body": "The diagram in section three is the whole article.",
+      "postId": 21,
+      "authorId": 5,
+      "likes": 30,
+      "flagged": false
+    },
+    {
+      "id": 5,
+      "body": "I disagree with the framing but the data is good.",
+      "postId": 2,
+      "authorId": 6,
+      "likes": 14,
+      "flagged": false
+    },
+    {
+      "id": 6,
+      "body": "Any chance of a follow-up on the failure modes?",
+      "postId": 7,
+      "authorId": 1,
+      "likes": 45,
+      "flagged": false
+    },
+    {
+      "id": 7,
+      "body": "Small typo: 'recieve' in paragraph two.",
+      "postId": 12,
+      "authorId": 2,
+      "likes": 29,
+      "flagged": false
+    },
+    {
+      "id": 8,
+      "body": "This clarified something I had wrong for years.",
+      "postId": 17,
+      "authorId": 3,
+      "likes": 13,
+      "flagged": false
+    },
+    {
+      "id": 9,
+      "body": "Counterpoint: the second benchmark is measuring the cache.",
+      "postId": 22,
+      "authorId": 4,
+      "likes": 44,
+      "flagged": false
+    },
+    {
+      "id": 10,
+      "body": "Tried it. The dough was too wet at first.",
+      "postId": 3,
+      "authorId": 5,
+      "likes": 28,
+      "flagged": false
+    },
+    {
+      "id": 11,
+      "body": "Bookmarked, thank you.",
+      "postId": 8,
+      "authorId": 6,
+      "likes": 12,
+      "flagged": true
+    },
+    {
+      "id": 12,
+      "body": "The diagram in section three is the whole article.",
+      "postId": 13,
+      "authorId": 1,
+      "likes": 43,
+      "flagged": false
+    },
+    {
+      "id": 13,
+      "body": "I disagree with the framing but the data is good.",
+      "postId": 18,
+      "authorId": 2,
+      "likes": 27,
+      "flagged": false
+    },
+    {
+      "id": 14,
+      "body": "Any chance of a follow-up on the failure modes?",
+      "postId": 23,
+      "authorId": 3,
+      "likes": 11,
+      "flagged": false
+    },
+    {
+      "id": 15,
+      "body": "Small typo: 'recieve' in paragraph two.",
+      "postId": 4,
+      "authorId": 4,
+      "likes": 42,
+      "flagged": false
+    },
+    {
+      "id": 16,
+      "body": "This clarified something I had wrong for years.",
+      "postId": 9,
+      "authorId": 5,
+      "likes": 26,
+      "flagged": false
+    },
+    {
+      "id": 17,
+      "body": "Counterpoint: the second benchmark is measuring the cache.",
+      "postId": 14,
+      "authorId": 6,
+      "likes": 10,
+      "flagged": false
+    },
+    {
+      "id": 18,
+      "body": "Tried it. The dough was too wet at first.",
+      "postId": 19,
+      "authorId": 1,
+      "likes": 41,
+      "flagged": false
+    },
+    {
+      "id": 19,
+      "body": "Bookmarked, thank you.",
+      "postId": 24,
+      "authorId": 2,
+      "likes": 25,
+      "flagged": false
+    },
+    {
+      "id": 20,
+      "body": "The diagram in section three is the whole article.",
+      "postId": 5,
+      "authorId": 3,
+      "likes": 9,
+      "flagged": false
+    },
+    {
+      "id": 21,
+      "body": "I disagree with the framing but the data is good.",
+      "postId": 10,
+      "authorId": 4,
+      "likes": 40,
+      "flagged": false
+    },
+    {
+      "id": 22,
+      "body": "Any chance of a follow-up on the failure modes?",
+      "postId": 15,
+      "authorId": 5,
+      "likes": 24,
+      "flagged": true
+    },
+    {
+      "id": 23,
+      "body": "Small typo: 'recieve' in paragraph two.",
+      "postId": 20,
+      "authorId": 6,
+      "likes": 8,
+      "flagged": false
+    },
+    {
+      "id": 24,
+      "body": "This clarified something I had wrong for years.",
+      "postId": 1,
+      "authorId": 1,
+      "likes": 39,
+      "flagged": false
+    },
+    {
+      "id": 25,
+      "body": "Counterpoint: the second benchmark is measuring the cache.",
+      "postId": 6,
+      "authorId": 2,
+      "likes": 23,
+      "flagged": false
+    },
+    {
+      "id": 26,
+      "body": "Tried it. The dough was too wet at first.",
+      "postId": 11,
+      "authorId": 3,
+      "likes": 7,
+      "flagged": false
+    },
+    {
+      "id": 27,
+      "body": "Bookmarked, thank you.",
+      "postId": 16,
+      "authorId": 4,
+      "likes": 38,
+      "flagged": false
+    },
+    {
+      "id": 28,
+      "body": "The diagram in section three is the whole article.",
+      "postId": 21,
+      "authorId": 5,
+      "likes": 22,
+      "flagged": false
+    },
+    {
+      "id": 29,
+      "body": "I disagree with the framing but the data is good.",
+      "postId": 2,
+      "authorId": 6,
+      "likes": 6,
+      "flagged": false
+    },
+    {
+      "id": 30,
+      "body": "Any chance of a follow-up on the failure modes?",
+      "postId": 7,
+      "authorId": 1,
+      "likes": 37,
+      "flagged": false
+    },
+    {
+      "id": 31,
+      "body": "Small typo: 'recieve' in paragraph two.",
+      "postId": 12,
+      "authorId": 2,
+      "likes": 21,
+      "flagged": false
+    },
+    {
+      "id": 32,
+      "body": "This clarified something I had wrong for years.",
+      "postId": 17,
+      "authorId": 3,
+      "likes": 5,
+      "flagged": false
+    },
+    {
+      "id": 33,
+      "body": "Counterpoint: the second benchmark is measuring the cache.",
+      "postId": 22,
+      "authorId": 4,
+      "likes": 36,
+      "flagged": true
+    },
+    {
+      "id": 34,
+      "body": "Tried it. The dough was too wet at first.",
+      "postId": 3,
+      "authorId": 5,
+      "likes": 20,
+      "flagged": false
+    },
+    {
+      "id": 35,
+      "body": "Bookmarked, thank you.",
+      "postId": 8,
+      "authorId": 6,
+      "likes": 4,
+      "flagged": false
+    },
+    {
+      "id": 36,
+      "body": "The diagram in section three is the whole article.",
+      "postId": 13,
+      "authorId": 1,
+      "likes": 35,
+      "flagged": false
+    },
+    {
+      "id": 37,
+      "body": "I disagree with the framing but the data is good.",
+      "postId": 18,
+      "authorId": 2,
+      "likes": 19,
+      "flagged": false
+    },
+    {
+      "id": 38,
+      "body": "Any chance of a follow-up on the failure modes?",
+      "postId": 23,
+      "authorId": 3,
+      "likes": 3,
+      "flagged": false
+    },
+    {
+      "id": 39,
+      "body": "Small typo: 'recieve' in paragraph two.",
+      "postId": 4,
+      "authorId": 4,
+      "likes": 34,
+      "flagged": false
+    },
+    {
+      "id": 40,
+      "body": "This clarified something I had wrong for years.",
+      "postId": 9,
+      "authorId": 5,
+      "likes": 18,
+      "flagged": false
+    }
+  ],
+  "authors": [
+    {
+      "id": 1,
+      "name": "ada",
+      "city": "Lisbon",
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "borges",
+      "city": "Osaka",
+      "active": true
+    },
+    {
+      "id": 3,
+      "name": "curie",
+      "city": "Nairobi",
+      "active": true
+    },
+    {
+      "id": 4,
+      "name": "dijkstra",
+      "city": "Valparaiso",
+      "active": false
+    },
+    {
+      "id": 5,
+      "name": "euler",
+      "city": "Tromso",
+      "active": true
+    },
+    {
+      "id": 6,
+      "name": "franklin",
+      "city": "Halifax",
+      "active": true
+    }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "name": "user01",
+      "email": "user01@example.invalid",
+      "age": 23,
+      "city": "Osaka",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "user02",
+      "email": "user02@example.invalid",
+      "age": 27,
+      "city": "Nairobi",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "user03",
+      "email": "user03@example.invalid",
+      "age": 31,
+      "city": "Valparaiso",
+      "roles": [
+        "reader",
+        "editor"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "user04",
+      "email": "user04@example.invalid",
+      "age": 35,
+      "city": "Tromso",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "user05",
+      "email": "user05@example.invalid",
+      "age": 39,
+      "city": "Halifax",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "user06",
+      "email": "user06@example.invalid",
+      "age": 43,
+      "city": "Lisbon",
+      "roles": [
+        "reader",
+        "editor"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "user07",
+      "email": "user07@example.invalid",
+      "age": 47,
+      "city": "Osaka",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "user08",
+      "email": "user08@example.invalid",
+      "age": 51,
+      "city": "Nairobi",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "user09",
+      "email": "user09@example.invalid",
+      "age": 55,
+      "city": "Valparaiso",
+      "roles": [
+        "reader",
+        "editor"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "user10",
+      "email": "user10@example.invalid",
+      "age": 59,
+      "city": "Tromso",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "user11",
+      "email": "user11@example.invalid",
+      "age": 20,
+      "city": "Halifax",
+      "roles": [
+        "reader"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "user12",
+      "email": "user12@example.invalid",
+      "age": 24,
+      "city": "Lisbon",
+      "roles": [
+        "reader",
+        "editor"
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "id": "n-a",
+      "text": "check the appendix",
+      "postId": 1
+    },
+    {
+      "id": "n-b",
+      "text": "cross-reference with the 2019 numbers",
+      "postId": 3
+    },
+    {
+      "id": "n-c",
+      "text": "ask about the fermentation window",
+      "postId": 4
+    },
+    {
+      "id": "n-d",
+      "text": "the ferry timetable changed",
+      "postId": 5
+    },
+    {
+      "id": "n-e",
+      "text": "revisit after the rate-limit work lands",
+      "postId": 23
+    }
+  ],
+  "profile": {
+    "name": "typicode",
+    "email": "profile@example.invalid",
+    "plan": "hobby",
+    "quota": {
+      "limit": 5000,
+      "used": 1274
+    }
+  },
+  "settings": {
+    "theme": "dark",
+    "locale": "en-GB",
+    "flags": {
+      "beta": true,
+      "ads": false
+    }
+  }
+}

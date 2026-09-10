@@ -1,0 +1,327 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "lang04-acorn-js-to-rust"
+
+# Thirteen modules over the frozen differential corpus, split along the
+# boundaries the case catalog already used, plus `build` (which produces what the
+# other twelve read).
+#
+# WHAT EVERY MODULE HERE IS ALLOWED TO ASSERT
+#
+# The built artifacts' behaviour, and nothing else.  A module runs the installed
+# `acorn-probe` or the installed `acorn`, hands it an input, and compares the
+# bytes that come back against what the pinned JavaScript produced.  No module
+# opens a .rs file, and no module asserts that any particular crate, module, type
+# or function exists.  How the port is organised is stage 1's question, judged by
+# a model with both trees open, because it is a judgement and not a measurement.
+#
+# The two apparent exceptions are contract terms rather than implementation
+# details: the workspace publishes four crates at pinned versions, and the install
+# puts `acorn` and `acorn-probe` in the prefix.  Both are promised to downstream
+# consumers by name in instruction.md, both are read through `cargo metadata` and
+# the install prefix, and neither requires reading source.
+#
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner.  They answer one question -- if this module were the only thing that
+# regressed, how much of the migration would be missing? -- and they are
+# deliberately not proportional to case count.  `tables` holds thousands of cases
+# because the identifier tables are a large cross product of one lookup;
+# `whole-libraries` holds a few dozen because each of its cases is a real
+# published library parsed end to end, and those fail where per-construct cases
+# pass.
+#
+# WHAT STATE A SCORES HERE
+#
+# A rewrite preserves behaviour.  It does not add features and it does not drop
+# them, so the implementation the corpus was recorded from has to be able to
+# answer this stage -- if it cannot, the stage is asking about something other
+# than behaviour, and that is a defect in this file rather than a fact about
+# acorn.
+#
+# The eleven behavioural modules, 0.79 of the weight, are asserted rather than
+# hoped for: the Dockerfile's identity layer substitutes the pinned JavaScript for
+# the submission's probe and refuses to produce the image unless all 16,049 frozen
+# cases come back byte-identical.  A rate below 1.0 there is a bug in this suite,
+# never a fact about a port.
+#
+# All 16,049, while a submission is asked 16,018.  The 31 in the gap expect a
+# TypeError thrown from inside acorn's own JavaScript, and the `message` the
+# response schema requires is the engine's phrasing for the shape of the code that
+# threw -- the same acorn-walk source says `node.attributes is not iterable` read
+# as ES2020 and `Cannot read properties of undefined (reading 'length')` through
+# the reference's ES5 bundle.  No port can be asked for that, and a port that
+# handles the input sanely answers `ok:true` and would be marked wrong; so the
+# modules holding them skip them with a reason.  The reference is the code that
+# crashed, so it is the one probe that both can answer them and must -- otherwise
+# those 31 expectations would be the only ones in the corpus nothing ever verifies,
+# and a corrupted one among them would first be noticed by a submission being told
+# it got a crash wrong.  `freeze.check_unportable` derives the list by measurement
+# at build time; the identity layer compares its own count against
+# `graded_total + unportable_cases`, so a list that grows without the graded total
+# shrinking fails the build.
+#
+# `build` 0.06 is answered by a second builder chosen by what the tree is.
+# `build.detect_language` reads the tree; a package.json with acorn's layout and no
+# evidence of a port anywhere -- no manifest, no lockfile, no root Makefile, not one
+# `.rs` file -- gets
+# `build.JsBuilder`, which reproduces rollup's artifact set as `require(esm)`
+# bridges -- node 22 can `require` an ES module, so the bundler the grading image
+# deletes is not needed to make the packages loadable -- then installs the
+# contract's six files at the contract's modes and smoke-tests both binaries.  The
+# JS launcher execs node on the tree's own parser, so what is measured is still
+# `make build` and `make install PREFIX=` doing what they promise.
+#
+# `structure` 0.08 asks ten of its seventeen cases of a pre-migration tree and
+# skips the other seven, with a measured reason each:
+# `structure.JS_STRUCT_SKIP_GROUPS` records what every case did when run against
+# the JsBuilder's output.  The ten asked are the install inventory, the modes, the
+# rebuild no-op, `make clean`, installing into a second prefix and into a
+# never-built tree, the probe's version, the binaries running from a bare PATH, and
+# the installed documents matching their sources.  The seven not asked read an ELF
+# header, the crate graph `cargo metadata` resolves, or cargo's own
+# `target/release` layout.  A skip is charged 0 like any other, so this module does
+# not rate 1.0 on a tree that is not a Rust delivery; what `selftest.py` asserts
+# about these seven is narrower and stronger -- that none of them reports a
+# *finding*, since a fail or an error would mean a case reached a verdict about an
+# artifact that does not exist.
+#
+# An `error` deliberately stays in the denominator: it usually means the thing
+# under test was never produced, and dropping it would let a submission that built
+# nothing rate 1.0 over an empty pool.  Which is also why a module cannot rate 1.0
+# on nothing: an all-skipped module rates 0.0 and keeps its weight.
+#
+# The runner normalises by the declared weights it is given
+# (`infra/swerefactor/scoring.py`: `wsum = sum(m.weight for m in scores)`), so the
+# thirteen sum to 0.93 and a perfect run rates 1.0000.  Each module's share of
+# that rate is its weight over 0.93: `parser-suite` 16.13%, `structure` 8.60%,
+# `build` 6.45%.
+#
+# The weights set the rate the report publishes; they do not divide the stage's
+# points, because the stage is paid whole or not at all.  So they cannot buy a
+# pass for a tree that behaves and does not build: losing `build` rates 0.9355,
+# and anything short of every scored check pays nothing.  No module-level
+# `required` flag carries that point, and none is needed.
+
+default_timeout_sec = 2400
+lib_dir = "lib"
+
+[env]
+SWEREFACTOR_ASSETS = "/opt/assets"
+# Grading always enforces the interpreter tripwire: a submission that reaches for
+# node must fail to build rather than merely be logged as having done so. `off`
+# exists for the build-time identity check, and a run with it off says so in its
+# own notes and is not a grading result.
+SRB_SHIM = "enforce"
+
+[metadata]
+runtime = "rust 1.90.0"
+reference_version = "acorn 8.14.0"
+# The *recorded* population, which is not the graded one: 16,018 are asked of a
+# submission and 31 more are asked only of the reference, because their frozen
+# answer is acorn crashing inside its own JavaScript and the message the schema
+# demands is the engine's phrasing for the code shape that crashed.  See the
+# paragraph on the gap above, and `freeze.check_unportable`.
+#
+# The Dockerfile's suite-layout layer compares this against `graded_total +
+# unportable_cases` in the frozen manifest, so a wrong number here fails the image
+# build.
+cases = 16049
+corpus_seed = 20260730
+probe_ops = 23
+protocols = ["ndjson-probe", "cli-differential"]
+about = """
+The probe protocol is one JSON request per line, one JSON response per line, over
+23 operations covering acorn, acorn-loose and acorn-walk. Responses are compared
+byte for byte against output frozen from acorn 8.14.0 at image build time, so the
+comparison does not need a JavaScript runtime present while grading -- except in
+`cli`, where the surface is a process and both sides run live.
+"""
+
+# --------------------------------------------------------------------------- #
+# A. the build everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "build and install the submitted tree from source"
+weight = 0.06
+timeout_sec = 6000
+about = """
+Copies the submission, discards anything it arrived with already built, and runs
+the published build and install argv with cargo offline and every JavaScript
+runtime on PATH replaced by a recording tripwire. Publishes the install prefix
+and the build ledger to $SRB_SUITE_WORK; every module after this one reads them.
+
+First, and everything after it reads what this one publishes. A tree that does not
+build cannot be measured, so the twelve modules downstream have nothing to read and
+each fails its own checks on its own evidence -- and this module says why, which is
+what keeps thirteen rows of zeros from describing the wrong defect. It carries 6.45%
+of the rate, and it needs no veto: the stage pays only for a submission that passed
+every scored check in every weighted module.
+"""
+
+# --------------------------------------------------------------------------- #
+# B-C. the installed deliverable, and where it came from
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "structure"
+title = "the installed tree as a distribution consumes it"
+weight = 0.08
+timeout_sec = 3000
+about = """
+17 cases over the install prefix and `cargo metadata`: what the install puts in a
+prefix and with what modes, that `make clean` removes what the build made, that a
+rebuild is a no-op, that installing into a second prefix works and into a
+never-built tree works, the four published crates at their pinned versions, the
+lockfile, the binaries running from a bare PATH after the build tree is deleted,
+and that the documents the install copied match the files they came from.
+
+Scored rather than gated because "the manpage did not get installed" and "there is
+no binary at all" are not the same failure.
+"""
+
+
+# --------------------------------------------------------------------------- #
+# D-F. the parser, which is the product
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "parser-suite"
+title = "acorn's own test suite, through the default parse entry point"
+weight = 0.15
+timeout_sec = 3600
+about = """
+The upstream suite: every case acorn's authors thought worth pinning, including
+the error messages and their positions. It carries the most weight in the stage
+because it is the definition of correctness the project publishes about itself,
+and because a failure here is a failure on code somebody actually wrote.
+"""
+
+[[module]]
+id = "parser-options"
+title = "the parser through its other public entry points"
+weight = 0.09
+about = """
+`onComment`, `onToken`, `ranges`, `locations` and the directive surfaces; module
+versus script source type, which changes strict mode, `await` and HTML comment
+handling; the collecting callbacks in order; and `parseExpressionAt` with a resume
+offset. Each is a separate code path with its own quirks and each can fail alone
+-- a port that gets `parse` right and `parseExpressionAt` wrong passes the suite
+above and fails here, which is why they are separate modules.
+"""
+
+[[module]]
+id = "parser-versions"
+title = "the ecmaVersion gates, one accept/reject table per version"
+weight = 0.06
+about = """
+ES3 through ES2025: what a given version must accept and what it must refuse, per
+version. This is the part of acorn a rewrite most often flattens into "parse
+everything and hope". A parser that accepts optional chaining under
+ecmaVersion 2019 is wrong in a way no amount of correct output on modern input
+compensates for.
+"""
+
+# --------------------------------------------------------------------------- #
+# G-H. the two other published packages
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "tokenizer"
+title = "the tokenizer as a public iterator"
+weight = 0.06
+about = """
+`tokenizer()` driven directly rather than through the parser: token types, values,
+positions, and the contextual decisions the lexer makes without a parse to guide
+it -- regexp versus division, template continuation, ASI-relevant newlines.
+"""
+
+[[module]]
+id = "loose"
+title = "acorn-loose: parsing input that does not parse"
+weight = 0.07
+timeout_sec = 3000
+about = """
+Error recovery has a shape, and it is the least specified part of this project:
+what a dummy node looks like, where a missing brace is assumed, which fragments
+survive. A port that reproduces the strict parser faithfully and approximates the
+loose one is a port that breaks every editor integration downstream of it.
+"""
+
+[[module]]
+id = "walk"
+title = "acorn-walk: four traversal orders over a parsed tree"
+weight = 0.05
+about = """
+`full`, `fullAncestor`, `simple` and `recursive`, each visiting the same trees.
+Node visit order is observable and load-bearing for every consumer that walks an
+AST, and it is not visible in parse output at all.
+"""
+
+[[module]]
+id = "find-node"
+title = "the four position queries over a parsed tree"
+weight = 0.05
+about = """
+`findNodeAt`, `findNodeAround`, `findNodeAfter`, `findNodeBefore`. Each has its own
+edge conditions exactly at node boundaries, which is where an off-by-one in a
+port's offset bookkeeping shows up and nowhere else.
+"""
+
+# --------------------------------------------------------------------------- #
+# I-J. inputs nobody wrote by hand, and the tables
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "generated"
+title = "the same paths again, on generated sources"
+weight = 0.08
+timeout_sec = 3000
+about = """
+Sources composed at freeze time from a recorded seed, run through parse, tokenize,
+loose parse, walk, collect and the position queries. Worth less per case than the
+curated families because they find fewer distinct bugs; worth having because the
+ones they do find are the ones nobody thought to write a test for.
+"""
+
+[[module]]
+id = "tables"
+title = "the character-class tables and the line machinery"
+weight = 0.05
+about = """
+The identifier start and continue tables, `getLineInfo`, the line-break and
+non-ASCII-whitespace scanners, and the static surfaces (version string, default
+options, the token and keyword type tables). Thousands of cases for one table
+lookup each, and load-bearing: an identifier acorn accepts and the port rejects is
+a parse failure on real code.
+"""
+
+# --------------------------------------------------------------------------- #
+# K-L. whole files, and the process
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "whole-libraries"
+title = "real libraries, parsed whole"
+weight = 0.07
+timeout_sec = 3000
+about = """
+acorn's own benchmark inputs -- entire published JavaScript libraries, each parsed
+in one call and compared by digest. A port can be right about every construct in
+isolation and wrong about a 300KB file, because what fails at that size is
+accumulated state rather than a rule.
+"""
+
+[[module]]
+id = "cli"
+title = "the installed executable, differential against node"
+weight = 0.06
+timeout_sec = 2400
+about = """
+Every documented flag of `acorn(1)`, stdin and named files, multiple files, a
+missing file, a directory, and the exit status in each case. The only module that
+runs the JavaScript live rather than against frozen bytes, because the surface here
+is a process: stdout, stderr and exit status are compared together, since a tool
+that prints the right answer to the wrong stream has broken every script that
+pipes it.
+"""

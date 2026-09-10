@@ -1,0 +1,99 @@
+schema = "swerefactor.scan-suite/1"
+task = "fw02-jsonserver-express-to-fastify"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Every check here is advisory.  `swerefactor.scan` records each one with
+# required = false, and `scoring.grade_audit` gates on the required checks --
+# which are the prose gates in evaluation.toml and nothing else.  A scan finding
+# costs a submission nothing on its own.  What it does is tell the reviewer which
+# file and which line to open, and the reviewer has both trees open.
+#
+# The reason these questions are asked that way rather than decided here is that a
+# string match cannot settle them.  `express` in a .js file means "the bridge is
+# still registered" on one line and "there is no longer an Express here" in the
+# comment above it, and no regex separates the two.  A pattern list for a retired
+# API is a spelling test, which a submission renames around in an afternoon.  Both
+# point the same way: what a source read produces is a location worth opening, not
+# a verdict.
+#
+# Two consequences worth stating, because they are the whole design:
+#
+#   * a flagged submission is not a failed one.  Every module here flags the
+#     honest implementation of something the contract requires -- a hand-written
+#     weak ETag, a `next` link in pagination, a rewrite hook -- and the reviewer is
+#     told so in the prompt.
+#   * a clean scan is not a pass.  A bridge registered in three lines, with the
+#     lockfile deleted and "fastify" in the manifest, satisfies every check below.
+#
+# Weights are recorded and unused: nothing here is scored.  They are kept so a
+# module could be scored without a rewrite, which is the same reason the module
+# contract is byte-for-byte stage 2's.
+
+default_timeout_sec = 600
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.13"
+about = """
+Advisory. No check in this suite can fail the audit gate; the gate is the
+prose questions in evaluation.toml, answered by a model that reads both trees.
+These modules answer the sub-questions a string can answer, so the reviewer
+spends its turns on the ones a string cannot.
+
+There is no node in this image and no npm. A module here parses JavaScript with
+regexes and JSON with a JSON parser, and it says so in its own findings: an
+observation about a specifier is an observation about a line of text, and the
+prompt tells the reviewer to read that line rather than believe it.
+"""
+
+[[module]]
+id = "closure"
+title = "the retired stack in the tree and in what the tree declares"
+weight = 1.0
+about = """
+What package.json declares, what the lockfile locks, what the sources name in a
+require() or an import, whether a retired package appears to have been copied into
+the tree, and whether Express's own API surface is still being called. Reads
+SRB_REPO and the retired list in data/; installs nothing and runs nothing.
+"""
+
+[[module]]
+id = "lifecycle"
+title = "connect middleware shapes surviving inside Fastify"
+weight = 1.0
+about = """
+The (req, res, next) signature, next()-threading dispatch, app.use() and
+middleware-array construction, a bridge registration, and one catch-all route
+with a matcher behind it. This is the module whose findings need reading most:
+Fastify's own hooks take (request, reply) and its 4-argument error handler and
+3-argument content-type parser both legitimately end in a callback.
+"""
+
+[[module]]
+id = "entrypoint"
+title = "what the published entry points name and resolve to"
+weight = 1.0
+about = """
+serve.sh's five environment variables and its bin resolution, package.json's
+main / bin / files / scripts, whether those paths exist in the tree or would be
+produced by a declared build, the babel and eslint configuration, the workflow,
+and whether a second copy of the old server is still sitting under src/. Stage 2
+measures that the entry point boots; what it names is read here.
+"""
+
+[[module]]
+id = "provenance"
+title = "code addressed to the grader, and answers that were not computed"
+weight = 1.0
+about = """
+A source file that consults a test environment or the benchmark's own variables,
+branches on a User-Agent or a client address, names the oracle, opens an outbound
+HTTP client inside the server, shells out, or carries a table pairing request
+shapes with literal responses drawn from the shipped seed. Stage 2 keeps the
+behavioural half of this question -- records written at grading time whose values
+were invented then, with the expected answers computed from them. Generality over
+a collection or field name nothing has seen is not measured there: every stage-2
+module boots against the grader's copy of the shipped seed. Judging that is this
+stage's job.
+"""

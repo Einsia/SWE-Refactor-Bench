@@ -1,0 +1,360 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "lang03-sqlparse-python-to-go"
+
+# 8453 behavioural cases plus 73 over the built artifacts, split into fifteen
+# modules along the boundaries the case catalog already used: `build` (which
+# produces what the other fourteen read), twelve slices of the library's own
+# pipeline, and `provenance` (which asks where the answers came from).
+#
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing?  They are deliberately
+# not proportional to case count.  `format` and `format-wide` hold 2840 of the 8453
+# cases between them because the option grid crossed with the statement corpus is a
+# large product, not because reformatting is a third of the library; `cli` holds
+# 127 and carries 0.03 because there are only so many ways to invoke one command,
+# and every one of them is a script somebody has already written.
+#
+# `roundtrip` carries the most of any single slice because losslessness is what
+# this library promises about itself -- str(parse(sql)[0]) == sql for every input,
+# including the malformed ones -- and a port that breaks it has broken every
+# consumer that edits SQL and writes it back. `grouping` and `statements` come next
+# together: the token tree and the statement splitter are what tooling actually
+# imports sqlparse for, and neither is visible in a formatted string.
+
+# Every module's run.sh is a symlink to lib/run-module.sh, which reads
+# $SRB_MODULE_ID and asks lib/driver.py for that slice. One script rather than
+# fifteen copies: the modules here differ in which cases they own, not in how they
+# run. A module that needs its own logic replaces its symlink with a real script
+# and nothing else changes.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+SWEREFACTOR_ASSETS = "/opt/assets"
+# Grading always enforces the interpreter shim: a *Go* submission's repository
+# Python must fail to run rather than merely be logged as having run. `off` is a
+# diagnostic for that path -- run a Go tree twice and the difference says whether
+# the shim is what rejected it -- and a run with it off says so in its own notes.
+#
+# It is not how State A is graded. A pre-migration tree takes `_build_python`,
+# where no shim is installed at all, because a shim whose job is to break Python
+# cannot stand in front of an implementation that is Python. State A's full score
+# is measured with this set to `enforce`, the same value grading uses.
+SRB_SHIM = "enforce"
+
+[metadata]
+runtime = "go 1.25.12"
+reference_version = "sqlparse 0.5.3"
+cases = 8526
+behavioural_cases = 8453
+probe_tiers = ["core", "model", "keywords", "parts"]
+
+# --------------------------------------------------------------------------- #
+# The build everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "build, vet, test, install, and compile every consumer"
+weight = 0.06
+timeout_sec = 5400
+about = """
+Copies the submission, discards anything it left built, and drives go build, go
+vet, go test, go install and a second install into a separate prefix, with the
+interpreter shim in place -- so a tree that still needs Python fails here with a
+ledger entry rather than quietly succeeding on a machine that happens to have one.
+Then compiles the four probe tiers, the three standalone closures, and the API
+consumer against the submission's own packages, and publishes all of it to
+$SRB_SUITE_WORK; every module after this one reads it.
+
+The compilations are separate closures on purpose: a probe tier that does not
+build costs its own cases and nothing else, and a submission whose core package
+cannot be imported without dragging in the whole library has a layering problem
+that a whole-module `go build ./...` cannot show.
+
+Two builders, chosen by what the tree is rather than by a flag, and a submission
+cannot pick. A tree with a go.mod takes everything above. A tree with no go.mod and
+an importable sqlparse package is the pre-migration implementation, and it is built
+as one: compileall, an import, an installed `sqlformat` launcher, and the four probe
+tiers answering through it. That path exists because State A is the oracle every
+frozen expectation here was computed from, and a stage that cannot run its own
+oracle has no zero point to read a submission's shortfall against. It is not a way
+through the task: four required stage-1 gates -- no-python-implementation,
+no-interpreter-dependency, go-present, go-is-primary -- each fail a Python tree, and
+a required gate failing there scores the submission 0 before this image starts. The
+module says so in its own notes when it takes that path.
+"""
+
+# --------------------------------------------------------------------------- #
+# The pipeline, in the order the library runs it
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "lexer"
+title = "the regex lexer and its state machine"
+weight = 0.06
+about = """
+394 cases over the first stage: SQL_REGEX applied to statements, comments, string
+literals with every quoting style, numbers, placeholders and operators, plus the
+lexer's own state -- which is what makes `$$ ... $$` and dollar-quoted bodies work
+at all. A port that rewrote the regex table by hand rather than translating it gets
+the common tokens right and fails on the ordering, because the table is
+first-match-wins and its order is the specification.
+"""
+
+[[module]]
+id = "tokens"
+title = "the token type hierarchy"
+weight = 0.07
+about = """
+738 cases over what each token *is*: the ttype assigned to every token of every
+corpus statement, and the hierarchy itself -- Token.Keyword.DML is a Keyword and a
+Token, and consumers filter on exactly that relationship. Python builds it with a
+metaclass-free singleton tree that supports `in`; Go has no equivalent, so this is
+a structure the port has to design rather than translate, and getting the leaves
+right while getting containment wrong is the common outcome.
+"""
+
+[[module]]
+id = "grouping"
+title = "the token tree"
+weight = 0.09
+about = """
+698 cases over grouping: the nested Statement/Parenthesis/Function/Identifier/
+IdentifierList/Comparison/Where/Operation tree the engine builds from the flat
+token stream, serialised whole and compared node by node. This is the part of
+sqlparse that is invisible in formatted output and is the entire reason a consumer
+imports the library instead of a regex, and it is the stage where a
+non-validating parser's specific choices -- what counts as an Identifier, where a
+Where ends -- cannot be derived from SQL and have to be reproduced.
+"""
+
+[[module]]
+id = "statements"
+title = "splitting a script into statements"
+weight = 0.09
+about = """
+1517 cases over split(), parse() and parsestream(): semicolons inside strings,
+comments and parentheses, BEGIN/END blocks, dollar-quoted bodies, CREATE
+statements holding their own semicolons, empty trailing statements, and the
+incremental path that gets fed a file handle rather than a string. A port that
+buffers the whole input and splits on the last stage passes split() and fails
+parsestream(), which is what a tool tailing a log actually calls.
+"""
+
+[[module]]
+id = "roundtrip"
+title = "parse then serialise, byte for byte"
+weight = 0.10
+about = """
+698 cases asserting str(parse(sql)[0]) == sql over every corpus statement,
+including the malformed, the truncated and the ones with invalid UTF-8. This is the
+invariant the library documents about itself, and it is graded on its own because
+it fails independently of everything else: a port can produce the right tree and
+the right formatting and still lose a token's whitespace on the way back out,
+which silently corrupts every consumer that parses SQL, edits one clause and
+writes the result back.
+"""
+
+[[module]]
+id = "format"
+title = "the formatter over the option grid"
+weight = 0.10
+timeout_sec = 3600
+about = """
+1444 cases: format() and sqlformat's option set -- keyword_case, identifier_case,
+strip_comments, strip_whitespace, reindent, reindent_aligned, indent_width,
+indent_tabs, indent_after_first, indent_columns, comma_first, use_space_around
+_operators, truncate_strings, output_format -- applied across the statement corpus
+and in combination. Compared byte for byte, because "formatted correctly" is not a
+property with any other definition.
+"""
+
+[[module]]
+id = "format-wide"
+title = "the formatter's wrapping and alignment behaviour"
+weight = 0.07
+timeout_sec = 3600
+about = """
+1396 cases over the option combinations whose output depends on measuring the text
+it has already emitted: wrap_after with reindent, aligned indentation, comma_first
+against wrapped identifier lists, and the interaction of indent_width with
+pre-existing whitespace. Split from `format` because it fails as a group: it is the
+one part of the formatter that is stateful across a statement, and a port that
+reformats token by token gets every case here wrong and every case in `format`
+right.
+"""
+
+[[module]]
+id = "encoding"
+title = "bytes in, text out"
+weight = 0.06
+about = """
+305 cases on the boundary that has no Go equivalent: sqlparse accepts bytes with a
+declared encoding, accepts str, and accepts bytes that are not valid in the
+encoding they claim -- and has specific documented answers for all three,
+including which exception type comes back. Python's str and bytes are different
+types with an explicit decode between them; Go has one string type that holds
+arbitrary bytes, so a port either invents the distinction or loses the behaviour.
+Includes the error-type cases, because a consumer catching UnicodeDecodeError and
+a consumer catching ValueError are different programs.
+"""
+
+[[module]]
+id = "keywords"
+title = "the nine keyword tables"
+weight = 0.05
+about = """
+391 cases over the keyword data: the nine dialect tables (common, Oracle, MySQL,
+PL/pgSQL, HQL, MS Access, Snowflake, BigQuery and the base set), the ttype each
+word maps to, and which table a word has to come from for a given dialect. 809
+entries of data, not logic -- and a port that regenerated them from a newer
+upstream, or transcribed them by hand, gets most of them right, which is why they
+are checked rather than assumed. The dialect cases are separate because the tables
+overlap and disagree: ten words appear in more than one table and three of them
+(CHARACTER, MAP, TIMESTAMP) carry a different ttype in each, so which one wins is
+decided by the order the tables are consulted -- an order that is not derivable
+from any one table.
+"""
+
+[[module]]
+id = "filters"
+title = "the filter stack"
+weight = 0.05
+about = """
+368 cases over sqlparse's extension point: the pre-process, statement-process,
+process and post-process phases, the stack's own assembly from a set of options,
+and each shipped filter in isolation. This is the API a consumer subclasses, and a
+port that hard-codes the pipeline it happens to need passes every formatting case
+and has removed the reason the library is extensible.
+"""
+
+[[module]]
+id = "api"
+title = "the public surface and its helpers"
+weight = 0.07
+about = """
+377 cases over what `import sqlparse` gives a caller: the module-level functions,
+sql.py's node API (token_first, token_next, get_real_name, get_alias, flatten,
+has_alias and the rest), the utils, and the option validator -- including the
+options it is documented to *reject*, and the exact key set it returns for a given
+input. The rejections matter as much as the successes: a port that accepts an
+invalid option and picks a default has changed the contract for every caller who
+was relying on the error.
+"""
+
+[[module]]
+id = "cli"
+title = "the installed sqlformat command"
+weight = 0.03
+about = """
+127 invocations of the installed binary: every documented flag, stdin and file
+input, --outfile, the encoding flags, missing and unreadable files, --help,
+--version, and the exit codes. Compared on stdout, stderr and exit status
+together, because a tool that prints the right answer to the wrong stream has
+broken every script that pipes it.
+"""
+
+# --------------------------------------------------------------------------- #
+# The artifacts, and where their answers came from
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "structure"
+title = "the built artifacts and the installed tree"
+weight = 0.05
+timeout_sec = 2400
+about = """
+32 cases over what the build produced rather than what was submitted: the module
+graph and go.mod's directive, that go.sum is absent or empty and no vendor
+directory was needed, the installed binary's ELF properties (static, no
+interpreter, no libpython bytes anywhere in the file), its Go build record
+(-trimpath, CGO_ENABLED=0, the module path), a second build coming out
+byte-identical, the three standalone package closures, the four probe tiers and
+the API consumer compiling, and the install inventory resolving with nothing extra
+in it.
+
+Every one is answered by opening a file the build wrote or running what it
+installed. What is not asked here -- was the Python deleted, is a checked-in .pyc
+still present, does the README still describe a Python package -- are claims about
+the submitted *files*, and answering them means reading source. They are stage 1's,
+where a read-only scan does the reading and a model with
+both trees open does the judging.
+
+A Go submission is asked all 32, and `binary-no-cpython` is the one carrying no
+weight -- so it runs, and is deleted at collection rather than reported as worth
+nothing. The criterion behind that zero is the one the whole stage runs on: an
+expectation is scored only if State A can answer it, because State A -- sqlparse
+0.5.3 -- is the oracle every frozen expectation in this suite was computed from
+rather than transcribed. "No libpython, no Py_Initialize, no PyRun_" is
+unsatisfiable for a CPython library by definition rather than by behaviour, so
+pricing it would put the reference below full marks against its own corpus, at
+which point a submission's shortfall stops being readable as a behavioural
+difference.
+
+Applied consistently, that criterion reaches further than one case. Measured
+against State A, 28 of these 32 read something only a Go build produces -- go.mod
+and go.sum, an ELF header, a Go build record, a package closure, a compiled probe
+tier, `go vet`, `go test` -- and 4 do not: build-all, install-sqlformat,
+no-vendor-dir, man-page-installed. So the applicability is decided per submission
+at grading time, in structure.PY_STRUCT_SKIP_GROUPS, which carries the reason for
+each of the 28: a pre-migration tree is asked the 4 and skipped on the rest, and a
+Go tree is asked all 32 exactly as before. A skipped case stays in the denominator
+and scores 0, so such a tree rates 4/32 here and the label changes only what the
+report says about the missing 28, not what they cost. That is the right price --
+they read a Go artifact and producing one was the task -- and it keeps this module
+the same size for every submission, which is what makes two cells' rows comparable.
+What the 28 stand for is not unmeasured on a Go tree -- it is what
+`build/probe-tiers` and 8,326 behavioural cases are for.
+
+`no-interpreter-dependency` in stage 1 owns that question, required, and asks it of
+the whole tree rather than of one binary's symbol table: an embedded interpreter, a
+cgo link against libpython, a plugin load, a //go:generate that runs Python, a build
+tag under which an interpreter path is compiled in. Failing it there is a zero for
+the submission before this image starts, which is a harsher outcome than anything a
+single case here can charge. The symbols are still read and still reported here.
+"""
+
+[[module]]
+id = "provenance"
+title = "the answers were computed, not looked up"
+weight = 0.05
+timeout_sec = 2400
+about = """
+41 cases in two families, 40 of them scored. `fresh` composes SQL from a seed drawn
+at grading time, puts it through the submission's own binary, and asserts the round
+trip is lossless -- the one family in this stage not graded against a frozen
+expectation, and the reason a submission cannot pass this module from a recorded
+table. Those 40 carry the module's whole weight.
+
+`shim` is the 41st and it carries no weight, so it runs and is then deleted at
+collection. It opens the ledger the graded build wrote: every interpreter name a build
+might reach for resolves to a program that refuses and records the attempt, so a
+submission that shells out to Python during its build leaves a ledger entry rather
+than a clean log -- in the module's own log, not in the graded record. That
+is worth reporting and it is not this stage's to price -- its subject is the retired
+interpreter, and charging for it would put the oracle below full marks on its own
+corpus and make a shortfall unreadable as a behavioural difference.
+`no-interpreter-dependency` in stage 1 asks the stronger form of the same question,
+required, of the tree rather than of one build's ledger, and a required gate failing
+there is a zero for the submission.
+
+On a pre-migration tree this case is skipped rather than answered, and the reason is
+worth stating because the alternative looked like good news. No shim is installed
+for that build -- one whose job is to break Python cannot stand in front of an
+implementation that is Python -- and the case reads an absent ledger as a pass,
+correctly, since the shim writes it on first refusal. Answering it would print "the
+graded build never invoked a Python interpreter" about a build whose two steps were
+`compileall` and `import sqlparse`: a true-looking sentence produced by scaffolding
+that was never there. See provenance.Provenance.PY_PROV_SKIP. The 40 `fresh` cases
+carry this module's whole weight and none of them is skippable, so the module still
+has scored checks either way.
+
+`fresh` is deliberately the weaker of the two claims it could make. The Python
+reference is deleted from this image, so there is no oracle to compare unseen
+input against; what remains checkable without one is the library's own invariant.
+Attacking the port with unseen input that *has* an oracle is stage 3's job, and it
+has both trees and both builds to do it with.
+"""

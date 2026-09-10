@@ -1,0 +1,179 @@
+{
+  "schema_version": "swerefactor-source-contract-v1",
+  "task": "lang01-cmark-c-to-rust",
+  "product": {
+    "name": "cmark",
+    "upstream_version": "0.31.1",
+    "state_a_language": "C",
+    "state_b_language": "Rust"
+  },
+  "submission_root": "/workspace/repo",
+  "native_code_policy": {
+    "description": "Every byte of machine code in the delivered library, archive and executable must be produced by the pinned Rust toolchain from Rust sources inside the submission.",
+    "rust_toolchain": "1.90.0",
+    "rust_edition_max": "2024",
+    "allowed_rust_dependencies": "std, core and alloc only. No crates.io dependencies, no git dependencies, no vendored third-party crates, no build-script code generation from C sources.",
+    "min_rust_logic_lines": 3000,
+    "forbidden_build_actions": [
+      "compiling any C, C++, Objective-C, Objective-C++ or assembly translation unit",
+      "invoking cc/gcc/clang/c++/g++/clang++/as/cpp for anything other than the final Rust link step",
+      "linking any prebuilt object file, static archive or shared library that ships inside the submission",
+      "downloading, fetching or cloning anything at configure, build, install or run time",
+      "loading code at run time with dlopen/dlsym/LD_PRELOAD",
+      "spawning a helper process to perform parsing or rendering"
+    ]
+  },
+  "forbidden_paths": {
+    "description": "Paths matching these patterns must not exist anywhere under the submission root except inside an out-of-source build directory produced by the build itself.",
+    "extensions": [
+      ".c",
+      ".cc",
+      ".cpp",
+      ".cxx",
+      ".c++",
+      ".m",
+      ".mm",
+      ".s",
+      ".S",
+      ".asm",
+      ".inc",
+      ".re",
+      ".hpp",
+      ".hh",
+      ".hxx",
+      ".o",
+      ".obj",
+      ".a",
+      ".lib",
+      ".so",
+      ".dylib",
+      ".dll",
+      ".lo",
+      ".la"
+    ],
+    "header_allowlist": [
+      "src/cmark.h"
+    ],
+    "header_allowlist_note": "src/cmark.h is the installed public ABI contract and must be retained. Every other .h file in State A is a private C header and must be gone. Generated headers (cmark_export.h, cmark_version.h) belong in the build directory or may be produced from a .in template."
+  },
+  "build_contract": {
+    "driver": "cmake",
+    "min_cmake_version": "3.25",
+    "in_source_build_forbidden": true,
+    "configurations": [
+      {
+        "id": "shared",
+        "configure": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "<build-dir>",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DBUILD_SHARED_LIBS=ON",
+          "-DCMAKE_INSTALL_PREFIX=<prefix>"
+        ],
+        "build": ["cmake", "--build", "<build-dir>", "--parallel"],
+        "install": ["cmake", "--install", "<build-dir>"]
+      },
+      {
+        "id": "static",
+        "configure": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "<build-dir>",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DBUILD_SHARED_LIBS=OFF",
+          "-DCMAKE_INSTALL_PREFIX=<prefix>"
+        ],
+        "build": ["cmake", "--build", "<build-dir>", "--parallel"],
+        "install": ["cmake", "--install", "<build-dir>"]
+      }
+    ],
+    "environment_during_build": {
+      "network": "none",
+      "CC": "a shim that fails on any compile action",
+      "CXX": "a shim that fails on any compile action",
+      "note": "The shim forwards link-only invocations to the real linker driver, so a Rust cdylib/binary still links. Any attempt to compile a C or C++ translation unit fails the build and the audit gate."
+    }
+  },
+  "install_inventory": {
+    "description": "Required entries under the install prefix. 'shared' and 'static' list the entries specific to that configuration; 'common' is required by both.",
+    "common": [
+      {"path": "bin/cmark", "kind": "executable"},
+      {"path": "include/cmark.h", "kind": "file"},
+      {"path": "include/cmark_export.h", "kind": "file"},
+      {"path": "include/cmark_version.h", "kind": "file"},
+      {"path": "lib/pkgconfig/libcmark.pc", "kind": "file"},
+      {"path": "lib/cmake/cmark/cmark-config.cmake", "kind": "file"},
+      {"path": "lib/cmake/cmark/cmark-config-version.cmake", "kind": "file"},
+      {"path": "lib/cmake/cmark/cmark-targets.cmake", "kind": "file"},
+      {"path": "share/man/man1/cmark.1", "kind": "file"},
+      {"path": "share/man/man3/cmark.3", "kind": "file"}
+    ],
+    "shared": [
+      {"path": "lib/libcmark.so.0.31.1", "kind": "file", "soname": "libcmark.so.0.31.1"},
+      {"path": "lib/libcmark.so", "kind": "symlink", "target": "libcmark.so.0.31.1"}
+    ],
+    "static": [
+      {"path": "lib/libcmark.a", "kind": "file"}
+    ],
+    "forbidden_extra": {
+      "description": "The install tree must not contain a second implementation or a fallback engine.",
+      "patterns": ["**/*cmark*c*.so*", "**/libcmark_c.*", "**/*.py", "**/*.sh"]
+    }
+  },
+  "abi_contract": {
+    "library_basename": "cmark",
+    "soname": "libcmark.so.0.31.1",
+    "exported_symbol_count": 70,
+    "exported_symbol_prefix": "cmark_",
+    "allowed_needed_libraries": [
+      "libc.so.6",
+      "libm.so.6",
+      "libgcc_s.so.1",
+      "libpthread.so.0",
+      "libdl.so.2",
+      "librt.so.1",
+      "ld-linux-x86-64.so.2"
+    ],
+    "visibility": "Only the documented cmark_* entry points may be globally visible. No Rust std symbols, no rust_eh_personality, no __rust_alloc, no internal helper may be exported.",
+    "calling_convention": "extern \"C\"",
+    "opaque_types": ["cmark_node", "cmark_parser", "cmark_iter"],
+    "transparent_types": ["cmark_mem"],
+    "note": "cmark_mem is a caller-visible struct of three function pointers (calloc, realloc, free) and must keep C layout. cmark_node/cmark_parser/cmark_iter are opaque to callers, so their internal layout is unconstrained."
+  },
+  "behavioral_contract": {
+    "comparison": "byte-exact",
+    "reference": "cmark 0.31.1 built from the pinned upstream C sources",
+    "surfaces": [
+      "cmark(1) command line: all options, all five output formats, stdin and file inputs, multi-file concatenation, exit statuses and stderr text",
+      "libcmark C API: all 70 exported functions including error paths, NULL handling, custom allocators, streaming parser feeds, iterators and tree mutation",
+      "installed man pages, pkg-config metadata and CMake package files"
+    ],
+    "note": "Where State A has quirks or arguably wrong behavior, State B must reproduce the quirk. Compatibility is defined against the reference implementation, not against the CommonMark specification prose."
+  },
+  "preserved_paths": {
+    "description": "These files define the public contract and must remain present with unchanged semantics.",
+    "paths": [
+      "src/cmark.h",
+      "src/libcmark.pc.in",
+      "src/cmarkConfig.cmake.in",
+      "man/man1/cmark.1",
+      "man/man3/cmark.3"
+    ]
+  },
+  "removable_paths": {
+    "description": "State A material whose purpose disappears with the C implementation. Removing these is expected; keeping a Rust equivalent is also acceptable as long as no forbidden path or build action results.",
+    "paths": [
+      "api_test/",
+      "fuzz/",
+      "Makefile.nmake",
+      "nmake.bat",
+      "toolchain-mingw32.cmake",
+      "tools/appveyor-build.bat"
+    ]
+  }
+}

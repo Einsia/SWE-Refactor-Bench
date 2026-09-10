@@ -1,0 +1,303 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "pf02-stylus-web-platform-port"
+
+# Weights are relative shares of the behavioural stage, normalised by the runner.
+# They are written out of 100 so a weight reads directly as a percentage of the
+# rate this stage publishes.
+#
+# The question each weight answers is: if this module alone regressed, how much of
+# the migration would be missing?  The two case modules carry the largest share
+# between them because they are the promise the task makes -- every `.styl` file
+# upstream ships must still compile to the same CSS, first through the realm-hosted
+# core and then through the Node adapter.  `builtins` and `options` come next: they
+# are the surface that a port which only moved files would quietly drop, since both
+# reach deep into the compiler rather than its entry point.  `paths` is small but
+# irreducible, being the one dimension where the replacement is written from
+# scratch rather than adapted.
+#
+# `platform` is the odd one and is worth its six points for a reason the case
+# modules cannot cover.  Everything else here asks whether the right CSS came out;
+# a submission can answer that with the original compiler and a fake platform
+# object it never consults.  `platform` asks whether the capability object is load
+# bearing, by removing what it provides -- so its four checks are the only place in
+# this stage where "the port happened" is measured rather than inferred from output
+# that a wrapper would also produce.
+#
+# `prepare` is first, and every module after it runs against the tree and the
+# dependencies it publishes, so a submission that cannot be copied leaves them
+# nothing behavioural to measure: each fails its own checks on its own evidence and
+# the stage pays nothing, because it pays only for a submission that passed every
+# scored check in every weighted module.  Note how
+# narrow the coupling is: an offline `npm ci` that fails costs the Node-side modules
+# their weight and leaves the realm-hosted ones untouched, because `src/core/` is not
+# allowed to import a package in the first place.
+#
+# Every module here runs an artifact and watches what comes out -- a compile inside
+# the restricted realm, a `render()` call, a CLI invocation, a source map fetched
+# from a build.  None of them opens a file in the submitted tree to look at its
+# text.  There is deliberately no fixture that would hand one a source file: the
+# checks that read code live in `tests/audit/`, which sees both trees and
+# starts neither.
+#
+# ## Which face a tree is measured on
+#
+# `harness.layout.face()` decides, from the tree alone, which entry point the
+# drivers load: `src/core/index.js` if it is there (`PORTED`), otherwise
+# `lib/stylus.js` (`PRE_MIGRATION`), otherwise neither (`ABSENT`, and
+# `require_core()` fails the check rather than skipping it).  This is a dispatch,
+# not a fallback: a tree carrying `src/core/index.js` is measured there and nowhere
+# else, so a port that half-lands cannot have its broken core quietly excused by
+# the package it was ported from.  Measured: a State A tree with one deliberately
+# broken `src/core/index.js` rates 0.123, not 1.0.
+#
+# The reason the pre-migration face is measurable at all is what this stage is for.
+# A platform port must not change what the compiler computes -- §1.3 -- so almost
+# every check here asks a question upstream already answers, and asking it of the
+# tree the port starts from is the control that proves the check measures the port
+# rather than the harness.  State A fed back as its own submission takes full
+# marks.  That is deliberate and it costs nothing: stage 1's required
+# `node_platform_retired` and `default_path_is_the_port` gates fail such a tree, and
+# a stage-1 failure is a zero for the whole task.
+#
+# ## The three checks with no pre-migration subject
+#
+# Three checks are about a mechanism the port introduces, so on the pre-migration
+# face there is nothing behind them to compare against:
+#
+#   * `platform` / built-in library loaded through the platform -- upstream finds it
+#     through `__dirname`, so there is no capability object to withdraw
+#     `runtimeRoot` from.  §1.4 asks the port to close exactly that gap.
+#   * `platform` / `renderSync()` refuses an async platform -- there is no platform
+#     to declare `sync: false` on, so upstream returns CSS.  §1.3 asks the port to
+#     keep `renderSync()` working *and* to read through the injected platform; a
+#     tree with only the first half has answered half the question.
+#   * `paths` / the algebra is reachable as `path` on the default export -- upstream
+#     has no such module.  §1.1 introduces it.
+#
+# All three are asked of that face and charged there, rather than keeping a verdict
+# at weight 0.0.  A weight decided at run time from what the tree turned out to be
+# makes a module's size depend on how far the submission got, and a weight-0 row is
+# dropped when the result is collected -- so two trees would be scored out of
+# different totals and then compared as though out of one.  So the absent mechanism
+# is the answer: such a tree fails these three rows, passes the behavioural ones,
+# and the ordering that produces is the correct one, because the migration is the
+# task.
+#
+# Nothing in the stage loses weight on either face.  In particular a licensed skip
+# is never used for this: `permitted_skip()` is for the oracle failing to state an
+# expectation, never for a submission failing to meet one.
+#
+# A skip is charged, in the denominator and the numerator both.  The runner pools a
+# module as earned weight over the weight of *every* weight-bearing check, so a skip
+# forgoes its own weight and stays in the total.  That is what makes a module's size
+# the same question for every submission, and it is why a skip must be the oracle
+# admitting it never stated an expectation, never a submission being let off one: an
+# excused failure would otherwise be worth the same as a pass.
+#
+# ## Cases upstream cannot compile
+#
+# Four of the frozen cases are inputs State A refuses, and they are there on purpose:
+# `render()` throwing with the right `.name`, `.lineno`, `.column` and `.filename` is
+# what every build tool reads, and §1.5's `errors` clause holds a port to it.  What
+# they do not have is a *result* -- no CSS, no map, no String return, no callback that
+# fired, no Stylus explanation under a bare ENOENT.
+#
+# So no row asks them for one.  A row whose subject a case does not have would have to
+# be excused on every submission alike, which costs each of them a check none was
+# asked; the exclusions are declared in the module instead, and the module collects
+# over the complement:
+#
+#   * `jsapi`.  `FAILING_IDS` (8 cases) is declared in the module and its complement
+#     is what `test_render_returns_a_string_not_a_promise` and
+#     `test_callback_fires_synchronously` collect over.
+#   * `sourcemaps`.  `sourcemaps.compiled_ids()` drops the one `expect_failure` case
+#     from the three rows comparing CSS, comment and map presence, and from the
+#     adapter's map row.
+#   * `cli`.  An `explains=` declaration on `CliCase` marks the two failures whose
+#     stderr is a Node-inspected ENOENT, and
+#     `test_failure_explanation_matches_state_a` collects over the rest.
+#
+# All four cases are graded, and every row asked of them is one they can answer: that
+# they fail at all, with which error name, message and position, and -- for the
+# sourcemap case -- that the Node adapter reproduces the same error rather than
+# compiling it.  The declarations are asserted against the oracle on every run
+# (`test_declared_failures_still_fail`, `test_declared_writes_match_state_a`), so a
+# case that changed behaviour fails the run instead of quietly losing its rows.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+# State A, installed and frozen read-only at image build time.  Every module needs
+# it for two things: the upstream `.styl` inputs under `test/`, and a reference
+# compiler to produce the expected CSS on demand rather than from a recorded file.
+PF03_STATE_A = "/opt/state-a"
+
+[metadata]
+runtime = "node22"
+target = "ESM core in a restricted realm + a node adapter"
+state_a_version = "stylus 0.63.0"
+
+# --------------------------------------------------------------------------- #
+# What everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "prepare"
+title = "stage the submitted tree and install its dependencies"
+weight = 4
+timeout_sec = 2400
+command = ["python3", "run.py"]
+about = """
+Copies the submission to $SRB_SUITE_WORK/tree without node_modules or .git, then
+installs the dependencies its own lockfile declares, offline, from the same cache
+the agent was given. Publishes a ledger the other modules read so none of them
+repeats the install. Only the copy is a precondition for the rest: an install that
+fails is recorded, costs the Node-side modules their weight, and leaves the
+realm-hosted core -- which cannot import a package at all -- fully measurable.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: the CSS upstream produces has to survive
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "web-cases"
+title = "upstream .styl cases compiled inside the restricted realm"
+weight = 18
+timeout_sec = 3600
+about = """
+Every case under test/cases is compiled twice -- once by State A on the host, once
+by the submitted core inside a V8 realm that has no require, no process and no
+filesystem -- and the two CSS outputs are compared byte for byte. The realm is
+where the port either holds or does not: a core that still reaches for a Node
+built-in fails to link there, and nothing about that is visible from reading it.
+"""
+
+[[module]]
+id = "node-cases"
+title = "the same cases through the node adapter"
+weight = 11
+timeout_sec = 2400
+about = """
+Replays the same inputs through src/node against the real filesystem. A core that
+passes in the realm and fails here has an adapter that mistranslates the
+capability object; the reverse means the core smuggled a Node built-in past the
+realm through the adapter's back door.
+"""
+
+# --------------------------------------------------------------------------- #
+# Whether the injection is real, asked by taking capabilities away
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "platform"
+title = "the capability object is the only door the core has"
+weight = 6
+about = """
+Four probes, none of which reads the submission's source. Withdraw the mount the
+built-in .styl library lives at: a core that inlined it keeps working and never
+attempts a read. Mount the same import at two different virtual paths: a core
+reading through the platform object follows both, one reading the real disk
+follows neither. Compile a selector generated microseconds ago: a table of
+recorded answers has no entry for it. Call renderSync() where no synchronous read
+was offered: it has to refuse, because returning CSS means it found blocking IO
+somewhere that is not the capability object.
+
+These are the checks that distinguish "compiles the corpus" from "inverted the
+dependency". They are here rather than in the review because each is settled by
+removing something and watching, and there is no way to spell your way past a
+missing file.
+"""
+
+# --------------------------------------------------------------------------- #
+# Surfaces a move-the-files port drops
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "builtins"
+title = "the built-in function library"
+weight = 12
+about = """
+Exercises the built-ins that touch the outside world -- image sizing, file
+embedding, hashing, path resolution -- through compiles that call them, comparing
+results against State A. These are where the capability object earns its keep:
+each one used to call fs or crypto directly.
+"""
+
+[[module]]
+id = "options"
+title = "the render option matrix"
+weight = 10
+about = """
+Compiles a fixed set of inputs across the documented option combinations
+(compress, sourcemap, includeCSS, resolveURL, imports, prefix, and the rest) and
+compares each result against State A under the same options. An option silently
+ignored by the port is invisible in single-option testing.
+"""
+
+[[module]]
+id = "imports"
+title = "@import and @require resolution"
+weight = 9
+about = """
+Drives import resolution through a virtual filesystem: index files, nested paths,
+multiple include roots, globs, url() rebasing, .css passthrough, and the
+once-only semantics of @require. Resolution order is observable in the output, so
+this is a behavioural comparison and not an inspection of the resolver.
+"""
+
+[[module]]
+id = "cli"
+title = "bin/stylus"
+weight = 8
+timeout_sec = 2400
+about = """
+Runs the submitted CLI and State A's CLI on the same arguments in matching
+directory trees and compares stdout, stderr, exit status and every file written.
+The CLI is the only interface most users of this library ever touch.
+"""
+
+[[module]]
+id = "paths"
+title = "POSIX path algebra"
+weight = 7
+about = """
+Puts a large vector set through the port's own path implementation and node's
+path.posix, and requires them to agree. Small in weight per check and large in
+count: this is the one dimension where the replacement is written from scratch,
+and join/normalise/relative disagree only on inputs nobody writes by hand.
+"""
+
+[[module]]
+id = "jsapi"
+title = "the public render API"
+weight = 7
+about = """
+Calls render() and renderSync() as a library consumer would -- callback and
+promise forms, the options object, the returned CSS and source map -- and compares
+against State A. Asserts on what the calls return, never on how the module that
+provides them is arranged.
+"""
+
+[[module]]
+id = "errors"
+title = "diagnostics for bad input"
+weight = 5
+timeout_sec = 2400
+about = """
+Compiles inputs that must fail and compares the failure: the message, the file and
+line it points at, the error's own fields. A port that throws a bare Error where
+State A threw a located ParseError has lost the part of the compiler users
+actually interact with.
+"""
+
+[[module]]
+id = "sourcemaps"
+title = "generated source maps"
+weight = 3
+about = """
+Fetches the map a build produces and compares its fields, sources list and decoded
+mappings against State A's, including the inline and separate-file variants and
+the node-side parity case.
+"""

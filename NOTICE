@@ -1,0 +1,229 @@
+SWERefactorBench
+Copyright 2026 The SWERefactorBench Authors
+
+Licensed under the Apache License, Version 2.0.  The full text is in LICENSE.
+
+
+================================================================================
+Third-party software redistributed by this repository
+================================================================================
+
+Every task under tasks/ carries one upstream open-source release, unmodified, in
+environment/original.tar.gz.  That archive is State A: the tree the benchmark
+asks a model to evolve.  The Apache-2.0 licence above covers this repository's
+own work -- the shared grader in infra/, the task definitions, the per-task
+ladders, the documentation.  It does not cover the vendored releases.  Each one
+stays under its own terms, and its full licence text travels inside its own
+archive, at the path named below (relative to the archive's root directory).
+
+These entries were read out of the archives, not transcribed from the task
+prose, and each licence file was compared byte-for-byte against its upstream
+project at the recorded ref: 25 of 25 reachable files matched exactly.  The two
+that are not on GitHub -- SQLite and QuickJS -- are recorded from the archive
+alone.  Two checks keep this table honest rather than merely written down:
+infra/tests/test_licensing.py re-derives it from the archives on every run, so an
+entry cannot silently go stale and a new task cannot be added without appearing
+here; tools/verify_upstream_licences.py repeats the comparison against upstream,
+and is what to run when a task is added or re-pinned.
+
+The licence identifiers are SPDX.  "AND" means parts of one release are under
+different terms; "OR" means the recipient chooses.
+
+--------------------------------------------------------------------------------
+
+build01-libsodium-autotools-to-cmake
+    libsodium 1.0.20 -- https://github.com/jedisct1/libsodium
+    ISC.  Copyright (c) 2013-2026 Frank Denis <j at pureftpd dot org>
+    Licence text: LICENSE
+
+build02-gson-maven-to-gradle
+    Gson gson-parent-2.10.1 -- https://github.com/google/gson
+    Apache-2.0.  Copyright 2008-2011 Google Inc.
+    Licence text: LICENSE, gson/LICENSE
+
+build03-pycryptodome-setuptools-to-meson
+    PyCryptodome 3.20.0 -- https://github.com/Legrandin/pycryptodome
+    BSD-2-Clause AND Unlicense.  Code originating from PyCrypto is released into
+    the public domain; direct contributions to PyCryptodome are BSD-2-Clause,
+    with the copyright of each piece belonging to its author.
+    Licence text: LICENSE.rst
+
+fw01-httpbin-flask-to-asgi
+    httpbin 0.10.2 -- https://github.com/psf/httpbin
+    ISC OR MIT.  Copyright (c) 2017 Kenneth Reitz
+    Licence text: LICENSE (a pointer to both), LICENSE.ISC, LICENSE.MIT
+
+fw02-jsonserver-express-to-fastify
+    json-server 0.17.4 -- https://github.com/typicode/json-server
+    MIT.  Copyright (c) 2015 typicode
+    Licence text: LICENSE
+
+fw03-conduit-vue-to-react
+    vue-realworld-example-app, commit feb0b7d2 --
+    https://github.com/gothinkster/vue-realworld-example-app
+    (the organisation now redirects to realworld-apps/)
+    MIT.  Copyright (c) 2017-present all contributors listed in the upstream
+    repository.
+    Licence text: LICENSE
+
+fw04-chartmuseum-gin-to-chi
+    ChartMuseum v0.15.0 -- https://github.com/helm/chartmuseum
+    Apache-2.0.  Copyright The Helm Authors.
+    Licence text: LICENSE
+
+fw05-miniserve-actix-to-axum
+    miniserve 0.27.1 -- https://github.com/svenstaro/miniserve
+    MIT.  Copyright (c) 2018 Sven-Hendrik Haase
+    Licence text: LICENSE
+
+fw06-uploadserver-gorillamux-to-nethttp
+    go-simple-upload-server v2.2.0 --
+    https://github.com/mayth/go-simple-upload-server
+    MIT.  Copyright (c) 2023 Mei Akizuru
+    Licence text: LICENSE
+
+fw07-graphhopper-dropwizard-to-springboot
+    GraphHopper 11.0 -- https://github.com/graphhopper/graphhopper
+    Apache-2.0.  Copyright 2012 - 2024 GraphHopper GmbH
+    Licence text: LICENSE.txt, and the project's own NOTICE.md
+    See "Additional terms inside individual releases" below.
+
+lang01-cmark-c-to-rust
+    cmark 0.31.1 -- https://github.com/commonmark/cmark
+    BSD-2-Clause AND MIT AND CC-BY-SA-4.0.  Copyright (c) 2014 John MacFarlane
+    Licence text: COPYING
+    See "Additional terms inside individual releases" below.
+
+lang02-zlib-c-to-java
+    zlib 1.3.1 -- https://github.com/madler/zlib
+    Zlib.  (C) 1995-2022 Jean-loup Gailly and Mark Adler
+    Licence text: LICENSE
+
+lang03-sqlparse-python-to-go
+    sqlparse 0.5.3 -- https://github.com/andialbrecht/sqlparse
+    BSD-3-Clause.  Copyright (c) 2016 Andi Albrecht <albrecht.andi@gmail.com>
+    Licence text: LICENSE
+
+lang04-acorn-js-to-rust
+    Acorn 8.14.0 -- https://github.com/acornjs/acorn
+    MIT.  Copyright (C) 2012-2022 by various contributors (see AUTHORS)
+    Licence text: acorn/LICENSE, acorn-loose/LICENSE, acorn-walk/LICENSE
+
+lang05-goyaml-go-to-zig
+    go-yaml v3.0.1 -- https://github.com/go-yaml/yaml
+    Apache-2.0 AND MIT.  Copyright (c) 2011-2019 Canonical Ltd for the project;
+    Copyright (c) 2006-2011 Kirill Simonov for the eight files ported from
+    libyaml -- apic.go, emitterc.go, parserc.go, readerc.go, scannerc.go,
+    writerc.go, yamlh.go, yamlprivateh.go -- which stay MIT.  LICENSE names
+    that split itself; the eight files repeat both copyright lines in their
+    own headers.
+    Licence text: LICENSE, and the project's own NOTICE (reproduced below)
+
+lang06-jsonnet-cpp-to-csharp
+    Jsonnet 0.20.0 -- https://github.com/google/jsonnet
+    Apache-2.0.  Copyright 2015 Google Inc.  (The LICENSE file is the unmodified
+    Apache-2.0 appendix; the copyright holder is named in the source headers.)
+    Licence text: LICENSE
+    See "Additional terms inside individual releases" below.
+
+lang07-jsonata-js-to-typescript
+    JSONata 2.2.2 -- https://github.com/jsonata-js/jsonata
+    MIT.  (C) Copyright IBM Corp. 2016, 2018.  (The LICENSE file carries the MIT
+    terms with no copyright line; the holder is named in the source headers.)
+    Licence text: LICENSE
+
+pf01-sqlite-wasi-port
+    SQLite 3.31.1 -- https://www.sqlite.org/
+    blessing.  SQLite is in the public domain: the author disclaims copyright to
+    the source code and puts a blessing where a legal notice would go.  SPDX's
+    identifier for that text is `blessing`; "public-domain" is not one.
+    Licence text: LICENSE.md
+    See "Additional terms inside individual releases" below.
+
+pf02-stylus-web-platform-port
+    Stylus 0.63.0 -- https://github.com/stylus/stylus
+    MIT.  Copyright (c) Automattic <developer.wordpress.com>
+    Licence text: LICENSE
+
+pf03-quickjs-byteorder-port
+    QuickJS 2020-11-08 -- https://bellard.org/quickjs/
+    MIT.  Copyright (c) 2017-2020 Fabrice Bellard and Charlie Gordon
+    Licence text: no standalone licence file.  Upstream states the MIT terms in
+    the header of every source file; quickjs.h lines 1-24 is the canonical copy.
+    This is how the release is published, not something the snapshot dropped.
+
+--------------------------------------------------------------------------------
+Additional terms inside individual releases
+--------------------------------------------------------------------------------
+
+A release's own licence is not always the only licence in its tree.  These are
+the cases found by scanning every file of every archive, and they are listed
+because a redistributor needs them, not because they are edge cases.
+
+fw07 GraphHopper, whose project licence is Apache-2.0, additionally contains:
+  * core/src/main/java/com/graphhopper/isochrone/algorithm/ContourBuilder.java
+    -- LGPL-3.0-or-later, stated in the file's own header, with no exception.
+  * core/src/main/resources/com/graphhopper/routing/util/legal_default_speeds.json
+    -- data under a Creative Commons Attribution-ShareAlike 2.0 licence, stated
+    in the file.
+
+lang01 cmark, whose project licence is BSD-2-Clause, additionally contains, all
+per COPYING:
+  * houdini.h, houdini_href_e.c, houdini_html_e.c, houdini_html_u.c -- MIT,
+    Copyright (C) 2012 Vicent Martí.
+  * buffer.h, buffer.c, chunk.h -- MIT, derived from code (C) 2012 GitHub, Inc.
+  * utf8.c -- MIT, derived from utf8proc.
+  * the normalisation code in normalize.py -- MIT, Copyright 2013 Karl Dubost.
+  * test/spec.txt, the CommonMark specification -- CC-BY-SA-4.0, Copyright (C)
+    2014-15 John MacFarlane.  This is the one share-alike licence in the whole
+    vendored set, and it is on a document rather than on code.
+
+lang06 Jsonnet additionally contains doc/_layouts/base.html, which states a
+Creative Commons Attribution 2.5 licence for the documentation site's layout.
+
+build01 libsodium and pf01 SQLite ship the usual GNU autotools helpers --
+config.guess, config.sub, ltmain.sh, aclocal.m4, and similar.  Those files are
+GPL-licensed and each carries the Autoconf Configure Script Exception, which is
+what permits distributing them as part of a work under other terms.  They are
+build machinery, not part of either library.
+
+build03 PyCryptodome ships Doc/LEGAL/, which holds PyCrypto's historical
+licensing record: the original authors' public-domain statements and a copy of
+the CNRI Python 1.6.1 licence.  That licence mentions the GPL only in a
+choice-of-law clause; it is not a GPL grant.
+
+--------------------------------------------------------------------------------
+Upstream attribution notices, reproduced
+--------------------------------------------------------------------------------
+
+Two of the vendored releases ship a NOTICE file of their own.  Apache-2.0
+section 4(d) asks a redistributor to carry those attributions along.
+
+go-yaml v3.0.1 (lang05), NOTICE, in full:
+
+    Copyright 2011-2016 Canonical Ltd.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+GraphHopper 11.0 (fw07), NOTICE.md: its own copyright line is
+
+    GraphHopper licensed under the Apache license, Version 2.0
+    Copyright 2012 - 2024 GraphHopper GmbH
+
+The rest of that file is an inventory of GraphHopper's build-time dependencies
+-- slf4j, Jackson, JTS, Guava and some thirty others -- and of the map and
+elevation data sources it can consume.  Almost none of those are redistributed
+here: this repository ships GraphHopper's source tree, not its resolved
+dependency set.  Reproducing that list would claim to distribute software that
+is not in the archive, so it is left where it belongs, verbatim, at NOTICE.md
+inside fw07's original.tar.gz.

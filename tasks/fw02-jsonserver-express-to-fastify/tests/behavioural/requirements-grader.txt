@@ -1,0 +1,18 @@
+# The grader's own Python stack, hash-pinned.
+#
+# Deliberately tiny: the suite drives the submission over real HTTP using the
+# standard library only (http.client), so nothing here can drift into the
+# behaviour being graded. pytest and its three runtime dependencies, nothing
+# else -- no httpx, no requests, no plugins.
+#
+# Installed with --require-hashes, so a substituted artefact fails the build.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6
+iniconfig==2.0.0 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759
+pluggy==1.5.0 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest-timeout==2.3.1 \
+    --hash=sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e

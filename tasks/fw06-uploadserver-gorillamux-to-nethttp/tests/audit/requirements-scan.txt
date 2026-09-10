@@ -1,0 +1,31 @@
+# The scan's runner, and nothing else.
+#
+# Four packages, hash-pinned, installed --no-deps: this is a test runner for
+# checks that open files and read them.  Nothing here can build the submission,
+# and that is the point of keeping the list this short.  The moment a Go
+# toolchain or an HTTP client appears in this image, a scan module could compile
+# the tree or start it, and stage 1's whole claim -- that it observed the code
+# without ever running it -- stops being structurally true and becomes a promise.
+#
+# No pytest-timeout and no PyYAML, unlike the behavioural stage's list.  A scan
+# reads files and cannot wait on a socket, so there is no clock to install.  And
+# nothing here parses YAML: this repository's only YAML is its CI workflow, and
+# what that workflow claims about the build is checked by stage 2 doing the build.
+#
+# The versions are the ones tests/behavioural/requirements-runner.txt pins, so the
+# scan runs on the same pytest the behavioural suite does and there is one version
+# of the runner to reason about across two stages.  Both hashes are listed for
+# each package -- wheel and sdist -- because this image installs from a different
+# base than the behavioural one and pip is free to prefer either.
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6 \
+    --hash=sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761
+iniconfig==2.0.0 \
+    --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==24.2 \
+    --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759 \
+    --hash=sha256:c228a6dc5e932d346bc5739379109d49e8853dd8223571c7c5b55260edc0b97f
+pluggy==1.5.0 \
+    --hash=sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669

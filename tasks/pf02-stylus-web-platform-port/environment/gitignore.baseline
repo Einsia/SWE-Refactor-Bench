@@ -1,0 +1,8 @@
+# Installed dependencies are provisioned by the image, not committed.
+node_modules/
+
+# Build and tooling scratch.
+*.log
+.npm/
+.cache/
+coverage/

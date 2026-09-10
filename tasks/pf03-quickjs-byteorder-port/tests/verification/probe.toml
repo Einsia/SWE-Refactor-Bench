@@ -1,0 +1,277 @@
+schema = "swerefactor.verification-probe/1"
+task = "pf03-quickjs-byteorder-port"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file run against a tree this script builds for all
+# three targets -- x86-64 native, armhf and s390x cross -- with the same argv
+# stage 2 uses and instruction.md publishes.  A candidate sees three interpreters,
+# a static library it can link C against, and the pristine original built for
+# x86-64 as its reference.  It cannot tell which tree it is testing except by the
+# answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# This stage needs a scope more carefully than most, and for a reason particular
+# to a byte-order port: the break condition is mechanical -- passes on the
+# original, fails on the submission, three times -- and on this task there is a
+# whole family of candidates that satisfies it while asserting the defect.
+#
+# On s390x the original is WRONG. That is the task. So:
+#
+#   "x86-64 and s390x agree on this program"  fails on the original wherever the
+#   defect lives, so it is discarded before it is weighed. Where it passes on the
+#   original -- a program byte order does not reach -- it is a sound claim, and a
+#   submission that broke it swapped something the format never asked to be
+#   swapped. That direction is self-limiting and needs no rule.
+#
+#   "x86-64 and s390x DISAGREE on this program"  passes on the original for every
+#   one of the 41 DataView keys and every wide bignum literal, and fails on every
+#   correct submission. Passes, fails, reproduces: an upheld break that asserts
+#   the bug. Nothing mechanical stops it, so the deny list does, first clause.
+#
+# The allow list is what the port is answerable for: the answers the language
+# specification fixes, the answers upstream's own format fixes, and x86-64's
+# behaviour preserved. The deny list is what instruction.md tells the agent is not
+# compared, plus that first clause. They have to agree -- a scope forbidding what
+# the instruction promised makes the task unwinnable, and one permitting what the
+# instruction excluded makes it unlosable.
+[scope]
+allow = [
+  "the value of any expression the ECMAScript specification fixes, evaluated on any of the three targets and compared against the pristine original built for x86-64: numbers, strings, dates, JSON, RegExp, Map and Set iteration, Proxy and Reflect, generators and async, and the whole standard library",
+  "DataView with an explicit byte-order argument, at every width and every signedness, at aligned and unaligned offsets, over buffers of every provenance: getFloat64/getFloat32/getBigInt64/getBigUint64/getInt32/getUint32/getInt16/getUint16 and their setters. These answers are fixed by the specification and must be identical on all three targets",
+  "typed arrays and the buffers under them, where the specification fixes the answer: element values written and read through the same view, byteLength and byteOffset and subarray geometry, and the result of an explicit-order DataView read over a typed array's buffer -- which on a big-endian target is a big-endian read of big-endian storage and is therefore a specified value, not a native-order one",
+  "Atomics and SharedArrayBuffer element values, and views of differing element type over one buffer where the specification states the result",
+  "bytecode a build's own host compiler writes and its own target interpreter reads: examples/hello and examples/test_fib, which embed a blob compiled to C, and qjs itself, which links the compiled repl and qjscalc. Whether such a binary runs and computes the right answers is the central question of this task",
+  "everything reachable through that blob boundary, not only the constants stage 2 records: BigInt literals of any width, Float64 constants, strings needing 16-bit storage, RegExp literals whose compiled program is serialised with the blob, template literals, class and closure structures, and any other value a source file can put into a compiled unit",
+  "the tests/bjson.so module: JS_WriteObject and JS_ReadObject over any value it accepts, round-tripped inside one build and, where the helper offers it, written on one target and read on another",
+  "the C API as quickjs.h declares it, exercised by a candidate's own C program linked against the tree's libquickjs.a for a target: JS_ReadObject and JS_WriteObject with any documented flag including JS_WRITE_OBJ_BSWAP, JS_ParseJSON, JS_Eval, the typed-array and DataView entry points, and JS_GetTypedArrayBuffer",
+  "the upstream test suite files the repository ships -- tests/test_language.js, test_builtin.js, test_closure.js, test_loop.js, test_bignum.js, test_bjson.js, test_qjscalc.js -- run on any target",
+  "x86-64 behaviour preserved: any expression whose answer the pristine original gives on x86-64 must be the answer the submission gives on x86-64. A port is not entitled to change the platform that already worked",
+  "armhf behaviour preserved, on the same reading, except for answers that follow from a 32-bit word: those are the ABI's and not the port's",
+  "a crash, a hang past a generous timeout, a non-zero exit, an uncaught exception or an interpreter-level assertion failure, on any target, where the pristine original on x86-64 completes normally",
+  "the build itself as instruction.md publishes it: `make CONFIG_LTO= CROSS_PREFIX=<prefix> qjs qjsc libquickjs.a tests/bjson.so examples/hello examples/test_fib host-qjsc` must succeed for all three targets and produce binaries of the right ELF machine",
+]
+deny = [
+  "the tree under test reproducing an unported big-endian build's answers. On s390x the original is wrong -- that is the defect this task exists to remove -- so a candidate asserting that some value on s390x equals what the original's own s390x build prints, or asserting that two targets must DISAGREE, passes on the original and fails on every correct submission while asserting the bug. Every claim's reference must be the original built for x86-64, where it is correct, or the specification of the format under test. `srbqjs.reference()` is the former and takes no target argument for exactly this reason: there is no supported way to ask the pristine original what it does on a cross target, because the answer is not evidence of anything.",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the token it is given, the presence of a file only one of the two trees can have, timing, or anything else that answers 'am I on the original?' without asking a built artifact a question. Such a candidate meets every mechanical condition for a break -- passes on one tree, fails on the other, reproduces exactly -- while establishing nothing about the port, and it is rejected on sight rather than weighed.",
+  "the bytes of a compiled blob, its header, its version tag, or any other part of its encoding. A port may legally fix this by making the writer emit the target's order OR by making the reader accept either order, and those two ship different bytes. What is answerable is whether the binary runs and computes the right answer.",
+  "the internal structure of the submission: file names, function names, macro names, whether the byte-order switch is a macro or a function or a build variable, which header it lives in, how many call sites it has, and whether any given piece of the port sits where a reader would expect. Stage 1 judges the shape of the port; this stage judges what it computes.",
+  "wall-clock performance as a number, on any target. An emulated target is an order of magnitude slower than the native one and a submission may be slower than the original; a hang that outlives the run timeout is in scope, a constant factor is not.",
+  "peak memory as a number, allocation counts, allocation order, and the address of anything",
+  "answers that follow from armhf's 32-bit word rather than from byte order: pointer and limb width, Number formatting that depends on long double, and the two limb-width keys stage 2 excludes for the same reason",
+  "the contents of a build directory, the names of intermediate artifacts, compiler and linker diagnostics, warnings, and anything written to a build log",
+  "the exact wording of any diagnostic, exception message or stack trace. That an operation throws, and the constructor it throws, are in scope; the prose is not",
+  "text written to stderr on an otherwise successful run",
+  "examples/hello_module, and anything else needing `qjsc -o` on a cross build: it shells out to a linker for the architecture qjsc was configured with, which on a cross build is the host's. Upstream's limitation, not the submission's",
+  "behaviour the pristine original also gets wrong on x86-64. A candidate must pass on the original, which is what makes a divergence a port defect rather than an upstream bug -- and an upstream bug faithfully preserved is a correct port",
+  "requiring any particular toolchain, build system, compiler flag or configure mechanism beyond the published argv succeeding",
+  "network access, and any behaviour that depends on it",
+]
+
+# Three paired runs.  Almost nothing here is timing adjacent, but two things on
+# this task can flake and both would cost a sound submission ten points: an
+# emulated run under load, and a cross build competing for the same cores as
+# five other rounds.  A flake is a bug in the benchmark, not a finding.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Three cross builds plus pytest, for one candidate, on one tree.  The builds
+# happen once per tree and are cached, so only the first candidate of a round pays
+# for them; 2400s is the ceiling for that first one.
+candidate_timeout_sec = 2400.0
+run_timeout_sec = 900.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one program, one API call or one
+compiled unit that the original computes correctly and the submission does not. A
+round that finds nothing pays the submission 10 points; a round that errors pays
+nothing and is reported as an error rather than as either verdict.
+
+The invariant under attack is agreement. A candidate runs something on the tree's
+own three targets, or against the pristine original built for x86-64, and asserts
+they compute the same thing -- which is a sound claim precisely where the
+specification or upstream's own bytecode format fixes the answer, and which the
+original satisfies everywhere byte order does not reach. A candidate that leans on
+the original's s390x brokenness fails on the original and is discarded by the
+adjudicator mechanically, before scope is ever consulted.
+
+Where this stage reaches that stage 2 cannot: stage 2 grades a fixed inventory of
+programs and keys, frozen before any submission existed. Everything else a source
+file can put through the blob boundary -- a wide string, a RegExp's compiled
+program, a Float64 constant, a class with a computed key -- is a byte-order site
+that no recorded key visits. So is the C API, which a candidate can link against
+directly and stage 2 never calls.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable.
+#
+# `focus` is metadata, appended to the round's opening after the scope, which it
+# cannot widen.  Six unguided rounds converge on DataView, which stage 2
+# already covers exhaustively; six pointed ones cover the sites a recorded
+# inventory cannot reach.
+
+[[adversary]]
+id = "a01-blob-strings-and-regexp"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+strings through the blob boundary. A source file's string literals are
+serialised into the compiled unit, and a string needing 16-bit storage is
+written as wide units. Put strings in a compiled program -- astral-plane
+characters, lone surrogates, a string whose only wide character is at its end,
+one long enough to cross whatever buffering the writer does, property keys and
+RegExp sources as well as values -- and check what the target reads back. This
+is a site no recorded key in stage 2 visits.
+
+Then RegExp literals in a compiled unit. libregexp compiles a pattern to its
+own bytecode with its own multi-byte operands, and that compiled program
+travels inside the blob written by the host compiler. Put regexps into a
+program compiled to C -- large character classes, backreferences, quantifiers
+with counts above 255 and above 65535, capture groups past the single-byte
+range, unicode property escapes, lookbehind -- and check that matching on the
+target agrees with x86-64. A wrong operand is a wrong match or a hang, not a
+crash.
+"""
+
+[[adversary]]
+id = "a02-blob-numbers-and-capi-serialiser"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+non-integer and non-BigInt constants through the blob: Float64 literals at the
+boundaries -- subnormals, the smallest and largest finite doubles, negative
+zero, values whose bit pattern is asymmetric byte for byte -- plus large
+integer literals stored as doubles, and typed-array initialisers in a compiled
+unit. Stage 2 records BigInt literals only, and a Float64 rides a different
+writer path from a bignum limb.
+
+Then the C API's serialiser directly. Write a C program against the tree's
+libquickjs.a for a target and call JS_WriteObject and JS_ReadObject yourself,
+with and without JS_WRITE_OBJ_BSWAP, over values a JS program cannot easily
+reach: typed arrays and ArrayBuffers, Map and Set, Date, Error, a deeply
+nested object, a shared ArrayBuffer, a value containing a reference cycle.
+Nothing in stage 2 calls this API; a port that fixed the qjsc path and left a
+flag unhandled shows up only here.
+"""
+
+[[adversary]]
+id = "a03-bjson-cross-and-dataview-edges"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+tests/bjson.so, which is the one place JavaScript reaches the serialiser
+directly. Round-trip values inside one build and, where the helper allows it,
+across targets: typed arrays of every element type, a DataView, an ArrayBuffer
+sliced at an odd offset, nested and cyclic structures, BigInt and BigFloat and
+BigDecimal, and objects whose keys need wide strings. A writer and reader that
+carry the same defect agree with each other, so pay attention to what the
+cross path does.
+
+Then DataView and typed arrays at their edges, past the aligned reads stage 2
+records: unaligned offsets at every width, reads that straddle the end of a
+buffer, a view over a detached or resized buffer, byteOffset and length
+arguments at their limits, setters followed by reads through a different
+element type, NaN payloads and signalling NaNs through a Float32 round trip,
+and Atomics on a SharedArrayBuffer. The specification fixes all of these, so
+all three targets must agree.
+"""
+
+[[adversary]]
+id = "a04-over-swap-and-upstream-suites"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the other direction: a submission that swapped where the format never asked.
+This is the failure a little-endian test suite cannot see, and it lands on
+x86-64 as easily as on s390x -- a byte-order switch derived from the wrong
+macro, applied to a native read, or left on for the whole stream. Compare the
+submission's x86-64 against the pristine original's x86-64 everywhere you can
+reach: the upstream suites, the blob path, typed arrays, bjson, and anything
+whose answer is a raw byte sequence.
+
+Then the repository's own test files, on all three targets, and the parts of
+them stage 2 does not reach. Read what test_builtin.js, test_language.js,
+test_bignum.js and test_qjscalc.js actually assert, then write the cases they
+nearly cover -- the same mechanism one step further out. These files are the
+submission's own regression suite, so a defect they miss is one the agent had
+no way to notice.
+"""
+
+[[adversary]]
+id = "a05-bignum-wide-and-crash-hang"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+bignum through the blob, past the constants stage 2 records. A value is
+serialised only if it is a source literal, and it survives a raw-path swap
+only if every limb above the lowest nonzero one is its own byte reversal -- so
+the interesting literals are wide, asymmetric, and in forms nobody writes by
+hand: negative values, values whose lowest limb is entirely zero bytes,
+BigFloat and BigDecimal literals, literals in a nested function or a class
+field, and the same value written in decimal, hex, octal and binary.
+
+Then a misread length or count, which is what a byte-order defect looks like
+when it does not produce a wrong answer. A u32 read with its bytes reversed is
+an enormous number: an allocation that fails, a loop that never ends, a read
+past the end of a buffer. Feed the target blobs and API calls whose lengths
+and counts sit where a swap makes them huge or zero -- deeply nested
+structures, long argument lists, many properties, large typed arrays, a
+compiled unit with many functions -- and look for the crash or the hang rather
+than for a wrong value.
+"""
+
+[[adversary]]
+id = "a06-cross-compiler-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the two compilers a cross build has. host-qjsc runs here and writes blobs; the
+qjsc built for the target runs under the emulator and writes its own. A
+correct port makes both readable by the target's interpreter, and a port that
+fixed only the host path leaves the target's own compiler writing something
+its own interpreter cannot read, or the reverse. Compile the same source both
+ways, run both blobs on the target, and check they agree with each other and
+with x86-64.
+
+Then, with whatever budget remains, nothing in particular. Read the diff
+between the two trees, find every place the submission touched byte order, and
+ask what each one does to a value the other five rounds were not sent to look
+at.
+"""

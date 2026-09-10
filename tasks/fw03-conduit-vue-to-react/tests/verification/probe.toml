@@ -1,0 +1,197 @@
+schema = "swerefactor.verification-probe/1"
+task = "fw03-conduit-vue-to-react"
+prompt = "prompt.txt"
+
+# One candidate test is a pytest file run against a build that this script
+# obtains. Both builds are driven the same way -- a real browser, a real API
+# server, the same fixture data, the same DOM reduction stage 2 uses -- so a
+# candidate is a black-box browser test and cannot tell which build it is driving
+# except by what it renders.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two
+# front-end builds differ somewhere. The allow list is the application's own
+# observable product, the deny list is what instruction.md told the agent is
+# explicitly not compared. They have to agree: a scope that forbids what the
+# instruction promised would make the task unwinnable, and a scope that permits
+# what the instruction excluded would make it unlosable.
+[scope]
+allow = [
+  "the rendered DOM under #app: which elements exist, in what document order, with which classes and attributes, and the text they contain",
+  "the app URL a scenario ends at, in hash-routing form, including the unknown-route case and where a redirect lands",
+  "what any CSS selector matches on a settled page: how many elements, their text, and where their links point",
+  "live form state: an input's current value, a checkbox's checked property, whether a control is disabled -- after a failed submit, after navigating away and back, and after a value changes by something other than typing",
+  "the API requests a screen makes: which paths, in which order, how many times, with which query string, with which body, and with or without the stored credential",
+  "the status the API answered and how the screen renders it: 401 on an anonymous feed, 404 on a missing article, 403 on someone else's article, the 422 validation-error list",
+  "what a screen shows before its data arrives, when the list is empty, and when the viewer is anonymous rather than signed in",
+  "localStorage: which keys exist, what is written to them and when, and what is read back on a cold boot",
+  "behaviour on a cold boot at a URL versus the same screen reached by clicking, which are different code paths and may differ from each other",
+  "history navigation: going back, and what the previous screen shows when it is returned to",
+  "the document title, and the classes the app puts on <body> and must therefore also remove",
+  "that the release registers a service worker and serves a web app manifest",
+  "markdown and date rendering in article bodies and comment metadata, which the original does in a particular way",
+]
+deny = [
+  "framework fossils in the DOM: data-reactroot, data-reactid, data-v-* scoped-style attributes, the class attribute's ordering, router-link-active and router-link-exact-active, and a textarea's value appearing as a child node rather than a property -- the observation erases all of these, and reaching around it to find them is the same offence as identifying the tree",
+  "the identity of a bundle file: its name, its hash, its size, its contents, how many there are, or which chunks it was split into",
+  "reading any file from the built artifact or either source tree from inside a candidate, by any means",
+  "anything requiring the retired stack to be installed, importable or nameable in the submission",
+  "the internal structure of the submission: component names, file layout, hook or lifecycle choices, state-management library, console output",
+  "CSS: computed styles, layout, geometry, colours, fonts and anything else that depends on the stylesheet, which is served from a CDN the sealed browser never reaches",
+  "wall-clock timing, animation frames, transition states, and any assertion that depends on catching the page before it settles",
+  "behaviour under a scenario the original also gets wrong -- a candidate must pass on the original",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times. A browser is a large piece of
+# machinery and the app is asynchronous; a flake that costs a submission five
+# points is a bug in the benchmark, not a finding.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Build + browser + pytest, for one candidate, on one tree. The build happens
+# once per tree and is cached, so only the first candidate pays for it, and the
+# reference side is unpacked rather than built.
+candidate_timeout_sec = 1800.0
+run_timeout_sec = 600.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets. It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one scenario the original
+renders correctly and the submission does not. A round that finds nothing pays
+the submission 10 points; a round that errors pays nothing and is reported as an
+error rather than as either verdict.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another. Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific. Six unguided rounds
+# converge on the same three obvious screens; six pointed ones cover the
+# application. It is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-routing-and-params-in-place"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+hash routing: a cold boot at a deep route, the unknown-route case, trailing
+slashes, percent-encoded tag and username segments, and where a redirect after
+login or logout actually lands.
+
+Then route params that change while the component stays mounted: tag to tag,
+profile to profile, article to article, and the profile's own two tabs --
+Vue's watchers and React's effects disagree about when this refetches, and a
+stale screen is visible.
+"""
+
+[[adversary]]
+id = "a02-feed-pagination-and-request-order"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the home feed: the global and personal tabs, the tag pill that adds a third
+tab, pagination offsets and which page is marked active, and what happens to
+the page number when the tab or tag changes.
+
+Then the request log: which calls a screen makes, in what order, how many
+times, with which limit and offset, and whether the credential is attached --
+a port that fires a duplicate or drops the tags call renders identically and
+is still wrong.
+"""
+
+[[adversary]]
+id = "a03-form-state-and-validation"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+live form state: the editor's title, body, description and the tag input; the
+settings form pre-filled from the current user; what a field holds after a
+failed submit, after leaving the screen and returning, and after the store
+changes the value underneath it.
+
+Then how API errors reach the screen: the 422 error list on register, login
+and publish, the exact text of each item, whether a stale error survives a
+second submit, and what the screen does with a 401, 403 or 404.
+"""
+
+[[adversary]]
+id = "a04-session-and-article-page"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the session: which localStorage keys are written and when, what a cold boot
+reads back, what logout removes, and the stale-credential case where a stored
+token is no longer accepted.
+
+Then the article page: the body's markdown rendering, comment dates, the
+author's own controls versus a visitor's, deleting a comment, favouriting and
+following, and the tag list.
+"""
+
+[[adversary]]
+id = "a05-empty-states-and-shell"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+what a screen shows when it has nothing to show: the empty feed, the empty
+profile tab, the article with no tags and no comments, the loading state
+before data arrives, and the anonymous viewer's version of a screen that has
+an author's version.
+
+Then everything outside the router view: the navbar's links and which is
+marked active, the footer, the document title, classes the app puts on <body>
+and must remove again, and the service worker and manifest the release ships.
+"""
+
+[[adversary]]
+id = "a06-history-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+history: going back after an in-app transition, after a redirect, and after a
+form submit -- and whether the screen returned to is in the state it was left
+in or refetches.
+
+Then, with whatever budget remains, nothing in particular -- read the Vue tree
+and follow what looks weakest. The other five rounds were told where to look,
+so this tail is where anything they were not told about has to be found.
+"""

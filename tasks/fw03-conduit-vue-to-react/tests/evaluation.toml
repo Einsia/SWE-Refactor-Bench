@@ -1,0 +1,345 @@
+schema = "swerefactor.evaluation/1"
+task = "fw03-conduit-vue-to-react"
+title = "Conduit: Vue 2 + vue-cli to React 18 + Vite"
+results_dir = "/logs/verifier"
+
+# The published ladder. Stage 1 is pass/fail and a failure is the whole score;
+# stage 2 is worth 40 and pays only for every scored check, which is also what
+# stage 3 is asked of; stage 3 pays 10 points for each of 6 adversaries that
+# fails to break the submission.
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "framework-rewrite"
+state_a = "vue 2.6.10 + vue-router 3.1.3 + vuex 3.1.1, built by @vue/cli-service 3.11.0 (webpack 4)"
+state_b = "react 18.3.1 + react-router-dom 6.28.0, built by vite 5.4.11"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Five gates, all required. Each is a question about how the code works, which is
+# why the review is done by a model reading both trees rather than by a list of
+# forbidden tokens. This task is the clearest case for it in the suite: the old
+# framework's whole surface is `.vue` files and `v-` attributes, and both are
+# text. A rule that fails a submission for the string `v-if` fails a port that
+# left a migration note in a comment, and a rule that greps for `.vue` files
+# misses the adversary that renamed 26 of them and shipped a loader -- which is a
+# thing that happened, and which scored 0.999984 against a rule-based gate.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+# A read-only scan runs before the review and its output is substituted into
+# {{findings}} in the prompt: mechanical observations of the manifest, the
+# lockfile, single-file-component shape found by content rather than by
+# extension, framework-bridge packages, code addressed to the grader, and
+# literal tables that look like the mock API's data. None of it is scored.
+# `swerefactor.scan` records every check with required = false, and
+# `grade_audit` gates on the required checks -- which are the five gates
+# below and nothing else.
+#
+# The arrangement exists because of what the rule-based version got wrong. It
+# once failed a correct port for the bare word `golden` in a comment and
+# measured it at 0.0; and it passed three separate submissions that had not
+# migrated anything, because every rule it had was satisfiable by renaming. So
+# the scan says where to look and the reviewer, who has both trees open, says
+# what it means.
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+allowed_commands = []
+# Each stage is its own image because each needs a different thing to be true of
+# it: this one has no build toolchain and no browser at all (a review that can
+# build grades a build log), stage 2 can install either dependency closure -- the
+# target's from an npm cache, State A's from a yarn mirror minted from its own
+# lockfile -- and stage 3 is the only image that can put both artefacts side by
+# side. `context` is the build context, relative to this file; `image` is the tag
+# the runner is expected to use.
+image = "swerefactor/fw03-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+"""
+
+[[stages.audit.gate]]
+id = "old_stack_retired"
+title = "Vue is gone, not renamed, vendored or reimplemented"
+required = true
+question = """
+Is the retired framework actually absent from the submission, or has it been
+moved? Look for three things.
+
+First, the dependency: does anything the project installs still bring Vue,
+vue-router, vuex or the vue-cli build plugins in, under any name, including a
+local path or a tarball committed to the tree?
+
+Second, a copy: is the framework's own source in the tree under a different
+directory or file extension? Single-file components are recognisable by their
+content -- a `<template>` block, `v-if`/`v-for`/`:prop`/`@click` attributes, an
+`export default` with `data()`, `computed`, `methods` -- and that content does
+not stop being what it is when the file is renamed to `.jsx` or `.txt` and fed
+to a custom loader.
+
+Third, a reimplementation: is there hand-written code that is the retired
+framework rather than an application using the new one? A reactivity system
+built on `Object.defineProperty` getters and setters, a template compiler, a
+directive resolver, a virtual-DOM patcher, an options-object component runtime
+with its own `data`/`computed`/`watch` lifecycle. The test is not whether the
+word "Vue" appears; it is whether the submission ships a second framework.
+
+A migration note in prose, a changelog entry, or a comment explaining what a
+piece of code replaced is not a finding.
+"""
+
+[[stages.audit.gate]]
+id = "react_is_the_runtime"
+title = "React is what renders the screens, not a shell around something else"
+required = true
+question = """
+Follow one screen from the entry module to the markup it produces -- the article
+list is a good one, because it has a list, a conditional, a form control and a
+link in it. Is that screen a React component tree that React renders, or is
+React mounted around markup produced by something else?
+
+What counts as not migrated: a component whose body builds an HTML string and
+hands it to `dangerouslySetInnerHTML`; a component that renders an empty
+container and then has non-React code write into it; a hand-rolled renderer that
+React merely hosts; markup baked into `index.html` for screens that are supposed
+to be rendered from data.
+
+Idiom is not the question. Class components, hooks, a state library, a render
+prop, `useSyncExternalStore` -- all fine. One `dangerouslySetInnerHTML` for the
+article body, which is rendered Markdown in the original too, is fine. What is
+being asked is whether React is doing the rendering.
+"""
+
+[[stages.audit.gate]]
+id = "built_from_source"
+title = "the artefact is built from the submitted source by the new toolchain"
+required = true
+question = """
+The product here is a built bundle. Read the manifest's build script, the
+bundler configuration and anything the build runs, and work out what a fresh
+checkout would produce.
+
+Does the build compile the submitted source? Or does it copy, unpack or
+otherwise reuse an already-built bundle -- one committed to the tree, one
+fetched from a path outside it, one restored from a base64 blob or an archive?
+The State A production bundle is available to the agent, read-only, at
+/opt/oracle/dist, and a build script that reads it, or a source tree containing
+a copy of it, is the finding this gate exists for.
+
+Also check the direction of the build: is the new bundler configured to compile
+the new source, or is it configured to hand the old source to a plugin that
+compiles the retired framework's components?
+
+A committed asset that is genuinely an input -- an icon, a font, a CSS file, the
+`public/` directory the original also had -- is not a finding. A committed
+`dist/`, `build/` or `out/` directory containing compiled JavaScript is.
+"""
+
+[[stages.audit.gate]]
+id = "screens_are_rendered_from_data"
+title = "the screens are computed from the API's responses"
+required = true
+question = """
+Pick a few screens with real data behind them -- the article list, one article
+with its comments, a profile -- and read how each gets what it displays.
+
+Does the screen request data and render whatever came back? Or does the code
+contain the answer: an array of article objects, a map from a slug to a body, a
+list of the three users, the tag list, a table keyed on the paths a test would
+visit. Such a screen is correct for exactly the recorded data and wrong for any
+other, and it would pass a behavioural replay while implementing nothing.
+
+Genuine constants are not findings: the tag vocabulary a form offers, the
+default page size, placeholder text, an empty-state message, route paths in a
+router. The distinction is whether what the user sees is derived from a response
+or selected from a literal.
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "the application does not behave differently when it thinks it is graded"
+required = true
+question = """
+Does any code that ships in the bundle change what it does according to who is
+asking or what it is running under? Look for reads of `navigator.webdriver`,
+`window.playwright`, a Chrome DevTools Protocol marker, a headless User-Agent, a
+harness environment variable, a hostname or port that belongs to a test server,
+the absence of a mouse, or a timer that behaves differently under automation.
+Look also for a branch that renders one thing on a first pass and another later,
+where the second is the one a settled snapshot would see.
+
+Reading its own configuration is not a finding, and neither is a development-only
+branch that the production build removes -- check which it is. Deciding what to
+render based on recognising the caller as a grader is a finding, whichever way
+the branch falls.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural modules
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/fw03-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Ten modules, one process each, weight-normalised. `build` is required and runs
+first: it reinstalls the submission's dependency closure offline, runs the
+project's own build script, and drives the resulting bundle through 100 recorded
+journeys in a real browser. The nine modules after it compare that observation
+against the one State A produced through byte-identical harness code -- seven by
+screen group, then the requests that went out and what was left in storage.
+
+Every check is an assertion about the built artefact in a browser -- what was
+rendered, what was requested, what a form held, what was persisted. None of them
+opens a file in the submitted tree; the questions about what the source says are
+stage 1's.
+
+THE IDENTITY PROPERTY. Like every other framework-rewrite task, fw03 holds the
+identity property: feed State A back unchanged as the submission and this stage
+pays in full, because the stage asks what the application does and State A is what
+it does. Measured, on the image this file ships with: ten modules at rate 1.0000,
+21769 of 21773 checks passing, the four exceptions being the weight-0 checks
+described below.
+
+Three facts have to be right together for that to hold, and the diagnosis that
+looks right instead is worth writing down, because its shape recurs. That diagnosis
+says the property cannot hold here: State A ships no lockfile, `npm install`
+therefore resolves node-sass 4.14.1 whose postinstall needs python2, and with
+--ignore-scripts the build fails anyway on eslint plugins unresolvable under npm
+10's hoisting. Every part of it is wrong.
+
+  * State A ships yarn.lock. A probe that deletes package-lock.json -- a file
+    State A never had, so a no-op -- and runs npm cannot read it, so it
+    re-resolves 25 semver ranges against current registry contents and installs a
+    closure State A never had. An eslint plugin failure there belongs to that
+    substituted tree, not to this repository; from the committed lockfile,
+    eslint-plugin-prettier 3.1.0 is simply present.
+  * node-sass's postinstall is real, and irrelevant: the tree contains no .scss
+    or .sass file, so nothing imports it. --ignore-scripts is enough.
+  * The install failure a grade would actually hit is neither of those. It is
+    ENOTCACHED on @vue/cli-plugin-babel whenever the offline cache is minted
+    from an allowlist holding no Vue package, and an install failure fails
+    `build`'s checks, which pays the whole stage nothing.
+
+That last one is a design decision rather than a limit of State A's toolchain, and
+it is the one worth naming, because a cache minted that way encodes "if the retired
+stack were installable here, a submission that never migrated would build." That is
+a stage-1 question written into stage 2's environment, where it cannot be weighted,
+appealed, or told apart from a broken submission. The contrast with fw02 is direct:
+fw02's cache holds Express and the other retired packages, State A installs and
+takes full marks there, and whether the port happened is asked by eight weight-0
+`X-Powered-By` checks.
+
+WHAT THE IMAGE DOES. Both dependency closures install offline. The target closure
+comes from the npm cache minted from allowlist-package.json. State A's comes from a
+yarn offline mirror minted at image build time from the lockfile State A actually
+ships (data/statea-yarn.lock, sha256-checked, 1481 tarballs), and the image fails
+to build if that mirror stops covering the retired framework closure -- an offline
+install that silently stopped working would otherwise surface as every Vue-shaped
+submission failing for a grader-side reason. `build` tries npm when there is an npm
+lockfile, yarn when there is a yarn lockfile, and `npm install` when there is
+neither.
+
+Two era-appropriate flags are needed by State A and are retries rather than
+defaults, so that needing them is recorded and a submission that does not need
+them is unaffected:
+
+  * --ignore-scripts, tried only after the plain install has failed. node-sass
+    4.14.1 -> node-gyp 3.8.0 -> python2, for a dependency nothing imports.
+  * NODE_OPTIONS=--openssl-legacy-provider, tried only after the plain build has
+    failed with ERR_OSSL_EVP_UNSUPPORTED. webpack 4 hashes chunk ids with md4,
+    which OpenSSL 3 removed from the default provider.
+
+Each records a weight-0 check when it fires (`install-ran-scripts`,
+`build-needs-legacy-openssl`), so the report says what the toolchain required
+without charging for it.
+
+WHERE THE PORT IS JUDGED. Two weight-0 checks in `build` measure the stack that
+was shipped -- `ported-off-vue` (the manifest declares no Vue package) and
+`react-present` (it declares react and react-dom). Both fail on State A, by
+construction, and neither can move a score: a weight-0 non-required failure
+leaves both sides of the pooled rate untouched. They exist so the report states
+plainly what was installed, and so stage 1 -- which can read the diff, the
+history and the agent's own account -- has the measurement without stage 2 acting
+on it.
+
+THE TWO IMAGES NOW DIFFER, DELIBERATELY. The agent's environment still withholds
+Vue and still asserts that absence at its own build time, and instruction.md still
+says `npm install vue` fails with ENOTCACHED. That is a statement about the work:
+the agent is not meant to keep the retired stack, and an environment that made it
+easy to install would invite a day spent on the wrong thing. It costs nothing,
+because the agent already has State A's behaviour available as a running bundle at
+/opt/oracle/dist.
+
+This image is where the asymmetry matters and where it is resolved. What the agent
+was encouraged to do and what the grader is willing to install are different
+questions: the first shapes the work, the second decides whether a submission gets
+measured at all. Withholding Vue here did not encourage anything -- it converted
+one class of submission into a zero without reading it.
+
+THE REFERENCE IS STILL NOT A GRADE-TIME BUILD OF STATE A, and that is unchanged
+and deliberate. It is oracle-dist.tgz, built once from State A and shipped in the
+image, proven at image build time by driving all 100 journeys through it and
+refusing to build if any scenario goes unobserved. What the yarn mirror buys is
+not a second reference; it is that a submission which still ships State A's
+dependency closure gets installed and graded on its behaviour rather than
+rejected by the cache.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/fw03-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and both built bundles, and try to
+write one journey the original renders and this one does not. A candidate is
+upheld only if it matches on the original, diverges on the submission,
+reproduces, and is inside the declared scope. Each model that finds nothing is
+worth 10 points.
+"""

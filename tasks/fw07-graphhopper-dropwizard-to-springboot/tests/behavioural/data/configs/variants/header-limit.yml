@@ -1,0 +1,56 @@
+# Variant: a small max_request_header_size.
+#
+# 4KiB instead of the base profile's 50k, which is below Jetty's own default — so a
+# submission that ignored the key entirely, or held it in a configuration object it
+# never handed to its embedded container, accepts the oversized request that the
+# reference refuses.
+#
+# That distinction is the reason this variant exists.  Reading a configuration value
+# and APPLYING it are separate steps, and a migration between two frameworks with
+# different embedded containers is exactly where they come apart: the value binds
+# cleanly into a settings class, the container keeps its own default, and nothing
+# fails until a client sends a large header.  The only way to observe it is to send
+# one.
+#
+# The graph is the base profile's, so this launch is warm.
+
+graphhopper:
+  datareader.file: @REPO_ROOT@/core/files/andorra.osm.pbf
+  graph.location: @GRAPH_DIR@
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+    - name: foot
+      custom_model_files: [foot.json]
+    - name: bike
+      custom_model_files: [bike.json]
+  profiles_ch:
+    - profile: car
+  profiles_lm:
+    - profile: bike
+  graph.encoded_values: car_access, car_average_speed, foot_access, foot_priority, foot_average_speed, bike_priority, bike_access, roundabout, bike_average_speed, average_slope, max_slope, road_class, road_environment, road_access, hike_rating, mtb_rating, foot_network, bike_network, get_off_bike, smoothness, surface, track_type, country, max_speed, road_class_link, lanes, toll, hazmat, hazmat_tunnel, hazmat_water, max_height, max_weight, max_width, max_length, max_axle_load, urban_density, foot_road_access, bike_road_access
+  graph.urban_density.threads: 1
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 1
+  routing.non_ch.max_waypoint_distance: 1000000
+  import.osm.ignored_highways: ""
+  graph.dataaccess.default_type: RAM_STORE
+
+server:
+  application_connectors:
+    - type: http
+      port: @APP_PORT@
+      bind_host: 0.0.0.0
+      max_request_header_size: 4KiB
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: @ADMIN_PORT@
+      bind_host: 0.0.0.0
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

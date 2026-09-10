@@ -1,0 +1,195 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "fw02-jsonserver-express-to-fastify"
+
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing?
+#
+# Reads carry the most because they are most of what the service is -- filtering,
+# pagination, sorting, ranges, embedding, the static mount, conditional requests.
+# Writes come next: they are where a rewrite has to reproduce behaviour rather
+# than forward it, since every write decides a status, a Location, an id and a
+# persisted shape. `unseen-data` is weighted above `semantics` on purpose: it asks
+# the same questions about data the recording never contains, and it is the only
+# module here that a lookup table keyed on recorded paths cannot answer.
+#
+# `install` is first, and everything after it runs against the tree it builds, so a
+# submission that cannot be installed from source leaves them nothing behavioural to
+# measure. `replay` is second and produces the one shared recording the four
+# comparison modules read. Neither cancels another module's result: if either
+# produces nothing, the modules downstream say so individually and each fails its own
+# checks, which is how the stage reaches zero without any module vetoing it.
+#
+# Modules are grouped by domain, not by dimension. An earlier split was
+# status / headers / bodies / semantics, which made "statuses are broken" the unit
+# of report -- true of every rewrite in its first hour and useless for locating
+# anything. The dimensions survive as separate test functions inside each module,
+# so a failure still names which of the three broke, but the module tells you
+# *what* broke: reads, writes, the flag surface, the quirks.
+#
+# Every module here starts the submission and then observes it: an HTTP response,
+# a persisted file the server itself wrote, an overlapping schedule, a packed
+# tarball reinstalled from scratch. None of them opens a source file in the
+# submitted tree -- there is no `repo` fixture to hand them one. The checks that
+# did are in `tests/audit/`, which reads both trees and executes
+# neither.
+
+default_timeout_sec = 1200
+lib_dir = "lib"
+
+[env]
+SRB_REGISTRY_ROOT = "/opt/npm-registry"
+SRB_NPM = "/usr/local/bin/srb-npm"
+SRB_LAUNCHER = "serve.sh"
+
+[metadata]
+runtime = "node20"
+target_stack = "fastify 5.10.0 + @fastify/static 10.1.2"
+recorded_exchanges = 369
+recorded_sessions = 16
+
+# --------------------------------------------------------------------------- #
+# The install everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "install"
+title = "offline install from submitted source"
+weight = 0.05
+timeout_sec = 2400
+command = ["python3", "run.py"]
+about = """
+Copies the submission, removes everything a build produces, installs its declared
+closure offline against the COMPLETE mirror -- not the pruned one the agent was
+given: this one carries Express and every bridge, because State A declares Express
+and every other module boots what this one installs, so a pruned mirror would score
+the whole stage near 0 for the one tree every expectation here came from -- and runs whatever build script the
+package declares. A submission that still declares Express installs cleanly here;
+that it did is stage 1's finding, not this stage's. The copy is what every later
+module boots; the delivered tree is left untouched.
+"""
+
+# --------------------------------------------------------------------------- #
+# One replay, read by four modules
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "replay"
+title = "every recorded request, replayed once in order"
+weight = 0.05
+timeout_sec = 2400
+command = ["python3", "run.py"]
+about = """
+Boots all sixteen server configurations, replays their requests in the recorded
+order against a freshly seeded database, and writes the answers to
+$SRB_SUITE_WORK. Order is part of the ground truth -- a POST changes what the
+next GET sees -- and one shared replay is what lets the four comparison modules
+assert about the same response instead of four different ones. Scored on whether
+each session started, survived its own writes and answered every request.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: State A's answers have to survive
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "read"
+title = "reads: filters, ranges, embedding, statics, validators"
+weight = 0.23
+about = """
+The recorded reads, compared on status, headers and body. Query operators,
+pagination and its Link header, sort and slice, full-text search, _embed and
+_expand, the static mount, and the conditional requests whose answer is a bare
+304 -- the largest single share of what the service does.
+"""
+
+[[module]]
+id = "write"
+title = "writes: created ids, Location, persisted shape"
+weight = 0.17
+about = """
+The recorded writes, compared on status, headers and body, plus what the server
+persisted afterwards -- read back through the API, since the file on disk is an
+implementation detail and its formatting is not the contract. POST, PUT, PATCH,
+DELETE, nested creation, and the id allocation a rewrite has to reproduce rather
+than invent.
+"""
+
+[[module]]
+id = "options"
+title = "the launcher flag surface"
+weight = 0.11
+about = """
+The nine non-default server configurations the recording covers: --read-only,
+--nc, --ng, --delay, --id, --foreignKeySuffix, --static, --routes, and the two
+long flags that look like they do something and do not. A flag is observable
+behaviour, so each is asserted through a request whose answer changes with it.
+"""
+
+[[module]]
+id = "semantics"
+title = "the quirks a faithful rewrite keeps"
+weight = 0.10
+about = """
+Where State A is surprising and a rewrite is likeliest to quietly improve it: the
+500 from DELETE under --id, the 500 from _expand without a foreign key, the
+inert long-form flags, the exact weak-ETag format, the two-space JSON with no
+trailing newline, and the absence of X-Powered-By. Every one of these is a
+recorded answer; none of them is a source check.
+"""
+
+[[module]]
+id = "unseen-data"
+title = "the same questions about data the recording never saw"
+weight = 0.12
+timeout_sec = 1800
+about = """
+Seeds a nonce database -- collections, ids, field names and values generated per
+run -- and asks the same classes of question the recorded sessions ask, comparing
+against what the documented semantics require rather than against a stored
+answer. A submission that memorised the recording, or that special-cases the
+recorded paths, answers the recorded requests perfectly and fails here.
+"""
+
+[[module]]
+id = "concurrency"
+title = "requests do not contaminate one another"
+weight = 0.07
+timeout_sec = 1800
+about = """
+Determinism, isolation and order-independence under overlap. The replay is
+sequential, which is the friendliest possible schedule and hides the most common
+defect in a port to an async framework: per-request state parked somewhere that
+is not per-request, or a read-modify-write on the database that two overlapping
+writes can interleave inside. Every check here compares the submission against
+itself.
+"""
+
+# --------------------------------------------------------------------------- #
+# Migration: the new stack really replaced the old one
+# --------------------------------------------------------------------------- #
+
+
+[[module]]
+id = "entrypoint"
+title = "the service starts from something it publishes"
+weight = 0.05
+about = """
+Three observations of the running process: that a published entry point can start
+it at all -- the bin the package declares, or serve.sh, whichever, not a named
+file -- that it honours the host and port it was given, and that the process
+answering does not announce the retired framework on the wire or in its startup
+output.
+"""
+
+[[module]]
+id = "release"
+title = "what `npm pack` would ship still works"
+weight = 0.05
+timeout_sec = 1800
+about = """
+Packs the submission the way a publish would, installs the tarball into an empty
+directory offline, and serves from that -- nothing from the working tree, nothing
+from the build directory. A file the package forgot to include, or a devDependency
+it needs at runtime, is invisible everywhere else in this stage and fatal here.
+"""

@@ -1,0 +1,92 @@
+#
+# The behavioural suite's own Python dependencies: pytest, and the two content
+# decoders the recording cannot be read without.
+#
+# Hash-pinned because the image is the grader: an unpinned install makes the
+# measurement depend on the day the image was built.  The versions are fw01's,
+# deliberately.  Two tasks in this bench pinning different pytest majors would
+# mean a module's collection semantics depend on which task it lives in, and the
+# one semantic this suite leans on -- what an empty parametrisation scores -- is
+# exactly the kind of thing that shifts between majors.
+#
+# Brotli and zstandard are here because miniserve compresses with them and the
+# recording holds the decoded result.  State A's Cargo.toml turns on actix-web's
+# `compress-brotli`, `compress-gzip` and `compress-zstd`, so a request carrying
+# `Accept-Encoding: br` is answered `Content-Encoding: br`, and `normalize.record`
+# stores that response's *decompressed* body: its text, its length, its parsed
+# HTML.  gzip and deflate come out of the standard library, and for a long time
+# that made the omission of these two invisible -- `cp-gzip` and `cp-deflate`
+# passed, so compression looked covered.  It was not.  `decompress()` raises
+# ValueError when the module is missing, `record()` catches it as a decode
+# failure, and the three cases that negotiate br or zstd (`cp-br`, `cp-zstd`,
+# `cp-qvalues`) come out with `decompressed: false` and no html at all.  Against a
+# recording that has all three decoded, that is 72 failed checks in `encodings`
+# for a server that did exactly what it was asked -- the grader was the thing that
+# could not hold up its end.
+#
+# So this is not a client library sneaking in through the back door.  The
+# distinction is what the code does to the bytes: an HTTP client would decide for
+# the suite how a response is framed and normalise what this task grades, whereas
+# these two invert a transformation the server announced in a header, and their
+# output is compared to output that the same two calls produced.  Reading the
+# recording requires the same decoders that wrote it.
+#
+# Wheels for cp310 and cp311 are both pinned, plus each sdist, for the same reason
+# the conditional pytest dependencies below are pinned: the image is 3.11 and the
+# suite is developed on 3.10, and a pin list that only installs in one of those
+# cannot be checked in the other.  Neither package needs cffi on CPython --
+# zstandard asks for it only under PyPy and under its `cffi` extra -- so there is
+# no transitive hash missing here.
+#
+# What is NOT here is the more interesting half:
+#
+#   * No HTTP client.  The harness speaks HTTP over `socket` and `ssl` from the
+#     standard library, because a client library normalises the things this task
+#     grades -- header case and order, a chunked body's framing, a 304 that
+#     carries no body, a connection closed mid-response.  requests or httpx would
+#     hand back a tidied version of the response and the tidying would be
+#     invisible in the diff.
+#
+#   * No pytest-timeout.  It guards a hang, and every blocking path here is
+#     already bounded by its own deadline: sockets by SRB_REQUEST_TIMEOUT (60s)
+#     and SRB_READY_TIMEOUT (90s), the CLI by subprocess timeout, process exit by
+#     wait(timeout=10).  The thirteen comparison modules do no I/O at all -- they
+#     read one JSON recording -- so there is nothing in them to hang.  A pinned
+#     dependency that guards nothing still has to be fetched at image-build time,
+#     and can still fail there.
+#
+#   * Nothing for reading TOML on 3.11.  The harness reads suite.toml through the
+#     infra image's swerefactor.tomlcompat, and 3.11 has tomllib.
+#
+# exceptiongroup and tomli are pytest 8.3.4's own conditional dependencies below
+# Python 3.11.  The image is bookworm's python3, which is 3.11, so pip's markers
+# drop both there.  They are pinned anyway so this same file installs on a 3.10
+# host -- which is where the suite gets developed, and a pin list that only works
+# in the image cannot be checked before the image is built.
+#
+Brotli==1.1.0 \
+    --hash=sha256:38025d9f30cf4634f8309c6874ef871b841eb3c347e90b0851f63d1ded5212da \
+    --hash=sha256:a469274ad18dc0e4d316eefa616d1d0c2ff9da369af19fa6f3daa4f09671fd61 \
+    --hash=sha256:81de08ac11bcb85841e440c13611c00b67d3bf82698314928d0b676362546724
+exceptiongroup==1.2.2 ; python_version < "3.11" \
+    --hash=sha256:3111b9d131c238bec2f8f516e123e14ba243563fb135d3fe885990585aa7795b \
+    --hash=sha256:47c2edf7c6738fafb49fd34290706d1a1a2f4d1c6df275526b62cbb4aa5393cc
+iniconfig==2.0.0 \
+    --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
+packaging==23.2 \
+    --hash=sha256:048fb0e9405036518eaaf48a55953c750c11e1a1b68e0dd1a9d62ed0c092cfc5 \
+    --hash=sha256:8c491190033a9af7e1d931d0b5dacc2ef47509b34dd0de67ed209b5203fc88c7
+pluggy==1.5.0 \
+    --hash=sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6 \
+    --hash=sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761
+tomli==2.0.1 ; python_version < "3.11" \
+    --hash=sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc \
+    --hash=sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f
+zstandard==0.23.0 \
+    --hash=sha256:157e89ceb4054029a289fb504c98c6a9fe8010f1680de0201b3eb5dc20aa6d9e \
+    --hash=sha256:fd30d9c67d13d891f2360b2a120186729c111238ac63b43dbd37a5a40670b8ca \
+    --hash=sha256:b2d8c62d08e7255f68f7a740bae85b3c9b8e5466baa9cbf7f57f1cde0ac6bc09

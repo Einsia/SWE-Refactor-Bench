@@ -1,0 +1,65 @@
+# Committed as part of the State A baseline so that `git status` in a working tree shows
+# the port and not the build.  SQLite's build writes its output into the source directory
+# by default, and an out-of-tree build leaves a directory here too, so without this the
+# signal is buried under several hundred generated files.
+#
+# This file is advisory.  Harbor collects the working tree rather than your commits, so
+# ignoring a file does not exclude it from the submission -- and the verifier deletes
+# every build product before rebuilding regardless of what git was told.  It is here to
+# make the diff readable, nothing more.
+
+# configure
+/Makefile
+/config.h
+/config.log
+/config.status
+/libtool
+/sqlite3.pc
+
+# generated sources: the amalgamations, the parser, the keyword hash, the opcode tables
+/sqlite3.c
+/sqlite3.h
+/sqlite3ext.h
+/sqlite3session.h
+/shell.c
+/fts5.c
+/fts5.h
+/keywordhash.h
+/opcodes.c
+/opcodes.h
+/parse.c
+/parse.h
+/parse.out
+/fts5parse.c
+/fts5parse.h
+/fts5parse.out
+
+# code generators built during the build, and where mksqlite3c.tcl stages its inputs
+/lemon
+/mkkeywordhash
+/mksourceid
+/tsrc/
+
+# compiled output
+*.o
+*.lo
+*.a
+*.la
+*.so
+*.wasm
+.libs/
+.deps/
+
+# the product of build-wasi.sh.  Ignored deliberately: it is a build artifact, the
+# verifier rebuilds it from source, and a committed copy is never the one that gets
+# compiled.  Keep the script in the repository; the module is output.
+/sqlite3.wasm
+/sqlite3
+
+# a conventional out-of-tree build directory, since the reference build uses one
+/build-wasi/
+/build/
+
+# python
+__pycache__/
+*.py[cod]

@@ -1,0 +1,768 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "pf03-quickjs-byteorder-port"
+
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner. Every one of them was set from a measurement, not from judgement about
+# how important a row feels; the measurements are recorded per module in `about`
+# and the method is described under "How the weights were set" below.
+#
+# What this stage measures, and what it refuses to
+# ------------------------------------------------
+# Every module here builds something and runs it. Nothing reads the source tree --
+# there is no repo-reading helper in this suite's plugin, deliberately. The
+# question "is WORDS_BIGENDIAN defined for s390x" has an exact answer and this
+# stage gets it the only way that proves anything: it compiles the submission for
+# s390x, runs the result under an emulator, and compares what it computes against
+# the answer a known-good interpreter gives.
+#
+# So no module asserts that a variable exists, that a header is included, that a
+# macro is spelled a particular way, or that a file changed. A submission that
+# derives byte order from __BYTE_ORDER__, from <endian.h>, from a build-time
+# probe, by putting -DWORDS_BIGENDIAN on the s390x compile line, or by replacing
+# the serialiser outright is graded identically here, because all of them produce
+# an interpreter and the interpreter is what gets measured.
+#
+# The grading rule, in one sentence
+# --------------------------------
+# On every admitted key, all three submission targets must print what State A's
+# x86-64 build printed.
+#
+# State A on x86-64 is a working QuickJS -- that is the whole reason this task is
+# a port and not a bug fix -- so its answers are the ground truth. Note what the
+# rule is *not*: it is not "compare each submission target against the same target
+# of State A". That would require the submission to reproduce State A's big-endian
+# brokenness on s390x, which inverts the ranking. The role is named `original`
+# rather than `reference` in lib/targets.py so that trap cannot be reintroduced by
+# someone reading the name.
+#
+# Endianness that is not a bug
+# ----------------------------
+# Two kinds of answer must not be conflated, and separate modules exist per kind.
+#
+#   *Spec-determined.* dv.getUint32(0, true), JSON.stringify, (0.1+0.2), every
+#   language semantic. ECMAScript fixes these exactly. All three targets must
+#   agree with original/x86-64, and a divergence is a defect wherever it appears.
+#
+#   *Native-order by design.* The bytes a Float64Array shows through a Uint8Array
+#   on the same buffer. A big-endian machine is *supposed* to show these reversed,
+#   and upstream's tests/test_builtin.js has the little-endian answer hardcoded --
+#   so a correct port still fails that assertion on s390x. Comparing these against
+#   x86-64 would fail every correct submission and pass one that byte-swapped its
+#   typed arrays into agreement, which is a real bug. `native-order` grades them as
+#   an internal-consistency question instead: whatever order the target uses, every
+#   width and every API must agree on it.
+#
+# Screening, so the oracle is not trusted blindly
+# -----------------------------------------------
+# A key is admissible as spec-determined only if original/x86-64 and
+# original/armhf produce the same value for it. armhf is 32-bit little-endian, so
+# the screen catches anything that depends on pointer or long width rather than on
+# semantics, and a key that fails the screen is reported and left unscored rather
+# than graded against an answer that was never invariant.
+#
+# The screen deliberately does not consult s390x. A three-way screen would exclude
+# every key this task is about. Nothing automatic can separate "s390x differs
+# because the port is missing" from "s390x differs because its C library says so",
+# so that protection lives in the programs instead: they only ask questions whose
+# answers the language fixes. strings/localeCompare is the measured example -- it
+# asks Math.sign, because glibc's memcmp magnitude is implementation-defined and
+# answers -2 on s390x where it answers -1 on x86-64, in a correct build of either.
+#
+# What this stage charges for, and what it cannot
+# -----------------------------------------------
+# Every expectation this stage grades against was recorded from State A. That one
+# fact decides the shape of the whole file, because on the port target State A does
+# not have the behaviour this task is about: it is the premise of the task that
+# s390x is broken there. A check whose subject is what State A does not have would
+# fail by construction, on every submission, including a correct one -- it would be
+# measuring the premise, not the work.
+#
+# So this stage does not ask "did the port happen". It cannot, honestly, and the
+# question is not unowned: stage 1's six required gates own it, pass-or-stop, and
+# `bootstrap_handles_endianness` and `byte_order_handling_is_complete` are named on
+# every row below that hands a cell to them. What this stage asks is the three
+# things it can settle by running code:
+#
+#   1. Did the submission preserve everything that already worked? Two of the three
+#      targets are little-endian and correct in State A, and a byte-order rewrite is
+#      the kind of change that damages them. 395 keys per target, and the port rows
+#      grade the s390x cells State A itself carries.
+#
+#   2. Is what the submission claims to have fixed actually right? This is the part
+#      that needs machinery, and it is the reason two rows are not graded from a
+#      sealed sheet alone. See "Conditional credit" below.
+#
+#   3. Did it get there by breaking something broader? 348 spec-fixed keys on the
+#      port target, upstream's seven suites, libbf's 63 arithmetic keys, and the
+#      build's own hygiene. A whole-repository rewrite that reaches the byte-order
+#      sites through the parser or the number formatter shows up here.
+#
+# Conditional credit
+# ------------------
+# A sheet cell is a value: the only observable is the answer, so gating it on the
+# answer would be circular, and those cells are charged exactly when State A
+# carried them. Per target, `lib/freeze.py` measures which cells State A itself
+# carried and seals the result; the driver charges those and reports the rest at
+# weight 0, naming the stage-1 gate that owns them. This is not a pass list -- a
+# cell returns to the scored pool the moment State A can carry it.
+#
+# Two rows are different in kind, because what they do is launch an *operation*
+# rather than read a sheet: running a binary with a blob compiled into it, and
+# round-tripping bignum literals through a blob. An operation has a third outcome a
+# value does not -- performed, and wrong -- and "did it complete" is a second
+# observable that is independent of the answer. Those two rows charge a cell when
+# State A carried it *or this build completed the operation*. State A/s390x never
+# gets there (its blob artifacts exit 1 or take SIGSEGV before printing; its round
+# trip returns nothing), so it stays exempt; a submission that got the operation
+# running is held to the numbers it read.
+#
+# That is what keeps this stage able to see a defect on the port target at all, and
+# it is measured in both directions: State B is graded on *more* cells than State A,
+# not fewer -- port-blob-transport 11 -> 15, port-bignum-serialiser 32 -> 48 -- and
+# State C is caught by the cells it earned.
+#
+# How the weights were set
+# ------------------------
+# Three trees were built for all three targets and graded with this suite's own
+# screen. The weights follow from what each row can still see and how much of it:
+#
+#   State A   the original. Preserves both little-endian targets perfectly, claims
+#             nothing on s390x, and completes no operation there. Every row 1.0,
+#             the whole stage. That is the correct verdict for a tree
+#             that broke nothing -- and the reason the "did anything happen at all"
+#             question has to live in stage 1, where a do-nothing tree is stopped
+#             before this stage runs.
+#   State B   a minimal correct port (cutils.h derives the switch, the Makefile
+#             passes -x to the blob rules exactly when writer and reader disagree).
+#             458/458 on all three targets, every row 1.0, full marks, on a
+#             strictly larger scored pool than State A. The verification stage runs.
+#   State C   State B with only the four JS_WriteBigNum/JS_ReadBigNum limb blocks
+#             neutralised -- a port that fixed every JS-visible site and the
+#             bytecode container, and overlooked the mantissa loop. 458/458 on every
+#             program in this suite: invisible to all eight of them. Caught by
+#             port-bignum-serialiser at 33/48 = 0.6875, and by nothing else.
+#             Graded: rate 0.919, one failing cell, paid nothing.
+#   State D   not a port: `#define WORDS_BIGENDIAN` unconditionally, for every
+#             target. The shape of "the task says big-endian, so define the
+#             big-endian macro". It inverts every multi-byte DataView access on the
+#             two little-endian targets, and four rows catch it -- preserve-x86-64
+#             354/395, preserve-armhf 354/395, native-order 49/57,
+#             port-bignum-serialiser 14/32. Graded: rate 0.827, four failing rows,
+#             paid nothing. Built to measure preserve-x86-64's own claim about the
+#             submission it exists to catch, which had been asserted and never run.
+#
+# State C is what set the largest weight in this file. No weight is too small to
+# stop it -- the row is scored, so its one failing cell stops the ladder whatever
+# it weighs -- and that is exactly why the weight is not about stopping anything.
+# What it decides is the rate the report publishes: at 0.26 the stage rates
+# 0.91875 on State C, and this is the heaviest row in the file so that a defect
+# only this row can witness does not read as a rounding error.
+#
+# The other measurement that moved weight is the size of each row's scored pool.
+# port-dataview was the largest weight in this file at 0.22, and 41 of its 47 cells
+# are the cells State A does not carry: its scored pool is 6, permanently, because a
+# sheet row cannot take conditional credit. It keeps a control's weight. The two
+# rows whose pools *grow* on a real port hold 0.44 between them.
+#
+# One earlier structural finding still stands, and it is why `port-*` and
+# `preserve-*` are separate modules at all: grading all three targets into a single
+# mean let two already-working targets plus seven byte-order-insensitive programs
+# outvote the one program that discriminates, so a defect on the port target moved
+# the total by about 0.03. Splitting per target is what makes 0.26 on one row
+# possible, because the row now grades s390x and nothing else.
+#
+# A module's pass rate says nothing about which defects it can see. Each port row
+# below names the state it was confirmed to catch, and a row that no constructed
+# state fails carries a control's weight, not a measurement's.
+#
+# What this stage still cannot separate, stated plainly rather than left implicit: a
+# submission that fixes cutils.h and forgets the Makefile. Its DataView is right, so
+# port-dataview passes; its blob carries a little-endian tag that its now-big-endian
+# reader rejects, so no artifact runs and no round trip returns -- and cells State A
+# does not carry and this build did not complete are, by the rule above, not charged.
+# It takes full marks here. `bootstrap_handles_endianness` in stage 1 owns that
+# case, and this is the designed hand-off, not a gap that went unnoticed.
+#
+# `build` is first, and every module after it measures the trees it produced, so a
+# submission that does not compile for all three targets leaves them nothing
+# behavioural to measure: every one of them fails on its own evidence, and the
+# stage pays nothing. No module here needs a veto to reach that.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+# No [env] block. The three build trees, the snapshots and the ledger that names
+# them all live under $SRB_SUITE_WORK, which the runner sets per run. Pinning any
+# of those to an absolute path here would let two runs in one container share a
+# tree.
+
+# Where State A's answers come from
+# --------------------------------
+# Not from a build that happens beside the submission. `lib/freeze.py` runs in this
+# suite's Dockerfile: it unpacks the suite's own digest-verified copy of State A,
+# builds it for all three targets, runs the eight programs, records the screen, the
+# labels and every oracle expectation, and seals the result under /opt/assets with
+# a per-file digest manifest. driver.py re-checks that manifest on every read.
+#
+# The reason is not tidiness. Computing expectations at grading time means running
+# `make` from the submitted tree, as root, in the container where the answers are
+# being decided -- and a Makefile is a program: it can write outside its own
+# directory, put a compiler earlier on PATH, or edit a sheet collected a minute
+# earlier. Freezing removes that class instead of defending against it, and it
+# halves the stage: three builds rather than six, so a timeout stops being the
+# thing most likely to fail an honest submission.
+
+[metadata]
+targets = ["x86_64", "s390x", "armhf"]
+port_target = "s390x"
+builds = 3
+emulated_abis = 2
+programs = 8
+admitted_keys = 458
+native_keys = 20
+excluded_keys = 2
+oracle = "original/x86_64, frozen into the image by lib/freeze.py"
+grading_rule = "all three submission targets match original/x86_64 on admitted keys"
+
+# The scored surface, measured rather than declared. A check is scored when it has a
+# weight; a recorded one carries weight 0 and names the stage-1 gate that owns it.
+# The original's own pool is the smaller number, because the cells it does not carry
+# are not charged to anyone; a correct port is graded on more.
+checks_scored_original = 1467
+checks_recorded_original = 107
+checks_scored_ported = 1487
+conditional_rows = ["port-blob-transport", "port-bignum-serialiser"]
+
+# --------------------------------------------------------------------------- #
+# The matrix everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "three builds, run once and published"
+weight = 0.03
+timeout_sec = 7200
+about = """
+Snapshots the submitted tree and builds it for x86-64, s390x and armhf --
+interpreter, compiler, static library, the two loadable modules upstream's tests
+import, and the two executables that carry a generated blob inside them. Then runs
+the programs under data/programs/ on all three and writes the answer sheets.
+
+State A is not built here. Its sheets, its screen and every oracle expectation were
+computed by lib/freeze.py when this image was built and are read out of
+/opt/assets, digest-checked, by whichever module needs them. This module's first
+act is to validate that manifest, so a suite whose answers went missing says that
+instead of grading a submission against nothing.
+
+The trees stay under $SRB_SUITE_WORK and a ledger names them, so every module after
+this one restores builds by name instead of repeating them. A module that finds its
+named configuration missing fails saying so; none of them rebuild.
+
+Scored, not setup: "the submission builds for all three targets" is the first
+behavioural fact about a port, and its failure belongs in the report with its build
+log rather than as a harness error. Weight is low because building is a
+precondition, not an achievement -- State A itself builds three-of-three, which is
+exactly why this task is a port and not a build fix.
+
+Measured cost: about 20 seconds per target on this host, so the 7200s ceiling is
+generous rather than tight.
+"""
+
+# --------------------------------------------------------------------------- #
+# The port. These rows grade s390x, and they are what separates the states.
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "port-dataview"
+title = "explicit byte order on the port target"
+weight = 0.06
+timeout_sec = 2400
+about = """
+The 47 dataview-explicit keys on s390x, against original/x86-64. Six of them are
+scored and 41 are reported at weight 0, on every submission, and that split is
+this row's whole story.
+
+DataView takes byte order as an argument, so every one of these answers is fixed
+by the specification and any correct build must produce it. It is also exactly
+where State A fails -- 41 of 47 on s390x, and nowhere else in the whole program
+set. Those 41 are the premise of the task, not an observation about a submission,
+and charging them would fail a correct port for the same reason it fails State A.
+They are owned by stage 1's byte_order_handling_is_complete gate and reported here
+so a human reading the report can see whether the port landed.
+
+The scored pool is 6 and stays 6, measured on all three states. Unlike the two
+rows below, this one cannot take conditional credit: a DataView read has one
+observable, the value, so State A/s390x does not fail to *produce* an answer -- it
+produces the wrong one. There is no second, independent fact to condition on, and
+gating the value on the value would be circular. This is the ceiling on what a
+sheet row can measure while grading against State A, and it is why this row went
+from the largest weight in this file to a control's share.
+
+As a control it is worth its 0.06. The six scored keys are the ones byte order
+cannot reach: get-i8-0, get-i8-2, get-u8-0 and set-8bit are single-byte accesses,
+and sub-byteLength and sub-byteOffset are a subarray's geometry, a count of bytes
+rather than a value read through them. A submission that chased byte order through
+DataView and broke a single-byte read or a subarray's length on the port target
+fails here, and a rewrite that replaced the serialiser outright is the way that
+happens.
+
+An absent s390x build is answered here by the same arithmetic as any other case:
+with no tree, load_builds gives the row nothing, it produces no scored checks, and a
+module with an empty scored pool rates 0.0 -- rather than rating 1.0 over checks
+that only observed an absence. State A rates 6/6 = 1.0 here, so this row is not
+what catches an unported tree; that question is stage 1's.
+
+Confirmed on all three states: 6/6 scored, 41 recorded, rate 1.0.
+"""
+
+[[module]]
+id = "port-blob-transport"
+title = "host-written bytecode, read by the target"
+weight = 0.18
+timeout_sec = 2400
+about = """
+Runs the binaries that carry a generated blob: examples/hello, examples/test_fib,
+and qjs itself, which links the compiled repl and qjscalc blobs.
+
+Upstream's Makefile points every blob-emitting rule at ./host-qjsc under
+CROSS_PREFIX, so on a cross build each blob is written in the *host's* byte order
+and read by the *target's*. The bytecode header carries a self-describing endian
+tag (BC_BE_VERSION), which the writer flips when asked to swap and the reader
+checks, giving three distinct observable outcomes:
+
+  - correct: the blob loads and computes the right values;
+  - writer-side swap missing: a clean "invalid version" from the reader;
+  - reader-side switch missing: the version check passes by coincidence, because
+    an unported big-endian reader computes the same version a little-endian writer
+    produced, and the body is then misread.
+
+State A/s390x is the third case, which is why examples/hello returns a wrong
+answer -- ReferenceError on an integer misread out of the blob -- rather than
+failing to start, and why tests/test_qjscalc.js is the only upstream suite whose
+result genuinely differs between State A and State B on s390x.
+
+This is one of the two rows that takes conditional credit, and the first case above
+is why it can. Running a binary with a blob compiled into it is an operation, not a
+value: whether it ran at all is a fact about the build that is independent of what
+it printed. So a cell here is charged when State A carried it *or when this build
+ran the artifact* -- and the two halves are visible in the measurement:
+
+  State A   x86-64 5/5, armhf 5/5, s390x 1/5 scored. The four s390x artifacts exit
+            1 or take SIGSEGV before printing anything, so there is no value to
+            compare and they are reported at weight 0, owned by stage 1's
+            bootstrap_handles_endianness gate. Row: 11/11 = 1.0.
+  State B   s390x 5/5 scored, because all four artifacts now run. Row: 15/15 = 1.0
+            -- a correct port is graded on four more cells than the original, not
+            fewer, and it earns them.
+
+The one s390x cell State A does score is worth naming as this row's own control:
+qjs-eval runs `qjs -e` on an expression and loads no blob at all, so it must pass
+on every tree including one whose repl blob is unreadable. A submission that failed
+it broke something the transport path does not reach.
+
+What the conditional half buys is the third outcome: a submission whose artifacts
+run and print the wrong number is charged for every one of them. That is the case a
+frozen baseline alone could not see, because State A never gets far enough to
+disagree.
+
+This row was `required` on the same narrow reading as the row above, and the flag is
+retired along with it. The case it existed for is unchanged in outcome: if the s390x
+build is not there, load_builds finds no tree, the row produces no scored checks, and
+an empty scored pool rates 0.0 and is charged this row's weight rather than reporting
+1.0 over checks that only observed an absence. It never zeroed an unported tree --
+State A rates 1.0 here.
+
+examples/hello_module is deliberately absent. It is built by `qjsc -o`, which
+shells out to a linker for the architecture qjsc was configured with, and on a
+cross build that is the host's. Asking for it would fail every submission on a
+limitation of upstream's build that has nothing to do with byte order.
+
+Confirmed to separate: State A from State B. State C passes this row -- it does
+not touch the transport path -- which is exactly why the next module exists.
+"""
+
+[[module]]
+id = "port-bignum-serialiser"
+title = "multi-limb bignum constants across the blob boundary"
+weight = 0.26
+timeout_sec = 2400
+about = """
+A module of multi-limb bignum constants compiled by the host's qjsc and read back
+by the target's interpreter, plus the same constants round-tripped through
+tests/bjson.so inside a single build as the control.
+
+This row exists because of a measurement. State C -- both DataView sites fixed,
+the Makefile fixed, only the four JS_WriteBigNum/JS_ReadBigNum limb blocks
+neutralised -- scores 458/458 on every program in this suite. Four of the seven
+byte-order sites in this codebase are unreachable from `qjs script.js`, and this
+is the only row that reaches them.
+
+Three facts about the mechanism, all read from the source and then confirmed by
+running it, determine how the row is built:
+
+  1. The mantissa loop uses dbuf_put_u32/dbuf_put_u64, not bc_put_u32/bc_put_u64.
+     The stream-level byte_swap flag therefore never touches limbs -- only the
+     compile-time switch does. A submission that fixes the Makefile alone cannot
+     pass this row, and one that fixes the switch alone cannot pass the previous
+     one.
+
+  2. Which constants discriminate follows from two conditions, and the obvious
+     criterion -- "anything wider than one limb" -- is false in both directions.
+
+     First, the value has to be a BigInt *literal*. The parser builds the bignum
+     while compiling and the constant lands in the bytecode, so a literal is
+     serialised; `2n ** 64n + 1n` is arithmetic on three single-limb literals that
+     the interpreter performs after the blob has been read, and its 64-bit-wide
+     result is never serialised at all. Size has nothing to do with it.
+
+     Second, the literal needs a limb on the writer's *raw* path that is not
+     byte-palindromic. JS_WriteBigNum skips leading zero limbs, strips the trailing
+     zero bytes of the lowest nonzero limb and writes what remains with a shift
+     loop, which is endian-clean; every limb above it goes out through
+     dbuf_put_u32/u64 in native order. A limb that reads the same forwards and
+     backwards survives a swap, so 0xAAAA...BBBB...n is a literal that reaches the
+     serialiser and still cannot show the defect.
+
+     This is why the table cannot be written by eye, and the first version of it was
+     wrong: five rows were declared discriminating that are expressions, so State C
+     -- a port that fixed the transport and left the serialiser alone -- passed all
+     five and collected 5/16 of this row for arithmetic that has nothing to do with
+     the port. The predicate is now in the driver (`_can_show_bignum_defect`), every
+     row is held to its own declaration at both 64- and 32-bit limbs when the image
+     is built, and the two together were checked against a correct and a
+     known-broken big-endian build: the predicate agrees with the measurement on
+     every row.
+
+     23 constants ship: 15 discriminating and 8 controls at weight 0, reported so a
+     reader can see the boundary of the effect and not scored, because a submission
+     cannot fail them for a byte-order reason. The controls come in two kinds, and
+     the second kind is the one that states the mechanism -- three of them are the
+     *same value* as a discriminating row, written as an expression instead of a
+     literal. The literal fails on State C and the computed form passes, so the
+     pair says the difference is serialisation rather than arithmetic.
+
+  3. The bjson round trip is symmetric within one build: writer and reader carry
+     the same defect, so the value returns intact even when both are wrong. It is
+     shipped as a control, not as a measurement. A submission that passes the round
+     trip and fails the cross path has precisely State C's defect.
+
+This is the second row that takes conditional credit, and the round trip is what
+makes it possible: it either hands back a blob or it does not, which is a fact
+independent of the limbs inside. A cell is charged when State A carried it or when
+this build's round trip completed. The measurement, per target, 25 cells each --
+15 discriminating constants and the round trip scored, 8 controls and the recipe
+reported:
+
+  State A   x86-64 16/16, armhf 16/16, s390x 0/25. Its s390x round trip returns
+            nothing at all, so no limb value exists to compare and the whole target
+            is reported, owned by byte_order_handling_is_complete. Row: 32/32 = 1.0.
+  State B   s390x 16/16 scored. Row: 48/48 = 1.0, on sixteen more cells than the
+            original.
+  State C   s390x 1/16. Its round trip *completes* -- writer and reader carry the
+            same defect, so the value survives, which is why that one cell is the
+            control passing and not luck -- and all 15 discriminating constants come
+            back with reversed limbs. Row: 33/48 = 0.6875.
+
+Without the conditional half State C would take full marks: its s390x cells would
+be exempt on the frozen baseline alone, and the only row in this stage that reaches
+those four limb blocks would measure nothing there. That is the whole reason the
+rule has a second clause.
+
+The weight does not decide whether State C is paid -- the row is scored, so its one
+failing cell stops the ladder whatever the weight is. What it decides is the rate
+the report publishes: at 0.26 the stage rates 0.91875 on State C, and this row is
+the heaviest in the file so that the number lands where an almost-finished port
+belongs rather than beside a tree that did nothing.
+
+The dilution is deliberate and worth stating, because it is where the weight comes
+from. The row pools three targets, so State C's 15 failures are 15 of 48 rather than
+15 of 16. Grading s390x alone would sharpen it, but then State A -- whose s390x
+cells are all exempt -- would have an empty scored pool and rate 0.0 on a tree that
+did nothing wrong. Keeping the little-endian cells in the pool is what makes the row
+honest on the original, and the weight is what makes it decisive on State C.
+
+State C is an *incomplete* port, not an absent one: its interpreter runs, its
+DataView is right, its blobs load. That distinction is no longer worth points --
+nothing short of every scored check is -- but it is worth reporting, and it is the
+rate that reports it. A row that swallowed the whole stage rate would publish 0.0
+for State C and for a tree with no port in it at all, and those two must not read
+the same.
+
+Confirmed to separate: State C (cross path diverges, round trip passes) from
+State B (both agree with x86-64), by the whole stage.
+"""
+
+[[module]]
+id = "port-semantics"
+title = "language, dates, strings and numbers on the port target"
+weight = 0.10
+timeout_sec = 2400
+about = """
+348 keys on s390x, against original/x86-64: the six programs whose answers the
+specification fixes regardless of byte order -- language, dates, strings, numbers,
+typed-arrays, and the four order-independent keys in native-order.
+
+Those four keys read oddly in a row named "semantics", and they belong here. The
+screen keeps native-order's 20 nat- keys out of every graded row, which left its
+four bare keys -- an 8-bit element view, a spec-fixed byteOffset, an Atomics round
+trip, and a sequence of Atomics operations -- claimed by no module at all. Each is
+the control for a nat- key beside it, so a submission could have broken one at no
+cost. driver.py's --self-check now proves the (program, target) partition is total,
+which is how that gap was found.
+
+These do not separate any of the three states: State A already passes all of them
+on s390x, and so do B and C. They are here as collateral-damage detection. A
+submission that reaches the byte-order sites by rewriting something broader --
+touching the parser, the number formatter, the string comparator -- shows up here
+and nowhere else. That is a real failure mode for a whole-repository rewrite and
+it deserves weight, but not the weight of a row that measures the port itself.
+
+strings/localeCompare is the reason this row asks Math.sign rather than the raw
+magnitude; see the header. Asking for the magnitude would have cost every correct
+s390x submission a key over its C library.
+"""
+
+# --------------------------------------------------------------------------- #
+# Preservation. These rows grade the two targets that already worked.
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "preserve-x86-64"
+title = "the target that already worked, unchanged"
+weight = 0.10
+timeout_sec = 2400
+about = """
+395 keys on x86-64, against original/x86-64 -- which is to say, against itself. The
+question is whether the port changed anything about the platform that was already
+correct.
+
+395 rather than all 458: bignum-limbs' 63 keys are graded on all three targets by
+bignum-control, so that they sit in one row instead of being split across two
+preserve rows and a port row. Every admitted key is claimed by exactly one module,
+and 47 + 348 + 395 + 395 + 189 = 1374 = 458 x 3.
+
+An honest tree that has done nothing earns this row in full, and that is correct:
+it preserved x86-64 perfectly. Gating it to zero on the grounds that no port
+happened would also zero every partial port, and the port rows above already carry
+that judgement.
+
+This is the row a byte-swap-everywhere submission fails, and that claim is now
+measured rather than asserted. State D was built for it: cutils.h with a bare
+`#define WORDS_BIGENDIAN`, for every target -- not a port, but the shape of "the
+task says big-endian, so define the big-endian macro", which is a failure mode a
+model reaches for. On the two little-endian targets that inverts
+js_dataview_getValue and js_dataview_setValue at their `is_swap ^= 1` under
+`#ifndef WORDS_BIGENDIAN`, so every multi-byte DataView access goes the wrong way --
+including the ones that pass `true` and ask for little-endian explicitly.
+
+Measured: this row 354/395, and all 41 failures are in one program,
+dataview-explicit. preserve-armhf is identical, 354/395. native-order also catches
+it, 49/57, because the nat- keys on a little-endian target now report a big-endian
+layout and fail the permutation they declared. port-bignum-serialiser catches it
+too, 14/32, most of that on armhf where a 64-bit host limb swapped by the writer
+does not come back through a 32-bit reader's swap. Rated 0.827 of the stage, and
+paid nothing: four rows fail, and one would have been enough.
+
+What that measurement also shows is how little of the *rate* this row moves. 41
+wrong keys out of a pool of 395 is a rate of 0.896, so at 0.10 this row gives up
+0.010 of the stage. The pool is what dilutes it: this row grades every admitted key
+on the target, and byte order reaches 41 of them. Four rows report State D between
+them, and a reader of the published rate needs all four. Splitting the spec-fixed
+DataView keys into a row of their own would sharpen it, but every admitted key is
+claimed by exactly one module and the driver's --self-check proves that partition is
+total, so this is a boundary of the current structure rather than an oversight.
+"""
+
+[[module]]
+id = "preserve-armhf"
+title = "a second little-endian ABI, 32-bit"
+weight = 0.08
+timeout_sec = 2400
+about = """
+The same 395 keys on armhf, against original/x86-64.
+
+armhf is little-endian like x86-64 but 32-bit, so it separates "assumed
+little-endian" from "assumed 64-bit". A submission that hardcoded 64-bit limb
+widths or pointer sizes while chasing byte order fails here and passes
+preserve-x86-64.
+
+armhf is also the second half of the screen: the two keys the screen excludes,
+bignum-limbs/env-limits and bignum-limbs/env-instance, are excluded because these
+two targets disagree on them, and both report libbf's limb width. No key was
+excluded by hand.
+"""
+
+# --------------------------------------------------------------------------- #
+# Order that is native by design, and upstream's own tests
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "native-order"
+title = "internal consistency of the target's own byte order"
+weight = 0.06
+timeout_sec = 2400
+about = """
+The 20 nat- keys of native-order, on all three targets. (The program has 24 keys;
+the other four are order-independent and belong to port-semantics.)
+
+A big-endian machine is supposed to show a Float64Array's bytes reversed through a
+Uint8Array. Grading these against x86-64 would fail every correct port and pass one
+that byte-swapped its typed arrays into agreement, which is a real bug. So this row
+does not compare targets.
+
+What it grades is the *relation*. The buffer's fields sit where the language says
+they do, so changing byte order permutes bytes within each field and does nothing
+else -- it does not move a field, resize one, or reorder two fields. Every nat- key
+therefore declares its own layout in lib/driver.py: a list of field widths, or the
+name of the key it should exchange answers with. The row applies that permutation to
+State A's x86-64 answer and requires the target to produce the result.
+
+That is stronger than asking the keys to agree with each other, which was the
+earlier design. A submission that swapped a Float64Array's bytes in pairs rather
+than reversing all eight is internally consistent and fails here precisely.
+
+Each transform was measured against a correct big-endian build and a correct
+little-endian build, not derived on paper. nat-slice under widths (4,4,4) is the
+readable example: little-endian 0,0,0,0,13,12,11,10,4,3,2,1 becomes big-endian
+0,0,0,0,10,11,12,13,1,2,3,4 -- the three words reverse internally and stay in place.
+
+The prefix itself was audited rather than trusted. lib/targets.py classifies every
+key by how it varies across the frozen sheets, and three keys that carried the nat-
+prefix turned out not to depend on order at all: an 8-bit element view, a spec-fixed
+byteOffset, and an Atomics load. They were renamed, which is why the four bare keys
+exist. The row still checks both directions -- that every nat- key earns its prefix
+on State A, at weight 0 because that is a statement about the suite, and that the
+submission introduces no order dependence it did not declare, which is scored.
+"""
+
+[[module]]
+id = "upstream-suites"
+title = "upstream's own tests, against a measured baseline"
+weight = 0.04
+timeout_sec = 3600
+about = """
+Runs tests/test_bjson.js, tests/test_builtin.js, tests/test_closure.js,
+tests/test_loop.js, tests/test_language.js, tests/test_std.js and
+tests/test_qjscalc.js on all three targets, and grades each against what the same
+suite does in the original tree on the same target in the same run.
+
+The baseline is what State A does, measured -- not a hand-written list of which
+suites should pass. Most of what these suites say on this host is about the host and
+not about the submission: test_std.js fails everywhere at os.isatty(0) under a pipe,
+and test_builtin.js fails on s390x in both trees at an upstream assertion with the
+little-endian byte string written into it. A pass list would charge submissions for
+both.
+
+State A's side of that comparison is frozen into the image by lib/freeze.py, which
+records each suite's exit status, timeout flag and output tail per target. Frozen
+and measured are not in tension here: the value was measured from an authenticated
+State A, in this image, on this host, through the same pipe setup the driver uses --
+and then sealed, so that a submission's build cannot be running while it is decided.
+
+Four outcomes, and only one of them costs anything:
+
+  both pass                              pass, weight 1
+  State A passes, the submission fails   fail, weight 1   <- the only cost
+  both fail                              pass, weight 0, "not charged"
+  the submission passes where A failed    pass, weight 0, recorded as an improvement
+
+Charging the third line would be charging for the host. test_std.js fails on all
+three targets at `os.isatty(0)` under a pipe, and test_builtin.js and
+test_qjscalc.js fail on s390x in State A, so five of the 21 cells say nothing
+about a submission and a row that scored them would read 21/21 on a tree that had
+fixed nothing.
+
+The scored pool is exactly the suites State A passes on the target -- 16 cells of
+21, measured -- and it is sealed: `ref_ok` is read from the frozen baseline, so a
+submission can lose a cell here but cannot move one out of the pool.
+
+The only genuine A-to-B delta among them is test_qjscalc.js, which goes from a
+segfault to clean, and port-blob-transport measures that mechanism directly and
+deterministically. Hence the low weight: this row is here to catch a submission
+that breaks something upstream tests and nothing here does, not to measure the
+port.
+"""
+
+# --------------------------------------------------------------------------- #
+# Over-reach controls
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "bignum-control"
+title = "libbf arithmetic, which byte order must not touch"
+weight = 0.05
+timeout_sec = 2400
+about = """
+The 63 bignum-limbs keys on all three targets: division printed past 100 digits at
+several precisions, transcendentals at 340-bit precision, radix conversion both
+ways, rounding modes driven through BigFloatEnv, and BigDecimal's exact and
+inexact paths.
+
+Reweighted down from 0.10 to a control's share, on measurement: it scores 189/189 on
+State A, State B and State C alike. It measures nothing about the port, and 0.10 of
+the stage that every submission passes for free is a floor handed out rather than
+earned. The weight it gave up went to port-bignum-serialiser, which reaches the
+sites bignum arithmetic does not.
+
+Its value is the other direction. libbf is the largest byte-order-adjacent surface
+in the tree, and a submission that "ports" it by touching limb handling shows up
+here in the last few digits of a long answer and nowhere else. The answers are long
+on purpose.
+
+Two keys are excluded by the screen, both reporting limb width; see
+preserve-armhf.
+"""
+
+[[module]]
+id = "no-build-side-effects"
+title = "the build leaves the tree alone"
+weight = 0.02
+timeout_sec = 1200
+about = """
+Builds once, records what the tree contains, builds again from a fresh copy, and
+compares the set of files each build produced against the pristine snapshot.
+
+Catches a submission that generates a source file at build time and leaves it
+behind, or that ships a pre-generated blob and a rule that never regenerates it --
+either of which would make the byte-order question depend on which machine last
+ran make. Behavioural: it compares what the build produced, not what any file
+says.
+"""
+
+# --------------------------------------------------------------------------- #
+# The apparatus checks itself
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "screen-audit"
+title = "the answers every module grades against are the sealed ones"
+weight = 0.02
+timeout_sec = 600
+about = """
+Checks the grading apparatus rather than the submission:
+
+  - the frozen manifest declares the schema this driver grades with;
+  - every file it lists still hashes to the digest recorded at image build time;
+  - /opt/assets is still read-only;
+  - the admitted, native and excluded counts in this file's [metadata] match the
+    screen that actually shipped -- 458, 20 and 2;
+  - no program emitted a duplicate key, in the frozen sheets or the submission's;
+  - no module reconstructed a screen of its own.
+
+The last one has a reason. lib/targets.py fails naming the file when a reader finds
+it absent, rather than rebuilding it, because a module that can silently reconstruct
+the screen can silently reconstruct a *different* screen. This row checks that the
+behaviour held in a real run.
+
+The digest check is the boundary, and the read-only bit is a guard rail on top of
+it. Grading runs as root because it has to cross-compile and run what it built, so
+mode bits stop an accident rather than an intent; a value that changed after the
+image was built fails its digest whoever changed it.
+
+The metadata comparison exists because a stale count in this file is a lie to
+whoever reads it next. It caught one: every number here was derived from an earlier
+program set and said 454.
+
+Weight is nearly nominal. It cannot fail on a submission's account -- if it fails,
+this suite is broken and the report should say so where a human will see it.
+"""

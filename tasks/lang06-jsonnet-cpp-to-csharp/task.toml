@@ -1,0 +1,277 @@
+# =============================================================================
+# SWERefactorBench -- language rewrite
+#
+#   State A : jsonnet 0.20.0, 14,958 lines of C++ across core/ and cmd/ -- a
+#             lexer, a comment-preserving parser, a desugarer, static analysis, a
+#             lazy tree-walking evaluator with thunks, closures and object
+#             inheritance, 39 native builtins, and a code formatter -- built by
+#             a Makefile into the jsonnet and jsonnetfmt command-line tools, with
+#             stdlib/std.jsonnet embedded as a C array.
+#   State B : the same two command-line tools, byte-identical on stdout, stderr
+#             and exit status, implemented in C# on .NET 8 against the base class
+#             library alone, with stdlib/std.jsonnet preserved unmodified and
+#             interpreted rather than reimplemented.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs a binary
+# publishes one from the submitted source with the published argv.  That is what
+# makes "there is no C++ left to compile" a fact about the repository rather than
+# a claim about a bin/ directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, nine gates, all of them required.  Failing one is a zero and
+#      nothing after it runs.
+#   2. nineteen behavioural modules, 40 points.  Eighteen case families are
+#      scored; `build`, which publishes the two CLIs, runs and reports at weight
+#      0.00, because it asks about a property of the .NET tree rather than about
+#      jsonnet's behaviour and because it produces what the other eighteen
+#      measure -- so its failure is already priced through them.  A module that
+#      can report and cannot be paid is not a measurement, which is why there is
+#      no second one.  The points are paid only for a submission that passed
+#      every scored check in all eighteen; short of that the ladder stops here
+#      with nothing from this stage.
+#   3. six adversaries with an hour each to write a case the C++ passes and
+#      this port does not.  60 points, 10 for every adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has
+# neither a C++ toolchain nor an SDK, because a review that can build grades a
+# build log instead of an implementation, and the question here -- were 15,000
+# lines of C++ reimplemented or wrapped -- is not one a build log answers.  Stage
+# 2 has the .NET SDK and no C++ compiler, so a repository that still needs g++ is
+# unbuildable there by construction, and the reference binaries it froze its
+# answers from are deleted before it grades anything.  Stage 3 is the only image
+# holding both, because "the C++ passes this case" is a claim that has to be
+# executed, and it reaches either tree only through that tree's own build.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop build and publish debris only.  They exist so a verifier
+# cannot be handed a prebuilt jsonnet binary and be fooled into running something
+# the submitted *source* no longer produces -- which for this task is the whole
+# ball game, since a tree that kept its C++ would otherwise ship a working
+# executable built from it.  Solutions must therefore live in tracked source
+# files, never inside these paths, a rule instruction.md states outright.
+#
+# `jsonnet` and `jsonnetfmt` are NOT in the list below, and must not be put back.
+# Those are the names of State A's linked ELF binaries at the repository root,
+# built by `make jsonnet jsonnetfmt`, so they look like debris.  They are also the
+# likeliest names of *project directories* in a correct State B -- build_contract
+# requires an assembly named exactly `jsonnet`, `<AssemblyName>` defaults to the
+# .csproj filename, and instruction.md blesses `src/jsonnet/jsonnet.csproj` by
+# name.  Harbor builds one `tar --exclude=` flag per entry (environments/base.py),
+# and a bare GNU tar pattern matches by basename at any depth, so either entry
+# would delete the submission's own CLI projects after the agent phase and before
+# grading.  A submission collected that way scores 0 of 2609 behavioural checks
+# with `build/build/discovery` reporting `metadata.projects: []`, and nothing in
+# the artifact would say a directory was removed -- the checks record `fail`, not
+# skipped, so they would not even read as unmeasured.
+#
+# Leaving them out costs no enforcement, which is why it is the answer and not a
+# concession.  The exclusions exist so a verifier cannot be handed a prebuilt
+# jsonnet binary and be fooled into running something the submitted *source* no
+# longer produces, and stage 2 provably cannot run one: executor.py pins
+# BASE_ENV["PATH"] to the system directories, so a root-level ELF is not on it,
+# and build.py publishes from source into its own copy with `bin`, `obj` and
+# `publish` discarded first.  A retained root binary is caught instead in stage 1,
+# by two required gates that read content rather than names -- `no-prebuilt-
+# binaries` ("first bytes are \x7fELF or MZ") and `no-subprocess-oracle` ("a
+# retained reference binary").  Excluding it by name would only hide it from those
+# gates: instruction.md says to delete the binaries and the build system, and a
+# submission that ignores that should fail loudly rather than be quietly repaired
+# at collection.
+#
+# Anchoring does not rescue the entry either.  `--exclude=./jsonnet` does spare
+# `./src/jsonnet/jsonnet.csproj` under GNU tar 1.34, but it still prunes a
+# root-level `./jsonnet/`, which is a layout instruction.md blesses, so it turns a
+# conditional silent failure into a narrower one.  `--exclude=/jsonnet` matches
+# nothing at all.  A name-based pattern cannot distinguish State A's file from
+# State B's directory, because tar is given no way to ask; the only safe list is
+# one that never names them.
+#
+# The general rule this is an instance of: an exclude entry must not match
+# anything a correct submission can be expected to produce.  Nothing upstream
+# enforces it here.  Pristine State A ships no file or directory called `jsonnet`
+# or `jsonnetfmt` at any depth -- both are build output -- so `swerefactor
+# validate`'s check against original.tar.gz would see nothing to complain about,
+# and an identity run cannot catch it either: identity builds both sides from the
+# same tarball, and the tarball is not what these patterns hit.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "bin",
+    "obj",
+    "publish",
+    "artifacts",
+    "*.o",
+    "*.a",
+    "*.so",
+    "*.so.*",
+    "*.dylib",
+    "*.exe",
+    "*.pdb",
+    "*.dll",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+]
+
+[task]
+name = "swerefactor/lang06-jsonnet-cpp-to-csharp"
+description = "Reimplement the complete jsonnet 0.20.0 configuration language in C# on .NET 8 with no external packages, preserving byte-identical evaluator and formatter output, both command-line interfaces, and the embedded Jsonnet standard library unmodified."
+authors = []
+keywords = [
+  "swe-refactor",
+  "language-migration",
+  "cpp",
+  "csharp",
+  "dotnet",
+  "jsonnet",
+  "interpreter",
+  "lazy-evaluation",
+]
+
+[metadata]
+category = "language-rewrite"
+difficulty = "frontier"
+license = "Apache-2.0"
+upstream = "https://github.com/google/jsonnet"
+upstream_version = "0.20.0"
+source_repository = "https://github.com/google/jsonnet"
+source_version = "0.20.0"
+state_a = "jsonnet 0.20.0 in C++11 (14,958 lines across core/ and cmd/, plus the C ABI in include/, the C++ binding in cpp/ and the CPython extension in python/), GNU make"
+state_b = "the same jsonnet(1) and jsonnetfmt(1), byte-identical on stdout, stderr and exit status, in C# on .NET 8 against the base class library alone, with stdlib/std.jsonnet preserved byte-for-byte"
+scale = "4,296 files, 14,958 lines of C++ in core/ and cmd/, plus the 1,713-line embedded standard library and the upstream conformance suite"
+tags = [
+  "whole-repository",
+  "language-rewrite",
+  "interpreter",
+  "differential-testing",
+  "offline",
+  "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 20h wall clock: a lexer, a parser that has to keep comments and whitespace as
+# fodder so the formatter can put them back, a desugarer, static analysis, a lazy
+# evaluator with thunks, closures and object inheritance, the 39 natives of
+# `jsonnet_builtin_decl`, and a formatter -- all of which has to agree with the
+# reference byte for byte, including its error messages and its stack traces.
+# (The behavioural contract counts 40 natives: those 39 plus `std.thisFile`,
+# which the desugarer injects as a field rather than declaring as a builtin.)
+#
+# The State A sources stay in the image as the oracle, so the time goes on
+# reimplementation rather than on reverse-engineering behaviour.
+#
+# no-network: the base class library is what there is.  "No external packages" is
+# enforced by the environment rather than audited afterwards -- except for the
+# test frameworks, which are seeded into an offline feed at image-build time so a
+# port that wants to ship xunit tests can.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 72000.0
+network_mode = "no-network"
+user = "agent"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+# Offline is enforced by network_mode, but the SDK still probes unless told not
+# to, and a probe failure is slower and noisier than a refusal.
+DOTNET_CLI_TELEMETRY_OPTOUT = "1"
+DOTNET_NOLOGO = "1"
+DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
+NUGET_PACKAGES = "/opt/nuget-offline"
+# The SDK writes to its CLI home on every invocation.  Named here as well as in
+# the image so an env block that replaces rather than merges still leaves the
+# agent a writable home; /opt/nuget-offline is world-readable but not writable.
+DOTNET_CLI_HOME = "/home/agent"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.  Stage 2 is budgeted generously because it
+# publishes two CLIs from a cold offline restore and then runs several thousand
+# cases through them, and a first-run JIT on a submission with no warm caches is
+# slow in a way the C++ reference -- which grades in about a minute -- is not.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota
+# to be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+user = "root"
+
+[verifier.environment]
+network_mode = "no-network"
+# The behavioural image builds the upstream C++ reference and freezes every
+# expectation before any submission exists, so its build is slower than the agent
+# environment's.
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+DOTNET_CLI_TELEMETRY_OPTOUT = "1"
+DOTNET_NOLOGO = "1"
+DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
+NUGET_PACKAGES = "/opt/nuget-offline"
+# Grading runs as root and /opt/assets is read-only, so the CLI home goes to
+# scratch space.
+DOTNET_CLI_HOME = "/tmp/dotnet-home"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a
+# smoke test that the suite can be passed at all.  The suite's own gate answers
+# that: stage 3 is asked only of a submission that scored stage 2 in full, so a
+# tree that reaches it has already passed every recorded check.  What six models
+# add is the other half -- an hour each spent hunting for a behaviour nobody
+# thought to record.

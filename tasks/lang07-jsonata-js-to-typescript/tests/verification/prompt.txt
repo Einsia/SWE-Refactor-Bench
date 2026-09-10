@@ -1,0 +1,318 @@
+TASK {{task}} -- find what the migration got wrong.
+
+JSONata is a query and transformation language for JSON, and this repository is a
+complete implementation of it: a hand-written parser using Pratt's top-down
+operator-precedence algorithm, a tree-walking evaluator, a builtin library of
+sixty-odd functions each carrying a type signature, a signature validator that
+type-checks calls at run time, and a date formatter implementing XPath F&O's
+picture language. Around 7,700 lines of JavaScript across six engine files, plus a
+differential probe in three more.
+
+It is not a tidy implementation, and that is the point of the task. The evaluator
+is written in terms of two things JSON has no words for: `undefined`, which means
+"no value here" and propagates rather than erroring, and a *sequence*, which is an
+array carrying hidden flags that decide whether it collapses to its single element.
+Neither is visible in a JSON answer, both are load-bearing everywhere, and the
+places they interact are decided by which line of code happens to run first.
+
+The submission is supposed to be that same engine in TypeScript: `tsc` under
+`strict`, running on Node 24, exposing the differential probe at `dist/probe.js`
+and the library itself at `dist/jsonata.js`, with the JavaScript gone.
+
+Same engine means the same answers. Not "evaluates JSONata correctly" -- the same
+values under the same encoding tags, the same diagnostic code with the same
+position and token, the same key order in the response envelope, and the same
+behaviour in the places where this implementation is idiosyncratic rather than
+specified. It has already been checked that the migration is real and that
+thirteen thousand recorded cases over evaluation, parsing, diagnostics, the builtin
+library and the protocol get the right answers. Your job is the part those cases
+cannot do: find an expression, an input or a sequence of requests that nobody
+thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original engine, JavaScript
+  {{submission}}   the submission, which claims to be the same engine in TypeScript
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories, both read-only to you.
+
+Read the original as much as you like -- it is the specification of what the answer
+should be, and it is the best use of your budget you will find. `src/jsonata.js` is
+the evaluator, `src/parser.js` the parser, `src/functions.js` the builtin library,
+`src/datetime.js` the picture language, `src/signature.js` the run-time type
+checker, and `src/probe.js` the protocol, including its own account of why each op
+exists.
+
+You attack the built artifacts, not the source. **Your candidate must reach an
+implementation only through the probe.** On this task that sentence carries more
+weight than it does on the other language pairs in this family: both trees are
+JavaScript by the time they run, so a candidate that read a tree's source and
+`require`d it would be comparing an implementation against itself -- it would pass
+every mechanical check and establish nothing. Reading source to decide what to
+assert is the whole method. Reading source from inside a test is out of scope and
+will cost you the round.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree the runner builds that
+tree, builds a probe against it, and runs your file. You are told the outcome on
+each tree separately. The build happens once per tree and is reused, so only your
+first candidate waits for it.
+
+Your file may import `srbjsonata` and the standard library, and nothing else:
+
+    import srbjsonata
+
+    def test_undefined_is_dropped_from_a_structure_not_tagged():
+        bare = srbjsonata.op("eval", "$nope")
+        inside = srbjsonata.op("eval", "[1, $nope, 3]")
+        assert bare.ok and inside.ok, (bare, inside)
+        assert bare.results == [["u"]], bare.text()
+        assert inside.results == [["a", [["d", 1], ["d", 3]]]], inside.text()
+
+Do not hard-code an answer you have not seen the original produce. Ask it first --
+one `op()` call tells you -- then assert. A candidate built on a guess about the
+original fails on both trees and buys you nothing. `srbjsonata` has a docstring;
+read it before your first candidate, because two of its conventions are not
+guessable.
+
+THE PROBE
+
+`srbjsonata.op()` and `srbjsonata.probe()` drive a differential probe: a program
+that reads one JSON request per line on stdin and writes one JSON response per
+line. It is the same instrument the recorded cases use, so you are exercising the
+graded execution path rather than a lookalike you wrote. On both trees it is `node
+dist/probe.js` -- against the original library on one and the port's on the other.
+You never see which. You see responses.
+
+    op(name, ...) -> Record             run one case
+    probe([...])  -> {id: Record}       run a batch in one process
+
+A response is one of:
+
+    {"id": N, "ok": true,  "op": NAME, "result": <per-op>}
+    {"id": N, "ok": false, "op": NAME, "error": {"kind": K, ..., "message": M}}
+
+The key order is part of the contract and `op` *is* echoed. A `Record` has `.ok`,
+`.result`, `.results`, `.error`, `.kind`, `.code`, `.message` and `.text()` for the
+raw line. There are three error kinds and the distinction between them is graded:
+
+  JsonataError   the engine rejected the expression or the data. Carries `code`,
+                 and `position`, `token`, `value`, `index` or `type` when the site
+                 that raised it had them.
+  ProtocolError  the request itself was unusable. Codes `P0001`-`P0010`, messages
+                 from a closed list, so they are comparable across the two trees.
+  Panic          the implementation crashed. Normalised to a `cause` from a fixed
+                 set rather than copied, because two stack traces never match. A
+                 Panic where the original gives a result is a finding. So is a
+                 Panic under a *different* cause.
+
+A request carries exactly the fields its op uses. A field its op does not take is a
+`ProtocolError` rather than something ignored, and asserting on that is in scope --
+a port that shrugged off the extra field diverges there. But `op()` will not build
+such a request: it refuses locally with a `CandidateError` that names the fields the
+op does take, on the grounds that most of the time you reached for one op's field
+while meaning another's. To send a malformed request deliberately, hand the dict to
+`probe()`, which sends whatever you give it. The same applies to a request with two
+faults in it, where which one gets reported is itself graded.
+
+THE OPS
+
+  hello                     protocol name and the three declared vocabularies:
+                            the six ops, the thirteen fixtures, the four engines.
+                            Takes no fields.
+  ast         expr          parse only. The AST as a typed structure, plus
+                            `errors`: `null` on a clean parse, a list when
+                            `recover` was set and the parser recovered. Those are
+                            different answers, and so is `[]`.
+  eval        expr          compile and evaluate. `input`, `bindings`, `options`,
+                            `clock` and `repeat` are optional.
+  evalcb      expr          the same, observing `evaluate`'s callback parameter:
+                            how many times it was called and with what.
+  assign      expr assigns  bind variables through the compiled expression's
+                            `assign()` before evaluating.
+  register    expr funcs    register named functions through `registerFunction()`,
+                            drawn from the thirteen fixtures, with the fixture's
+                            signature, an explicit one, or explicitly none.
+
+THE ENCODING
+
+Every value in an answer travels as a two-element `[tag, payload]` array, because
+four kinds of thing this engine evaluates to have no JSON spelling. The ten tags:
+
+  u  undefined      z  null          b  boolean       d  number     s  string
+  a  plain array    q  sequence      o  object        f  callable   x  other
+
+`o` is a list of `[key, value]` pairs, not an object, so key order stays
+observable. `d` carries the four IEEE-754 values JSON cannot spell as the tagged
+strings `"inf"`, `"-inf"`, `"nan"` and `"-0"`, which keeps them distinct from each
+other and from `0` -- a port that reached for a stock serialiser collapses three of
+them. `x` names a value's kind for things the library has no type for. `q` versus
+`a` is the sequence flag, and it is the tag pair a collapsing bug shows up in
+first.
+
+WHERE THIS MIGRATION IS LIKELY THIN
+
+Eleven places where this engine's behaviour follows from how the code is written
+rather than from what it set out to do. Each is something a correct-looking port
+gets wrong, and each is reachable through the ops above.
+
+  * `undefined` is not an error and not null. It is the answer to a path that
+    matched nothing, and it propagates: an object key whose value is undefined
+    vanishes from the object entirely, an array element that is undefined is
+    removed so `[1, $nope, 3]` is a two-element array, and a bare undefined result
+    is `["u"]`. Three different observable consequences of one absence. A port
+    that modelled it as `null`, or as an exception, or as an option type it
+    unwraps at the boundary, diverges in a different one of those three places
+    depending on which choice it made.
+
+  * The singleton collapse, which is the deepest seam here. A sequence carries
+    `sequence` and `keepSingleton` flags that never appear in an answer, and a
+    one-element sequence becomes its element unless the flags say otherwise. Go at
+    where they are set and cleared: a path step that matched exactly once against
+    one that matched twice, `[]` written around an expression that already yields
+    a sequence, `[]` around one that yields a single value, a predicate selecting
+    one element, an input that is itself an array against one that is an object.
+    `$match` answers a `q`; most things answer an `a`; which is which is not a
+    choice a port can rederive from the documentation.
+
+  * Numbers have two spellings and which one you see depends on the channel. There
+    is exactly one `toPrecision` in the whole library, inside `string()` in
+    `src/functions.js`, so the 15-significant-digit renormalisation belongs to
+    string conversion and not to evaluation: `0.1+0.2` is
+    `["d",0.30000000000000004]` as a value and `"0.3"` through `$string` or `&`.
+    It crosses back into the value channel through `$clone`, which is
+    `JSON.parse(fn.string(arg))` -- and the transform operator `~>|...|...|` looks
+    up that same `clone` and applies it to the object being transformed but not to
+    the update value, so `{"v": 0.1+0.2} ~> |$|{"w": 0.1+0.2}|` reports the same
+    arithmetic twice in one object, spelled two ways. `$each`, `$merge` and `$sift`
+    clone nothing. Establish which functions renormalise before building on any of
+    it.
+
+  * The diagnostics are data. 101 engine codes are declared; a given failure
+    produces one of them with a `position` and a `token`, and the payload's field
+    order is fixed: `kind` first, `message` last, and between them only the fields
+    that site had. Positions are the easiest thing here to be off by one on,
+    especially around a string escape, a regex literal, or an operator the parser
+    reads in two steps. Five of those codes cannot be reached in the original at
+    all -- two are dead entries whose wording never ships because another code
+    fires first, one is marked defunct in the library's own table, one is
+    documented for a case the implementation passes straight through, and one is
+    the timeout -- so a port that makes any of them reachable has invented an
+    answer. The protocol table has the same property one level up: it declares ten
+    `P00xx` codes and the tenth, `P0010` "unusable option", has no emission site
+    anywhere. A reimplemented validator that finds a use for it is answering a
+    question the original never answers.
+
+  * The same message is assembled at more than one site, and the sites disagree.
+    The sequence-limit diagnostic `D2015` is raised from three places and each puts
+    a different number in "the maximum sequence length of N was exceeded". The
+    path-step site reports the configured limit itself. The array-constructor site
+    reports the length the sequence had reached when the check tripped, one more
+    than the limit. `$append`'s site reports the size of the result it was about to
+    return, and is the only one of the three that carries `position` and `token`.
+    Which site you reach depends on the limit you set, so one expression can report
+    through two different sites at two different limits, with two different numbers
+    and two different field sets -- and a limit low enough to trip while the
+    arguments are still being built never reaches `$append`'s site at all. A port
+    that factored those three into one helper has made them agree, which is tidier
+    and wrong.
+
+  * Recovery is a second parser mode with its own output shape. `recover: true`
+    puts an error node into the AST at the point the parse broke and reports what
+    it collected; the clean parse reports `null` rather than an empty list. Which
+    expressions recover, where the error node lands, and what the surrounding tree
+    looks like afterwards are all properties of the recovery code rather than of a
+    grammar.
+
+  * `repeat` exists to make per-evaluation state observable, and the source says so
+    in as many words. One compiled expression, evaluated up to eight times, every
+    answer reported: a `counter` fixture counts up, an `assign` binding holds, the
+    pinned `$millis()` repeats, and `$random()` advances its stream rather than
+    restarting it. A port that rebuilds its environment per `evaluate` call answers
+    `repeat: 1` correctly everywhere and diverges here. Then ask the same question
+    across requests rather than iterations, where the answers are different.
+
+  * The registered-function fixtures are where the library's contract with a host
+    is visible. A registered function is called with the evaluation focus as its
+    receiver, so a fixture can read `this.input` and `this.environment.lookup` --
+    which means a port using arrow functions or binding `this` at registration has
+    already diverged. A promise-returning fixture is awaited to its resolved value
+    rather than encoded as `x`. A fixture that throws a bare error becomes a Panic
+    while one that throws a coded object becomes a `JsonataError` carrying that
+    code, position and token. And `$type`, `$boolean`, `$count`, `$keys` and
+    `$string` each have an answer for a host `Date` and a host `Map`, none of which
+    the library has a type for.
+
+  * The regex engine is swappable through an option, and the four stand-ins are
+    chosen to make the calling convention observable rather than the matching. What
+    the engine receives already carries the `g` flag, and the loop that drives it
+    has to terminate: `caseless` finds a match the default does not, `nomatch`
+    finds none at all -- so `$match` answers `["u"]` while `$split` returns the
+    subject unsplit -- and `broken` throws, which must arrive as a Panic under the
+    declared cause. A port that reimplemented `$match`'s loop instead of porting it
+    diverges on at least one of those three.
+
+  * The picture language is XPath F&O's, not `strftime`'s, and it is the other
+    place a port improvises. Component specifiers with width and presentation
+    modifiers, ordinal and name forms, ISO week numbering at a year boundary,
+    timezone offsets, and a picture that does not fit the value it is given.
+    `$formatNumber` and `$formatInteger` have their own picture language with the
+    same property.
+
+  * Arity is dispatched on, not just checked. Several builtins behave differently
+    depending on how many arguments they were given, and the higher-order functions
+    inspect the arity of the callback they were handed and pass a different number
+    of arguments accordingly. The signature validator reports which argument index
+    was wrong and what type it expected, for a builtin and for a function defined
+    inside the expression. A port that gave everything optional parameters with
+    defaults passes the common cases and loses the dispatch.
+
+Two things are out of bounds and will cost you the round: anything read out of
+either tree's source from inside a test rather than out of a response, and any
+assertion whose point is that one runtime exhausts its stack sooner than the other.
+The `stack` option is a declared limit and is in scope; where V8 gives up is not.
+The full scope follows below and it is what you are held to.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. The clock
+is pinned by default and `$random()` is a seeded stream, so a deterministic
+candidate is easy to write -- but `clock: "live"` is out of scope precisely because
+it is not, and the `timeout` and `sequence` limits are where a borderline case can
+flake. A flaky candidate is discarded even when the divergence it found is real.
+
+Both trees are built once and reused, so a test that writes into a tree can change
+the answer a later candidate gets: write under the scratch directory `srbjsonata`
+gives you, and nowhere else.
+
+Be careful with batches. Responses come back keyed by `id`, and a batch is one
+process: a `counter` registered in request 1 and any global the engine keeps are
+still there in request 2. If you are testing state, decide whether you mean state
+within one `repeat` or state across a batch, and put each in its own batch so you
+are not measuring the other.
+
+HOW TO SPEND THE BUDGET
+
+Read the source first -- not all 7,700 lines, but all of whichever mechanism this
+round is pointed at. Then find the line where its behaviour is incidental rather
+than specified: a flag cleared on one branch and not the other, a `<=` where `<`
+would have done, a variable read after the loop that modified it, an error
+constructed with the argument nearest to hand. Write the assertion that pins it, and run it the moment it is written. There
+is no turn limit; the wall clock is the only budget, and a wrong attempt costs
+one call and tells you more than another page of source.
+
+Run everything. A test that fails on both trees is wrong about the original, and a
+test that passes on both has found nothing. You learn which in one call and you
+have budget for many.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

@@ -1,0 +1,350 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "fw07-graphhopper-dropwizard-to-springboot"
+
+# This stage measures ONE thing: whether the rewritten repository still answers
+# what the original answered.  Nothing here asks whether the rewrite happened.
+#
+# The expectations are not written down anywhere.  There is no golden file to
+# read, because there is no file: the reference is State A itself -- the
+# unmodified Dropwizard tree, unpacked from data/original.tar.gz, compiled at
+# grading time, launched, and asked the same 88 questions as the submission,
+# in the same process, minutes apart.  A "correct answer" here means "what the
+# original said when asked this".  That is the strongest form the property can
+# take, and it makes one class of grader bug impossible: the suite cannot
+# disagree with its own baseline, because its baseline is computed, not recorded.
+#
+# It also costs something, and the cost is worth naming.  Building and exercising
+# two GraphHopper trees is most of this stage's wall clock, and if the reference
+# fails to build or fails to start, no number computed from it means anything.
+# `build` therefore distinguishes the two failures: a submission that will not
+# compile scores zero on a weighted module, and a REFERENCE that will not compile
+# aborts the stage with a grader-failure exit rather than reporting the zero the
+# submission would otherwise appear to have earned.
+#
+# The axes, and where each is measured:
+#
+#   whether the framework actually left    stage 1, over both trees' source: the
+#                                          Dropwizard imports, the Application
+#                                          and Configuration subclasses, the
+#                                          Jersey resource registrations, the
+#                                          bundle wiring, and the shape of a
+#                                          Dropwizard clone re-declared under
+#                                          new package names.  Its gates are
+#                                          required; a failure zeroes the
+#                                          submission before this stage runs.
+#   whether behaviour survived             here.
+#   whether anything else broke            stage 3, where six adversaries build
+#                                          requests this corpus does not contain
+#                                          and try to make the two jars disagree.
+#
+# So a submission that kept Dropwizard and renamed a few packages passes this
+# stage completely.  That is the correct outcome for a stage that only asks about
+# behaviour, it is a submission stage 1 rejects on sight, and it is one the agent
+# could not have produced anyway: the local Maven repository in the task image has
+# had the Dropwizard artefacts removed, so a tree that still depends on them does
+# not resolve while the work is being done.
+#
+# Nothing in this directory opens a file in the submitted tree.  There is no
+# `repo` fixture, and srbfixtures.py explains why adding one would be a mistake.
+# Every module here reads capture.json -- statuses, header maps, bodies -- or
+# observes the process it launched.  The one apparent exception, `own_tests`, runs
+# the repository's own suite and counts what passes; it reads no source either.
+#
+# Weights are relative shares of the stage's rate and answer one question: if
+# this axis were the only thing that regressed, how much of the ported behaviour
+# would be missing?
+#
+# `routing` carries the most because it is what the repository is for, and because
+# its response is the one with the most places to go quietly wrong -- an encoded
+# polyline that should have been a point array, an instruction list that lost its
+# sign convention, a `paths[].details` map that came back as a list.  A submission
+# can serve every other endpoint correctly and still be useless as a router.
+#
+# `errors` is priced second, above its case count's share, for a reason that is
+# invisible in the corpus's shape: error responses are the part of a web framework
+# a migration inherits rather than writes.  Dropwizard's Jersey stack turns an
+# unparseable query parameter into a 400 with a particular JSON envelope, an
+# unknown path into a 404 with another, an unacceptable Accept into a 406 with no
+# body at all.  A submission that wired up the happy paths and let Spring's
+# defaults answer everything else diverges on all 22 cases at once while looking
+# complete from the outside.
+#
+# `admin` is priced above its four-percent share of the corpus because it is where
+# the two frameworks' idioms differ most -- Dropwizard's second Jetty connector
+# with its own servlet tree against Spring's management port -- and because it is
+# the surface a monitoring system depends on, so getting it wrong is an
+# operational regression even when the API is perfect.
+#
+# `assets` and `cli` are narrow and cheap, and they are here because they are the
+# parts a submission is most likely to skip entirely: a service whose API is
+# flawless but which no longer serves its own web UI, or no longer imports a graph
+# from the command line, has not been migrated.
+#
+# Nothing here records without judging.  A module that cannot affect the score is
+# not a module: its checks would all be priced at zero, and a report listing them
+# reads as eleven modules plus something that looks scored and is not.  What is
+# worth recording is recorded anyway -- `build` writes provenance.json into the
+# shared work directory with what was built, what was launched and how, so a score
+# can be explained months later without rerunning anything, and the fields masked
+# as volatile are in each comparing module's own evidence.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+SRB_M2_REPO = "/root/.m2/repository"
+SRB_OFFLINE_SETTINGS = "/opt/srb/settings-offline.xml"
+SRB_REFERENCE_TARBALL = "/tests/behavioural/data/original.tar.gz"
+
+[metadata]
+runtime = "eclipse-temurin-17.0.17 / maven-3.9.11"
+target_stack = "Spring Boot 3.5.16"
+retired_stack = "Dropwizard 4.0.16"
+about = """
+Eleven modules, one process each, strictly sequential.  `build` compiles both
+trees offline with the same command, launches each under two graph profiles via a
+six-rung convention ladder that both sides are tried against equally, asks all 88
+cases twice per side, and publishes capture.json.  The ten modules after it
+restore that capture and grade one axis each.
+
+Asking twice per side is what makes the comparison honest without a hand-written
+volatility list.  Any JSON path that differs between a side's own two answers is
+unstable for that side, and the union of both sides' unstable paths is masked on
+both.  A masked path keeps its name and its presence: a field whose value drifts
+run to run is not compared, but a submission that stops emitting the field
+entirely still fails.  Nothing is masked by a human deciding in advance that a
+field looks volatile.
+
+State A scores 1.000 here by construction -- it is one of the two sides -- and
+that is the property to re-check whenever a module is added.  A behaviour-
+preservation suite its own baseline fails is a broken suite.
+"""
+
+# --------------------------------------------------------------------------- #
+# The ledger everything else reads
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "build both trees offline, launch both, record every answer twice"
+weight = 0.10
+timeout_sec = 7200
+command = ["python3", "run.py"]
+about = """
+Unpacks State A from data/original.tar.gz -- byte-identical to
+environment/original.tar.gz, which the validator enforces -- normalises its
+mtimes, and builds it and the submission with the same offline Maven command.
+Confirms each produced a launchable jar.  Launches each under both graph profiles
+and asks every case twice.  Publishes capture.json into $SRB_SUITE_WORK.
+
+Stage 2 does not mount /opt/original even though stages 1 and 3 do: the schema
+makes it optional here, and a stage whose result depended on how it was invoked
+would be a stage whose result is hard to trust.  Carrying its own copy costs disk
+and buys determinism.
+
+Scored, not setup.  A tree that does not compile has failed the most basic thing
+the task asked for, and that should read as a zero on a weighted module rather
+than as an infrastructure error that looks like the grader broke.  It runs first
+because the eleven modules after it have nothing to compare without the capture --
+ordering only: its zero cancels no other module's result, and the stage pays only
+for a submission that passed every scored check in every weighted module.
+
+The mtime normalisation is not incidental.  The shared snapshot builder fixes
+every file's mtime at epoch 0; maven-resources-plugin's incremental copy asks
+whether source.lastModified() > dest.lastModified(), a missing destination
+answers 0, and 0 > 0 is false -- so it creates the destination directories, logs
+"Copying 76 resources", and writes nothing.  Core's 49 translation files and
+web-bundle's test config.yml both vanish that way, and the symptom surfaces at
+runtime a long way from the cause.  The environment image applies the same fix
+for the same reason.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: what State A answered, the submission has to answer
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "routing"
+title = "the routing surface, across three vehicles and two speedup modes"
+weight = 0.16
+command = ["bash", "run.sh"]
+about = """
+17 cases over /route.  Car, foot and bike; contraction hierarchies on car and
+landmarks on bike, because the two speedups reach the same answer by different
+code and a submission that bound only one profile fails visibly.  GET and the
+separate POST resource.  With and without instructions, alternatives, path
+details, point_hints, snap_prevention, a custom model, and both response shapes
+-- the default encoded polyline and points_encoded=false's coordinate array.
+
+The heaviest weight on the stage.  This is the endpoint the repository exists to
+serve, and its response is deeply nested enough that a field can change shape
+without changing size: a details map serialised as a list, an instruction losing
+its interval, a bbox reordered.  The differential compares the parsed structure
+path by path, so those land as named path differences rather than as a diff of
+two large blobs.
+"""
+
+[[module]]
+id = "endpoints"
+title = "the rest of the public API, one or two cases each"
+weight = 0.12
+command = ["bash", "run.sh"]
+about = """
+18 cases.  /nearest, /isochrone in both its shapes, /spt as CSV and as JSON,
+/mvt vector tiles (compared as bytes -- protobuf, and a re-encoding that changed
+the tile is a changed tile), /info, /health, /i18n and /i18n/{locale}, /match
+fed a GPX trace in both its output types, and /navigate.  Breadth rather than
+depth: enough per endpoint to catch one that was not ported, was ported to a
+different path, or lost its content type.
+
+The last two are here because they are the two endpoints a migration is most
+likely to drop silently.  /match is the only endpoint that consumes XML rather
+than producing it, and it lives in a Maven module of its own whose resource is
+annotated with a fully-qualified @jakarta.ws.rs.Path -- invisible to anyone
+grepping for the short form.  /navigate is registered outside the bundle, by the
+application class, speaks a foreign wire format (Mapbox Directions v5), and
+recovers its coordinates by slicing the raw servlet request URI at a fixed
+offset.  A rewrite that rebuilds routing perfectly and never notices either one
+fails both cases and passes the rest, which is exactly the shape of partial
+migration this stage exists to name.
+"""
+
+[[module]]
+id = "pt"
+title = "public transit, on its own graph"
+weight = 0.08
+command = ["bash", "run.sh"]
+about = """
+7 cases against /route-pt and /pt-mvt, built on the beatty fixture and its GTFS
+sample feed.  Separated from `endpoints` because it needs a second graph profile
+and a second server launch, and weighted on its own because it is the part of the
+repository a submission is most likely to abandon after the car router works.
+GTFS wiring is a distinct bundle in State A and a distinct problem in the target
+framework.
+"""
+
+[[module]]
+id = "errors"
+title = "what the service does when the request is wrong"
+weight = 0.13
+command = ["bash", "run.sh"]
+about = """
+22 cases: missing required parameters, unparseable coordinates, an unknown
+profile, points off the graph, points on the graph with no route between them,
+malformed JSON bodies, a JSON body with the wrong types, unsupported methods on
+real paths, unacceptable Accept headers, unknown paths at several depths, and a
+request too large for the header buffer.
+
+Second-heaviest, above its share of the corpus, because error responses are what a
+migration inherits rather than writes.  Status code, media type and body
+STRUCTURE are compared; the human-readable message is not, because that is the
+framework's to phrase.  Neither are the container's own pre-application errors --
+a malformed request line never reaches application code, so what Jetty says about
+it is not this task's contract.
+"""
+
+[[module]]
+id = "headers"
+title = "response headers as a name-to-values map"
+weight = 0.08
+command = ["bash", "run.sh"]
+about = """
+11 cases.  Content negotiation across the endpoints that declare more than one
+type, CORS preflight against an actual request, Allow on a 405, Location on a
+redirect, Vary, and content encoding.
+
+Compared as a map from lowercased name to the ordered list of its values, not as a
+sequence of lines: HTTP semantics do not make the relative order of two different
+header names meaningful, and grading it would fail a submission for a difference
+no client can observe.  Repeated values of the SAME name do keep their order,
+because Set-Cookie and friends are order-dependent.  Date, Server, Connection,
+Keep-Alive, Transfer-Encoding and Content-Length are dropped as container
+bookkeeping.  Everything else is compared -- Content-Type, Content-Encoding, Vary,
+Allow, Location, Cache-Control, ETag, and every Access-Control-* -- because a
+client that depended on one of them would notice it going missing.  Charset
+parameters are normalised away: RFC 8259 makes JSON UTF-8, so whether the header
+says so is a formatting choice.
+"""
+
+[[module]]
+id = "assets"
+title = "the bundled web UI"
+weight = 0.05
+command = ["bash", "run.sh"]
+about = """
+4 cases: the index document, a hashed bundle asset, a directory request, and a
+path under the asset root that does not exist.  Small, and here because a service
+whose API is perfect but which no longer serves the page a browser loads has not
+been migrated.  Static-asset serving is a framework feature in both stacks and a
+different one in each, which is exactly why it is worth a case rather than an
+assumption.
+"""
+
+[[module]]
+id = "admin"
+title = "the second port, as a monitoring system would see it"
+weight = 0.08
+command = ["bash", "run.sh"]
+about = """
+9 cases on the admin connector: its root page, /ping, /healthcheck, /tasks, and
+the task endpoints that answer to a POST.
+
+Graded on what is observable and stable.  /ping's `pong` and /tasks' listing are
+compared in full; /healthcheck is compared on the set of checks it reports and
+each one's healthy flag, not on its timing fields; /metrics and /threads are
+compared structurally only, because their bodies are live JVM state and two runs
+of the SAME jar disagree about them.  Structurally still means something here: a
+submission that serves no /metrics at all, or serves it as HTML, fails.
+"""
+
+[[module]]
+id = "config"
+title = "the same YAML still configures the service"
+weight = 0.07
+command = ["python3", "run.py"]
+about = """
+The configuration contract, graded by observing effects rather than parsing.  Both
+sides are handed the same YAML -- the profiles, the CH and LM lists, the graph
+cache location, the two ports, the request header limit -- and the question is
+whether the running service reflects it: the profiles it will route on, the cache
+directory it created, the ports it bound, the oversized header it refuses.
+
+Nothing here asserts how the file was read.  A submission that binds it with
+Spring's own configuration mechanism, or a hand-written loader, or anything else,
+scores the same as long as the same file produces the same service.  That is the
+contract an operator has with this repository.
+"""
+
+[[module]]
+id = "cli"
+title = "command-line dispatch, by exit code and on-disk effect"
+weight = 0.06
+command = ["python3", "run.py"]
+about = """
+6 invocations: no arguments, an unknown command, `check` against a valid config,
+against a missing file, and against malformed YAML, and `import`.
+
+Deliberately narrow.  Exit codes and on-disk effects only -- whether `import`
+produced a graph cache, whether `check` refused a bad file -- and not one word of
+what was printed.  Usage text is the framework's to lay out, both stacks lay it
+out differently, and grading it would be grading the framework rather than the
+migration.  A timeout is recorded as a distinct outcome and compared as one,
+because "hung" is a comparable observation, not a grader error.
+"""
+
+[[module]]
+id = "own_tests"
+title = "the repository's own suite, executing"
+weight = 0.07
+command = ["python3", "run.py"]
+about = """
+State A ships 211 passing tests across the web modules.  They encode invariants
+the authors cared about and the corpus does not reach, and a migration that keeps
+them passing has kept those invariants.
+
+Scored on how many pass relative to State A's own count, measured in the same run
+rather than hard-coded, so a submission that rewrote the tests into the target
+framework's idioms is not penalised for the rewrite.  A submission that DELETED
+them scores nothing here, which is the intended asymmetry: porting a test suite is
+part of porting a repository.
+"""

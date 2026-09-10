@@ -1,0 +1,248 @@
+schema = "swerefactor.verification-probe/1"
+task = "pf02-stylus-web-platform-port"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file. It imports `srbstylus`, asks for the tree in
+# front of it, and drives it through the two doors a real consumer has: the entry
+# point `package.json` publishes, and `bin/stylus`.
+#
+# Neither door tells a candidate which tree answered. The helper installs the tree
+# into a consumer directory as `node_modules/stylus` and reaches it with a bare
+# `await import('stylus')`, so Node's own resolution honours `exports` when the
+# tree publishes one and `main` when it does not, and applies the tree's own
+# `type`. The CJS original and an ESM submission are reached by the same line,
+# with no branch and no path -- which is also exactly how an npm consumer reaches
+# this package. A candidate that wants to know which tree it is on has to ask the
+# compiler a question and read the answer.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing. The submission
+# is required to be a different program from the original -- §1.5 asks for a
+# synchronous face over an asynchronous core, §2.1 deletes `lib/` outright -- so a
+# candidate hunting *any* difference would find one in the first minute and learn
+# nothing about whether the port works.
+#
+# The allow list is what a consumer of this package consumes: the CSS, the errors,
+# the dependency and source-map metadata, the plugin API, the command line. The
+# deny list is what instruction.md put beyond comparison, plus the differences the
+# migration itself forces -- of which there are more here than in a build-system
+# port, and each one is a free break if it is left in scope.
+[scope]
+allow = [
+  "the CSS, byte for byte, for any input and any combination of options -- whitespace, `#f00` versus `red`, the order of hoisted at-rules, `@media` nesting, compressed output. §3 puts no qualifier on this at all, so neither does the scope.",
+  "the 356-case corpus in `test/`: any of its `.styl` inputs rendered against its expected `.css`, and the `.deps` and `.map` fixtures beside them. A case the original renders correctly and the submission does not is the centre of this task.",
+  "the synchronous face §1.5 requires, both halves of which exist on the original: `stylus(src).render()` returning a String and not a Promise, and `render(cb)` calling its callback before the next statement runs -- including what each does when the compile FAILS, where the original throws and a port built on an asynchronous core is under every temptation to reject instead",
+  "errors: the constructor name, the message, and the `file:line:column` a `ParseError` reports, for a syntax error, an unknown function, a bad `@extend`, a missing `@import`, a type error in an expression, and a plugin that throws. A port that gets the CSS right and the diagnosis wrong has broken every consumer that reads error messages.",
+  "the dependency list `deps()` returns, including transitive `@import`s, an `@import` of a directory's `index.styl`, a glob `@import`, and the order the list comes back in",
+  "the source map: `sources`, `sourcesContent`, `names`, the `mappings` string, `sourceRoot`, and the `sourceMappingURL` comment -- both inline and as a separate file",
+  "the built-in `.styl` library's behaviour: every function `functions/index.styl` defines, reachable without an explicit `@import`, plus the units, colour arithmetic and `%` interpolation the built-ins depend on. §1.4 lets a submission put that library wherever it likes and requires it to still be there.",
+  "the plugin API through `.use()` and `.define()`: a JavaScript function receiving Stylus nodes and returning one, `stylus.nodes` and the constructors on it, a plugin that calls `.define()` on the renderer it is handed, and a `.styl` file loaded by a plugin through `include`",
+  "every option §1.6 and the Node API accept, and what each one changes: `compress`, `linenos`, `firebug`, `include`, `imports`, `paths`, `filename`, `sourcemap` and its sub-options, `globals`, `functions`, `resolve url`",
+  "`bin/stylus` as a program: each flag State A accepts keeping its meaning, `--version` on stdout, `--help` on stderr, exit 0 for a successful compile and 1 for a failed one, reading from stdin, writing to a named output, and compiling a directory",
+  "the Connect middleware `stylus.middleware` publishes: the CSS it writes to disk, when it recompiles and when it does not, and what it does with a compile error",
+  "the names the published entry point exposes and whether each is callable, constructible or a value -- a name present on the original and absent on the submission is a consumer that gets `undefined`",
+  "repeatability: the same input rendering to the same bytes twice in one process and across two processes, and output that does not depend on filesystem enumeration order or on hash iteration order",
+  "anything that makes the package unusable to an existing Node consumer where the original is usable: an entry point that does not resolve, a `bin` that is not executable, a dependency the manifest declares and the code does not load, or a hang where the original returns",
+]
+deny = [
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the compiler a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+  "the file layout inside the tree, and any path within it. §2.1 requires `lib/` to be gone and §1.4 declines to say where its replacement lives, so a built-in's path differs between the two trees by construction. The helper collapses tree-internal paths to `/tree/<internal>` for this reason; a candidate that reconstructs one is attacking the instruction, not the port.",
+  "deep imports. `require('stylus/lib/renderer')` and every other path into the package's interior resolves on the original and cannot on a submission that obeyed §2.1. The published entry point and `bin/stylus` are the two doors, and they are the two doors on both trees.",
+  "whether the package is reached by `require` or by `import`. §1.5 requires a synchronous face, not a CommonJS one; `type`, `exports` and `main` are §3's list of things a submission may add or change, and `require()` of an ESM package is a fact about Node's loader rather than about this port.",
+  "`arguments` and `caller` on the exported function. They are own properties of a sloppy-mode function and absent on a strict-mode one, so they are present on the CJS original and impossible on any correct ESM submission -- measured, not assumed: `node -e 'function f(){}'` lists them and `node --input-type=module -e` does not. `api_surface()` filters them, along with `length`, `name` and `prototype`, which are on every function and say nothing.",
+  "the Node uncaught-exception framing around a CLI error: the `bin/stylus:NNN` throw site, the source excerpt, the caret, the stack frames, the `Node.js vNN` footer. The path in it is the staged directory, which differs between the trees by construction, and the frames name internal call structure §1.5 requires to change. The diagnosis inside that framing is in scope and is what the helper hands over.",
+  "`.stack` on any thrown error, for the same reason: it is a list of absolute paths into the implementation, and the implementation is stage 1's subject",
+  "the internal organisation of the submission: how many modules there are, what they are called, which of them holds what, what its classes and variables are named, whether it uses a helper the original had no equivalent of, and how `src/core/` and `src/node/` divide the work between them",
+  "the web-platform half of the port: the `./web` export, the platform realm, the capability object, and anything that runs in a browser. The original has no web core, so a candidate reaching for one fails on the original and is worth nothing. Stage 2 measures these.",
+  "anything §1 asks the submission to ADD, of which the async face is the one worth naming. `renderAsync` does not exist on the original, so a candidate that calls it fails there and is discarded -- and a candidate that instead asserts 'if an async face is published it must agree with the sync face' passes on the original only vacuously, which is the shape of a manufactured break rather than a found one. The sync face is in scope because it exists on both trees; its new counterpart is stage 2's.",
+  "`debug` output, progress notices, and anything else written to stderr that is not a diagnosis. `DEBUG` is unset for candidates; a port is free to log differently.",
+  "wall-clock time, memory, process count, and the size of any output as a number. A synchronous face over an asynchronous core may be slower and that is not a migration defect.",
+  "fields §3 permits the submission to add to `package.json` -- `type`, `exports`, `files`, `engines`, scripts -- and the presence of a lockfile entry or a `node_modules` layout that differs from the original's",
+  "behaviour the original also gets wrong. A candidate must pass on the original, which is what makes it a migration defect rather than an upstream bug -- and this compiler has upstream bugs, including in `@extend` ordering and in how some errors report their position.",
+  "the presence, absence or content of `lib/`, `src/core/` and `src/node/` as files. Stage 1 judges whether the migration happened and stage 2 measures the structure; this stage only asks whether the thing still compiles CSS correctly.",
+]
+
+# Three runs. Little here is timing-adjacent -- the subject is a compiler and its
+# answers are deterministic -- but a flake that costs a submission ten points is
+# a bug in the benchmark rather than a finding, and the callback-synchrony and
+# middleware-recompile checks are where a borderline one could appear.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# One candidate, on one tree. The expensive part is `npm ci --offline`, paid once
+# per tree by whichever candidate arrives first and cached under $SRB_STATE for
+# every candidate and round after it; a Node process that renders a few hundred
+# inputs is seconds. 600s is the ceiling for a candidate that pays for the install
+# and then walks the whole 356-case corpus.
+candidate_timeout_sec = 600.0
+run_timeout_sec = 600.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets. It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one input the original compiles
+correctly and the submission does not -- a `.styl` file, an option combination, a
+plugin, a command line, an error worth reporting accurately.
+
+A round that finds nothing pays the submission 10 points; a round that errors pays
+nothing and is reported as an error rather than as either verdict.
+
+The candidate reaches the compiler as an npm consumer does: `import('stylus')`
+against a tree installed as `node_modules/stylus`, and `bin/stylus` as
+`package.json` publishes it. Both exist on both trees, which is what makes a
+comparison between a CommonJS package and an ESM one mean anything.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another. Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific. Six unguided rounds
+# converge on the same two obvious things -- a corpus case and the synchronous
+# face -- and both are already stage-2 modules. Six pointed ones cover the
+# compiler.
+
+[[adversary]]
+id = "a01-corpus-css-and-sync-face"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the 356-case corpus, byte for byte: walk `test/cases/` and render every input
+against its expected `.css`, then do it again with `compress`, with `linenos`,
+and with the options each case's own name implies. This is the widest net in
+the stage and the one a submission is most likely to have a hole in somewhere.
+
+Then the synchronous face over an asynchronous core, which is the hardest
+thing §1.5 asks for: `render()` returning a String rather than a Promise,
+`render(cb)` calling back before the next statement executes, and what each
+does when the compile FAILS rather than succeeds -- a port that returns a
+rejected Promise where the original threw, or calls its error callback a tick
+late, has broken every caller's error handling. Compare against the ORIGINAL's
+behaviour, not against the submission's own async face: `renderAsync` does not
+exist on the original and is out of scope.
+"""
+
+[[adversary]]
+id = "a02-errors-and-imports"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the diagnosis: constructor name, message and `file:line:column` for a syntax
+error, an unclosed block, an unknown function, a bad `@extend`, a missing
+`@import`, a unit mismatch, a plugin that throws, and a `.styl` file whose
+error is on its last line with no trailing newline. Position arithmetic is
+exactly what gets lost when a parser is rehosted.
+
+Then `@import` resolution and the `deps()` list it produces: a relative
+import, one found on `paths`, a directory resolving to `index.styl`, a glob, a
+transitive chain, a diamond where two files import the same third, a cycle,
+and an import that does not exist. §1.5 keeps this on the Node adapter, so it
+is where the adapter and the core have to agree about who resolves what.
+"""
+
+[[adversary]]
+id = "a03-builtins-and-plugins"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the built-in `.styl` library §1.4 lets the submission relocate and requires to
+keep working: every function `functions/index.styl` defines, called without an
+explicit import, plus the `functions/*.styl` helpers, `unquote`, `lookup`,
+colour arithmetic, unit coercion and `%s` interpolation. A relocated library
+that lost one file is invisible until something calls the function in it.
+
+Then the plugin API as a real plugin uses it: `.use()` receiving the renderer,
+`.define()` with a JavaScript function that takes and returns Stylus nodes,
+`stylus.nodes` and the constructors on it, a plugin adding to `paths` or
+`include`, a plugin that defines a `.styl` file's worth of mixins, and a
+function whose arity or return type is wrong.
+"""
+
+[[adversary]]
+id = "a04-cli-and-sourcemaps"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+`bin/stylus` as a program: every flag State A accepts, stdin to stdout,
+`--out` to a directory, compiling a directory tree, `--watch` starting and
+stopping, `--include` and `--import`, `--compress`, `--line-numbers`,
+`--sourcemap` and its variants, `--print`, `--deps`, exit 0 against exit 1,
+and a flag given twice or with a missing argument.
+
+Then the source map: `mappings` against the corpus's own `.map` fixtures,
+`sources` and `sourcesContent` for a multi-file import chain, `sourceRoot`,
+`basePath`, an inline map against a separate one, the `sourceMappingURL`
+comment's placement, and a map for input that came from stdin and has no
+filename.
+"""
+
+[[adversary]]
+id = "a05-options-and-middleware"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the option matrix and the interactions in it rather than each option alone:
+`compress` with `linenos`, `firebug` with a source map, `globals` and
+`functions` set together, `resolve url` against an imported file's relative
+asset, `include css`, and an option set to a wrong type -- the original's
+answer to `compress: 'yes'` is an answer a port has to reproduce.
+
+Then `stylus.middleware`, driven as Connect drives it: the CSS that lands on
+disk, the `src`/`dest` split, whether a second request recompiles when the
+source is untouched and does recompile when it changes, what reaches the
+response when the compile fails, a request for a path that does not exist, and
+the `compile` hook a caller supplies.
+"""
+
+[[adversary]]
+id = "a06-determinism-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+output that must not depend on anything but the input: the same render twice
+in one process and in two, a glob import whose matches arrive in filesystem
+order, hoisted `@media` and `@import` ordering, `@extend` with several
+matching selectors, and object key ordering anywhere it reaches the CSS. A
+rehosted compiler that swapped a Map for an object gets these right by luck.
+
+Then, with whatever budget remains, nothing in particular -- read the
+original's `lib/` and follow whatever looks least likely to have survived
+being pulled apart into a platform-neutral core and a Node adapter. The other
+five rounds were told where to look, so this tail is where anything they were
+not told about has to be found.
+"""

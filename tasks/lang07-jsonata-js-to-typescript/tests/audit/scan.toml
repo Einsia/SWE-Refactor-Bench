@@ -1,0 +1,222 @@
+# --------------------------------------------------------------------------- #
+# lang07 stage 1: the read-only scan
+# --------------------------------------------------------------------------- #
+# Four modules that read the tree and report what they saw. None of them decides
+# anything: `swerefactor.scan` overwrites `required` to false on every check these
+# emit, and the findings are rendered into the reviewer's prompt as a digest. The
+# gates are the prose questions in evaluation.toml, and the models answer those.
+#
+# So the right shape for a check here is "the token `require('./jsonata.js')`
+# appears in src/probe.ts:14", not "the submission calls the original". The first
+# is true or false by reading. The second is the judgement that costs a submission
+# its score, and it is the reviewer's to make.
+#
+# Why this stage carries more of this task than of any other
+# ----------------------------------------------------------
+# On every other language pair in this benchmark, stage 1 precedes the
+# measurement. Here it *is* the measurement of whether the rewrite happened, and
+# the arithmetic that says so was run rather than assumed: rename the nine
+# `src/*.js` to `.ts`, put `// @ts-nocheck` at the top of each, write a
+# strict-looking tsconfig, compile, and stage 2 pays it in full. A control that
+# changes one line of behaviour fails a check and is paid nothing. Stage 2 is a
+# differential against the original's own output, a rename *is* the original, so
+# stage 2 is right to pass it and could not be made to fail it without breaking
+# what it is for.
+#
+# That is not a weighting mistake, and the two facts behind it are worth stating
+# because they decide the shape of every module below:
+#
+#   * node is both runtimes. Every other task can withhold the old toolchain and
+#     let the missing compiler prove the port; here the old runtime is the new
+#     runtime, and `dist/` is *required* to be full of emitted JavaScript. So no
+#     extension is forbidden on its own, and a module that reported `.js` files
+#     would report the same dozen findings on every honest submission.
+#   * The original is 6,376 logic lines the agent has in front of it, in the
+#     language it is porting *from*, and every line of it is legal TypeScript
+#     after a rename. No other task in this benchmark has an old tree the new
+#     compiler will accept verbatim.
+#
+# What the four modules therefore do is report *where* each JavaScript file is,
+# *what is in it*, and *how it differs from State A*, and leave every judgement to
+# a reader. The reviewer gets the tedious half established -- which files are
+# byte-equal to the original, where every long literal is, which of the 101
+# diagnostic codes appear in a data file rather than in code -- and spends its
+# turns on the question the gates ask.
+#
+# The weights are recorded and unused. `swerefactor.scan` emits advisory checks and
+# `grade_audit` scores the prose gates only, so these numbers reach no
+# arithmetic; they are here because the loader's shape is shared with a behavioural
+# suite, where they do.
+schema = "swerefactor.scan-suite/1"
+task = "lang07-jsonata-js-to-typescript"
+lib_dir = "lib"
+default_timeout_sec = 900
+
+[[module]]
+id = "closure"
+weight = 1.0
+about = """Where is the JavaScript, where is the TypeScript, and is there enough of the second?
+
+An inventory, in four parts, and the first is the one that differs from every
+other task's closure module: it does not treat a `.js` file as a finding.
+
+First, every JavaScript file in the tree with its path, its size, and whether it
+is byte-identical to State A's copy -- grouped by location, because location is
+the entire question here. A `.js` under `dist/` is the build's own output and is
+expected. A `.js` at `tools/build.js` is the vendored build helper State A ships
+and is expected. A `.js` under `src/`, or a byte-identical copy of
+`src/jsonata.js` anywhere at all, is the original implementation still present,
+and that is what `no-javascript-implementation` asks about. The module reports the
+grouping and says which files fall in it; it does not report a verdict, because
+`dist/probe.js` and `src/jsonata.js` are the same extension and opposite answers.
+
+Second, the TypeScript inventory beside it: every `.ts` outside `dist/`, with a
+physical and a logic line count per file, and the total against the contract's
+2,600-line floor. The floor is low on purpose -- the original is 6,376 logic
+lines and a competent port lands nearer that than the floor -- so a submission
+under it has not written a port at all, and one just over it is not thereby
+cleared. Counted by the same function that produced the contract's own figures,
+so the two numbers mean the same thing; see `lib/srbscan.py`.
+
+Third, the State A byte-identity sweep across the whole tree, by content rather
+than by path. Every file in State A hashed, every file in the submission hashed,
+and any match reported wherever it turned up. This is what finds `src/jsonata.js`
+carried across as `src/jsonata.ts` unmodified, or parked at `reference/engine.txt`,
+or renamed into `dist/` where a reader would take it for output. A rename is
+invisible to a path-based check and is the cheapest cheat available on this task.
+
+Fourth, the forbidden inventory that survives the reasoning above: `.node`,
+`.wasm`, `.so`, `.dylib`, `.dll` and `.exe` anywhere, a committed `node_modules`,
+`*.js.bak`-style backups, and any file whose first bytes say ELF, wasm, zip or
+gzip regardless of what it is called. These are ways to ship an implementation
+that no source read finds. The sniff matters more than the extension: a wasm
+module does not have to be called `.wasm` to be handed to
+`WebAssembly.instantiate`.
+"""
+
+[[module]]
+id = "provenance"
+weight = 1.0
+about = """Where do the answers come from -- computed, or carried?
+
+Five reports the reviewer would otherwise spend most of its turns assembling.
+
+First, a byte-level diff against State A: which of the fifteen files are
+unchanged, which were edited, which are new. Fifteen is few enough to list all of
+them, and on this task "new" is most of the answer -- State A ships no TypeScript
+beyond a hand-written `jsonata.d.ts`, so every `.ts` file and the tsconfig that
+compiles them are the author's. An edited `LICENSE`, `README.md` or
+`README.swerefactor.md` is the interesting row: those four preserved paths are
+supposed to survive untouched, and `README.swerefactor.md` in particular documents
+the probe protocol the later stages speak.
+
+Second, every string or array literal over 512 bytes, with file, line and a short
+excerpt, plus arrays of more than 64 elements. This is the shape an answer table
+has, and it is also the shape a date-format table has, and this repository is
+*full* of the second kind: `src/datetime.js` carries roman numerals, ordinal
+suffixes, month and day names in several forms, and ISO week-date constants. So
+the report is deliberately neutral about which it found. Distinguishing "keyed by
+a picture string, yielding a formatter" from "keyed by an expression, yielding a
+result" is the judgement `no-answer-tables` asks for, and the reviewer can make
+it once it can see both.
+
+Third, corpus-shaped content: runs of hash-width hex, base64 blobs over 512
+bytes, files that are mostly one-JSON-object-per-line, and any file naming
+`expected`, `corpus`, `golden` or `baseline`. A port derives its answers; a
+transcription carries them, and it has to keep them somewhere.
+
+Fourth and fifth, the two questions about JSONata's 101 diagnostic codes that
+survived being measured against State A. The obvious one did not: per-file code
+*density* looks like it should separate a port from a transcript, and it cannot
+here, because State A's own `src/jsonata.js` carries 100 of the 101 -- the whole
+message-template table sits in it, beside the evaluator -- with 33 in
+`functions.js` and 25 in `parser.js`. Any threshold that catches a transcript also
+catches a faithful port of the original's layout.
+
+What separates them is *where* a code appears and whether it arrived rendered.
+State A puts every code in JavaScript or in `README.swerefactor.md`, never in a
+`.json`, `.jsonl`, `.txt` or `.csv`: a code is raised by code, so a code in a data
+file was recorded rather than raised. And the engine renders messages at run time
+from templates -- a port holds
+`"Argument {{index}} of function {{token}} does not match function signature"` and
+never the substituted result, while a transcript of the reference's output holds
+the result and has no use for the template. Fourteen templates carry enough fixed
+text between their placeholders to search for without matching ordinary prose, and
+all fourteen produce zero hits anywhere in State A. Both lists are derived from
+State A at run time rather than written down, so neither can drift from the
+release.
+"""
+
+[[module]]
+id = "contract"
+weight = 1.0
+about = """Does the submission know it is being graded, and does the release contract hold on paper?
+
+Two unrelated readings that share a module because both are one pass over the
+same small tree.
+
+The awareness half: whether the submission names anything it should have no
+knowledge of. The seventeen tokens in the contract's `verifier_vocabulary` --
+`SRB_`, `swerefactor`, `/opt/assets`, `/opt/original`, `evaluation.toml`,
+`suite.toml`, `probe.toml`, `scan.toml`, `verification`, `expected.jsonl`,
+`corpus` and the rest -- and every `process.env` read with its file and line. A
+port has no reason to branch on how it is being run, and a branch on the grader's
+own vocabulary is the one finding here that is close to self-interpreting.
+`no-verifier-awareness` still owns the call: `process.env.NODE_ENV` and a
+`DEBUG` flag are ordinary and will show up in the same sweep. The sweep runs over
+authored text only, which is why an honest submission does not produce a finding
+for the word `corpus` in the 16,665-byte `README.swerefactor.md` it was told to
+preserve -- see `lib/srbscan.py`'s `authored`.
+
+The contract half, read rather than executed: `package.json`'s `build` script and
+what it invokes, its `main` and `types` fields, and whether `dependencies` and
+`devDependencies` are empty; `tsconfig.json`'s five `required_true` flags, its
+four `required_values`, and `"types": []` as they are *written*; `@ts-nocheck`,
+`@ts-ignore` and `@ts-expect-error` comments with per-file counts; and whether
+each of the four preserved paths is still there.
+
+The suppression counts deserve their own sentence, because on this pair they are
+the difference between a port and a rename. `// @ts-nocheck` at the top of a file
+turns off every check in it while leaving `strict: true` in the tsconfig
+untouched, and nine of them is the whole cheat this stage exists to catch. The
+module reports the count and where; `strict-typing` decides what it means, and
+stage 2's `structure` module settles *effective* strictness the only way it can be
+settled -- by compiling a deliberately ill-typed file against the submission's own
+tsconfig and requiring the build to fail.
+"""
+
+[[module]]
+id = "declarations"
+weight = 1.0
+about = """Are the published declarations emitted from the port, or carried across?
+
+The narrowest module here, and the one whose gate is hardest to answer by
+grepping, which is why it is separate rather than folded into `contract`.
+
+State A ships a hand-written `jsonata.d.ts` at the repository root: 2,297 bytes,
+81 lines, describing an `export =` callable merged with a namespace over six
+members. State B must publish declarations at `dist/jsonata.d.ts`, and the
+contract requires they be *emitted by tsc from the ported source* -- which is why
+`declaration: true` is in `required_true` rather than merely permitted. The
+distinction matters because the two routes are indistinguishable from the
+outside: a correct emit and a copied hand-written file both put a working `.d.ts`
+at the right path, and stage 2 can only check that the path works. `tsc` will
+happily emit nothing at all if `declaration` is off and a build step copies the
+old file into place, and the result type-checks for a consumer.
+
+So this module reports what a reader needs to tell the two apart. Whether the
+root `jsonata.d.ts` still exists and whether its bytes match State A's. Whether
+anything in the build path copies, writes or concatenates a `.d.ts` -- `cp`,
+`copyFile`, `writeFileSync`, a shell redirect into one -- with file and line, in
+`package.json` scripts, in `tools/`, and in any script the build script names.
+Whether `dist/` was committed. And the type names: the six namespace members and
+the five `Expression` members the contract lists, reported as present or absent
+in the submission's `src/`, because a declaration that describes types the source
+never declares was not emitted from that source.
+
+None of those is the verdict. A submission may legitimately keep a hand-written
+`.d.ts` in `src/` for the parts of node it touches -- `"types": []` means it has
+no `@types/node` and must declare what it uses -- and that file will show up in
+the copy sweep if the build touches it. `declarations-generated` reads the report
+and decides.
+"""

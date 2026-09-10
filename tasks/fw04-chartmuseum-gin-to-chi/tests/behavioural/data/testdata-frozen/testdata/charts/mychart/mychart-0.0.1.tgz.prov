@@ -1,0 +1,20 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+apiVersion: v1
+name: mychart
+version: 0.0.1
+
+...
+files:
+  mychart-0.0.1.tgz: sha256:beeeae03b3e6de14f15486f751918c50ccc3820105e00cdd0b15f4bc7dc284c3
+-----BEGIN PGP SIGNATURE-----
+
+wsBcBAEBCgAQBQJqa4OPCRCEO7+YH8GHYgAAqnAIAD21v7D/yDd3xjDMztfnVylS
+vmDprl7wqjOGW5//wlAM4wHmMiGB4RqzLHJHj2KeSntEXiRmNax2OQqM7wltoN2+
+q1eMcs5HbzS8F8fk+yVaS3CNO00sJzPBk/xfVSaSCzzsBEu72vVYvrfvGW/jZ1Ew
+nsxxPqYjzWmEoSxzmw3W1AVvHlKCdGRFd4di/Q67qOqU859k8a+ciWml5TBTU69r
+mN1M52yOVUlhUwwJaHAuMthzf/4XCk46A7lqBNZLQNFzCSdwIyvNhbp4wbux1vjr
+O4wotjwtylHp3cEE+0gYmbS8sJ5y4MDdqDriiaBQh8W/reGNzjWjS9yCIhaLLJw=
+=7kHb
+-----END PGP SIGNATURE-----

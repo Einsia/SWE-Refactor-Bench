@@ -1,0 +1,10 @@
+{
+  "name": "swerefactor-lang04-buildtools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned State A build toolchain for acorn 8.14.0 (rollup + buble plugin only).",
+  "dependencies": {
+    "rollup": "3.29.4",
+    "@rollup/plugin-buble": "1.0.3"
+  }
+}

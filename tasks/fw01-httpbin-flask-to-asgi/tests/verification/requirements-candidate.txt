@@ -1,0 +1,30 @@
+# The candidate's test stack for stage 3, one set of versions for both trees.
+#
+# This is not the service's dependency list -- that is requirements-baseline.txt
+# and requirements-target.txt, the two lockfiles beside this one -- it is what a
+# candidate test file is allowed to import beyond the standard library. Both
+# trees get the same versions from the same wheelhouse, because a candidate whose
+# pytest differed between the two halves of a comparison would not be comparing
+# the two frameworks.
+#
+# The same pytest and pytest-timeout every other task's stage 3 pins, for the same
+# reason: a benchmark should not run two pytests. httpx is the one addition, and it
+# is what makes this task's candidate different from all of them -- the subject here
+# is an HTTP service, so HTTP is how you ask it a question. The others reach their
+# subject through a library shim instead.
+#
+# No hashes, which this task shares only with fw06: these wheels are not fetched.
+# They are
+# built with --no-index --find-links from /opt/wheelhouse, which was itself built
+# from requirements-target.txt under --require-hashes, so every artifact here was
+# already hash-verified one layer up. httpx's own closure -- httpcore, anyio, h11,
+# sniffio, certifi, idna -- is in that lockfile; nothing here reaches starlette or
+# uvicorn, so a candidate cannot import the framework it is measuring.
+#
+# Deliberately absent: requests, aiohttp, anything that would give a candidate a
+# second HTTP client whose own quirks it could mistake for a difference between
+# the trees.
+
+httpx==0.28.1
+pytest==8.3.4
+pytest-timeout==2.3.1

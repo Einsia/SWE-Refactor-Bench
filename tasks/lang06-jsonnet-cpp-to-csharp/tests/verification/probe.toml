@@ -1,0 +1,230 @@
+schema = "swerefactor.verification-probe/1"
+task = "lang06-jsonnet-cpp-to-csharp"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file run against a tree this script builds and installs.
+# Both trees end at the same interface -- bin/jsonnet and bin/jsonnetfmt in a prefix
+# of their own, invoked identically -- so a candidate sees two installed programs and
+# no source, no project file and no build log.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two
+# implementations of a lazy functional language with 39 native functions and a
+# comment-preserving formatter differ somewhere.  The allow list is jsonnet's own
+# published contract -- what the language reference specifies, what the two CLIs
+# document, and what 0.20.0 does where the documentation is silent.  The deny list
+# is what instruction.md tells the agent is not compared.  They have to agree: a
+# scope that forbids what the instruction promised would make the task unwinnable,
+# and a scope that permits what the instruction excluded would make it unlosable.
+[scope]
+allow = [
+  "evaluation results byte for byte: the manifested output of any Jsonnet program on stdout, including the trailing newline and the exact indentation of nested objects and arrays",
+  "the number format: 17 significant digits, %.17g for anything fractional and %.0f for an integral value, a two-digit signed exponent, -0 for negative zero, and the round-trip of every double that can be written as a literal",
+  "the standard library as stdlib/std.jsonnet defines it together with the natives it is bound over: every std.* function, its argument coercions, its error messages, and its behaviour on empty, boundary and wrongly-typed arguments",
+  "std.parseJson and std.parseYaml on every input either accepts, including multi-document YAML, anchors and aliases, merge keys, tags, block scalars, and the scalar-to-type resolution table",
+  "std.manifestJson, manifestJsonEx, manifestYamlDoc, manifestYamlStream, manifestIni, manifestPython, manifestXmlJsonml, manifestTomlEx and the escaping each performs",
+  "std.format and the % operator: every conversion, flag, width, precision and mapping form, and the errors on a malformed format string or a mismatched argument",
+  "laziness and evaluation order as the language specifies them: thunks forced at most once, self and super, late binding, object composition with +, hidden and visible fields, computed field names, comprehensions, and recursive locals",
+  "the three error channels exactly as 0.20.0 writes them: the ERROR:, STATIC ERROR: and RUNTIME ERROR: prefixes, the message text, the location spans, and the exit status of each",
+  "the stack trace: frame order, the tab-indented layout, the function and location on each frame, the trailing context on the last frame, elision with ... under --max-trace, and what --max-stack changes",
+  "both command-line interfaces: every flag in --help for both programs, its short form, multi-character expansion, -- terminating options, - meaning stdin, an unknown flag, a flag missing its argument, a repeated flag, and the exit status in each case",
+  "--help and --version output byte for byte, on both programs",
+  "what a run writes to disk: --output-file, --multi's one file per top-level field including which files it does and does not rewrite, --yaml-stream, --string, and jsonnetfmt --in-place and --test",
+  "import, importstr and importbin: resolution order against the file's own directory and each -J path, a missing file, a directory, an import cycle, an absolute path, and importbin on bytes that are not valid UTF-8",
+  "external variables and top-level arguments: --ext-str, --ext-code, --tla-str, --tla-code and their -file forms, an undefined variable, a redefinition, and code that fails to parse",
+  "jsonnetfmt's output on any source it accepts, including comment placement and reflow, string style, --indent, --max-blank-lines, --pad-arrays, --pad-objects, --pretty-field-names, --sort-imports, their no- forms, and idempotency on its own output",
+  "the lexer and parser: every token form, verbatim and block strings, escapes, unicode identifiers, numbers at their boundaries, and the exact static error for malformed input",
+  "resource behaviour on verification input: deep recursion, long strings, large objects and pathological programs must not crash, hang past a generous timeout, or exhaust memory where 0.20.0 does not",
+]
+deny = [
+  "wall-clock performance: a submission may be slower than the C++, and any assertion of the form 'this must complete in N milliseconds' is out of scope. A hang that outlives the run timeout is in scope, as above; a constant factor is not.",
+  "peak memory as a number, and allocation or GC behaviour: --gc-min-objects and --gc-growth-trigger must be accepted and validated like any other integer flag, but what they do to a garbage collector the port need not have is not compared",
+  "the internal structure of the submission: project layout, namespaces, type and method names, file names, and whether any given piece of the port lives where the C++ did. Read the code freely -- that is how you find where to aim -- but the finding has to be a difference in what the programs do.",
+  "the contents of a build or publish directory, the names of intermediate artefacts, compiler diagnostics, and anything in a build log",
+  "anything that requires the C ABI, the C++ binding or the CPython extension: libjsonnet.h, the cpp/ and python/ interfaces are removed by the migration and are not part of the product",
+  "jsonnetfmt --debug-desugaring's output. The flag is broken in 0.20.0 for every input -- desugaring rewrites literals to DOUBLE and the formatter unescapes a second time, so the stdlib itself fails to reparse -- so the flag must be accepted, and what it prints is not graded.",
+  "std.parseJson and std.parseYaml on a number literal that overflows a double: the reference aborts on 1e400 and does not on 1e308 or 1e-400. The same magnitude as a *source* literal is a clean static error and is in scope; only the two parsers are excluded.",
+  "behaviour on input the original also gets wrong -- a candidate must pass on the original, which is what makes it a migration defect rather than an upstream bug",
+  "the presence, absence or content of C++ source, the forbidden build systems, and the preserved files, which stage 1 already judges",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, whether the program is an apphost or a shim, the presence beside it of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artefact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Little here is timing adjacent, but a
+# flake that costs a submission ten points is a bug in the benchmark, not a
+# finding -- and the deep-recursion and long-string cases are exactly where a
+# borderline timeout could produce one.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Build + install + pytest, for one candidate, on one tree.  The install is built
+# once per tree and cached, so only the first candidate pays for it; 1500s is the
+# ceiling for that one, on a cold g++ build of 15k lines of C++ or a cold restore
+# and publish of the submission.
+candidate_timeout_sec = 1800.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one program, one command line or
+one standard-library call that the C++ answers correctly and the C# does not.  A
+round that finds nothing pays the submission 10 points; a round that errors pays
+nothing and is reported as an error rather than as either verdict.
+
+A candidate is the same shape as a stage-2 case -- an input tree, an argv, and a
+comparison of stdout, stderr, exit status and the files the run created, changed or
+removed -- so a model that finds something has found a hole in stage 2's coverage,
+and the case can be read directly into the suite afterwards.
+
+This is the only image with both toolchains, because it is the only stage that has
+to build State A as well as the submission: a candidate's claim that "the original
+does X" is worth nothing unless the original is right there to demonstrate it.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures is
+# how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable in
+# the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds
+# converge on the same three obvious constructs; six pointed ones cover the
+# language.  It is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-numbers-and-stdlib"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+number formatting and arithmetic: %.17g against the C# double formatter at
+every awkward magnitude -- ties, subnormals, values just under and just over
+the integral cliff, exponents at two and three digits, negative zero through
+arithmetic as well as literally, and the manifested form of a double inside a
+nested structure.
+
+Then the standard library where std.jsonnet delegates to a native:
+std.format's conversions and error text, the string and codepoint functions on
+astral characters and lone surrogates, sort and uniq with a keyF, set
+operations on unsorted input, and every function's behaviour on an empty
+array, an empty string and an argument of the wrong type.
+"""
+
+[[adversary]]
+id = "a02-parseyaml-and-manifest"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+std.parseYaml and std.parseJson: the scalar resolution table (which strings
+become numbers, booleans, null), anchors, aliases, merge keys, tags, block and
+folded scalars with every chomping indicator, multi-document streams,
+duplicate keys, and the exact error on malformed input. The reference vendors
+rapidyaml, so its edges are unlikely to be C#'s.
+
+Then the manifesters: manifestYamlDoc's quoting and line folding,
+manifestIni's sections, manifestPython, manifestXmlJsonml, manifestTomlEx's
+escaping and key quoting, and manifestJsonEx's indentation with unusual
+separators -- each on deeply nested input, on strings needing escapes, and on
+the empty object and array.
+"""
+
+[[adversary]]
+id = "a03-errors-and-traces"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the three error channels byte for byte: the location span on every kind of
+static error, the message text of every runtime error the evaluator can raise,
+error values that are not strings, std.assertEqual's message, an error raised
+inside a lazily-forced field, and the exit status in each case.
+
+Then stack traces: frame order and naming through desugared constructs --
+comprehensions, object composition, std functions implemented in Jsonnet,
+mutual recursion, a thunk forced far from where it was created -- plus --max-
+trace elision at its boundaries and what --max-stack rejects.
+"""
+
+[[adversary]]
+id = "a04-formatter-and-lexer"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+jsonnetfmt: comment placement in the awkward positions -- between a field and
+its colon, inside an empty object, after the last element, around a binary
+operator -- plus blank-line collapsing, string style conversion when the
+source contains both quote kinds, --sort-imports with comments attached to
+imports, and idempotency on its own output for every file in test_suite/.
+
+Then the lexer and parser: block strings with irregular indentation, verbatim
+strings, every escape and the malformed forms, unicode in identifiers and
+strings, numbers at the syntactic boundaries (leading zero, trailing dot, huge
+exponent), operator precedence and associativity at the edges, and the exact
+static error for each malformation.
+"""
+
+[[adversary]]
+id = "a05-objects-and-cli"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+objects and laziness: self and super through several levels of +, hidden
+fields becoming visible and back, :::, assertions in object bodies, computed
+field names colliding, comprehensions over an object, late binding through a
+local, and a field whose thunk is forced during the evaluation of another
+field.
+
+Then the two command lines themselves: --multi's exact set of created and
+rewritten files including the unchanged-output case, --output-file to a path
+that cannot be written, --yaml-stream with -o, --string on non-string output,
+jsonnetfmt --test's exit status, --in-place on several files where one fails,
+-- and -, multi-character flag expansion, a flag given twice, and --help and
+--version byte for byte.
+"""
+
+[[adversary]]
+id = "a06-imports-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+imports: resolution order between the importing file's directory and each -J
+path, the same file imported by two different paths, a cycle, a missing file,
+a directory, importstr and importbin on invalid UTF-8 and on an empty file,
+and the error text and trace when an imported file fails to parse.
+
+Then, with whatever budget remains, nothing in particular -- read the C++ and
+the C# and follow what looks weakest. The other five rounds were told where to
+look, so this tail is where anything they were not told about has to be found.
+"""

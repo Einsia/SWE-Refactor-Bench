@@ -1,0 +1,144 @@
+# The new toolchain, the test runner, and the project's own vectors.
+#
+# Installed with --require-hashes, so every line below is a version *and* the
+# bytes of that version.  This matters more here than in a normal project: the
+# whole stage rests on "the submission's build succeeded against a fixed
+# toolchain", and a toolchain that silently moved between the run that recorded
+# data/ and the run that grades a submission turns a measurement into a
+# coincidence.
+#
+# What is here, and why each line has to be:
+#
+#   meson, ninja        the build system the migration targets, and its backend.
+#   meson-python        the PEP 517 backend a Meson-built Python package needs.
+#                       Never invoked by name anywhere in this suite -- the suite
+#                       only ever says `python -m build --wheel --no-isolation`
+#                       and lets the submission's pyproject.toml choose.  It is
+#                       installed because --no-isolation means pip will not fetch
+#                       a backend, so an absent one would fail every submission.
+#   patchelf            meson-python rewrites RPATHs through it.  These 41
+#                       objects link nothing but libc, so it will likely never
+#                       fire -- but a backend that wants it and cannot find it
+#                       fails the build, and that failure would read as the
+#                       submission's fault.
+#   build, pyproject_hooks, pyproject-metadata, packaging
+#                       the front end and what it imports.
+#   pytest, iniconfig, pluggy
+#                       the runner for the eleven pytest modules.
+#   setuptools, wheel   State A's backend, at the release contemporaneous with
+#                       pycryptodome 3.20.0.  See the block below.
+#
+# Why State A's backend is installed in the image that grades the migration away
+# from it.
+#
+# This stage grades behaviour preservation, and every expectation it grades was
+# recorded from State A -- the wheel's 336 members, the 277 exported symbols per
+# object, the four artefact counts under a crippled compiler, the 39,245 self-test
+# ids.  An image that cannot build State A cannot rebuild the tree those numbers
+# came from, which means the suite cannot be run against its own oracle: the
+# reference for "correct" fails the stage that defines it, and every number in
+# data/ is an assertion nothing in this image can check.
+#
+# Leaving them out would also be load-bearing for a claim this stage does not
+# make.  "The submission does not need setuptools" is a question about whether the
+# migration happened, and it belongs to stage 1's `setuptools_retired` gate, which
+# reads both trees with a reviewer and whose failure scores the submission zero
+# before this image runs.  The one check here whose subject is that -- cleanliness
+# `test_the_wheel_was_built_with_the_backend_the_tree_declares` -- is recorded at
+# weight 0.0 and scores nothing either way.  So their absence would buy a detection
+# this stage does not perform, at the price of the stage being unable to build its
+# own reference.
+#
+# `python -m build --no-isolation` is why both backends have to be installed
+# rather than resolved: the front end will not fetch a backend, so whichever one a
+# tree declares in `[build-system] requires` must already be here.  Installing
+# both is what makes the front end neutral -- the tree's own pyproject.toml picks,
+# and the harness never names a backend.
+#
+# 69.0.3 and 0.42.0 are the releases contemporaneous with pycryptodome 3.20.0
+# (January 2024), the same reason SOURCE_DATE_EPOCH is pinned to 2024-01-09.
+# data/wheel.json records `Generator: bdist_wheel (0.42.0)` and the filename
+# `pycryptodome-3.20.0-cp35-abi3-linux_x86_64.whl`; a setuptools two years newer
+# would produce a different METADATA block, a different RECORD and possibly a
+# different tag, none of which the migration is responsible for.  These are the
+# same two versions, to the byte, that ../verification/requirements-toolchain.txt
+# installs for the same purpose -- stage 3 also has to build State A.
+#
+# One consequence to keep in view: `import distutils` resolves, through
+# setuptools' vendored copy and its `distutils-precedence.pth`.  Nothing in this
+# suite asserts otherwise; the Dockerfile checks that both backends are reachable
+# through the front end, which is the assertion this stage's numbers rest on.
+#
+# What is deliberately absent: pycryptodome-test-vectors.
+#
+# It is absent for a narrower reason: the vectors *are*
+# needed -- without them Crypto.SelfTest collects 3,603 instances instead of
+# 42,784, and the module that would notice a wrong compiler flag never runs --
+# but the only distribution PyPI has for it is an sdist, and `pip install` of an
+# sdist prepares its metadata in an isolated environment that fetches its own
+# unpinned build backend.  That is a resolver deciding what goes into an image
+# that claims to be reproducible, which is the thing --require-hashes exists to
+# prevent.  It is 443 data files and no code, and
+# `Crypto/SelfTest/loader.py` reaches it with `import pycryptodome_test_vectors`
+# and `os.path.dirname(__file__)` -- no metadata, no entry points -- so the
+# Dockerfile fetches the sdist, checks this digest, and copies the package
+# directory into site-packages:
+#
+#     pycryptodome-test-vectors==1.0.14
+#     sha256:d437b44a35dcafc0626c3561bfb1b506a1b7c7445cc5fb9d36e2374161bc9a37
+#
+# and then asserts the import resolves and a vector actually loads.
+#
+# Both the sdist and the wheel digest are listed for each package.  pip verifies
+# whichever file it selects, and a list that pins only one of the two fails on an
+# image where the other is preferred -- a failure that would look like a network
+# problem and cost a submission its whole score.
+#
+# pytest, iniconfig, packaging and pluggy are also pinned, to these same
+# versions and digests, by ../audit/requirements-scan.txt.  One runner
+# across both stages, so a check that behaves one way in the scan cannot behave
+# another way here.
+
+meson==1.4.0 \
+    --hash=sha256:476a458d51fcfa322a6bdc64da5138997c542d08e6b2e49b9fa68c46fd7c4475 \
+    --hash=sha256:8fd6630c25c27f1489a8a0392b311a60481a3c161aa699b330e25935b750138d
+meson-python==0.15.0 \
+    --hash=sha256:3ae38253ff02b2e947a05e362a2eaf5a9a09d133c5666b4123399ee5fbf2e591 \
+    --hash=sha256:fddb73eecd49e89c1c41c87937cd89c2d0b65a1c63ba28238681d4bd9484d26f
+ninja==1.11.1.1 \
+    --hash=sha256:84502ec98f02a037a169c4b0d5d86075eaf6afc55e1879003d6cab51ced2ea4b \
+    --hash=sha256:76482ba746a2618eecf89d5253c0d1e4f1da1270d41e9f54dfbd91831b0f6885 \
+    --hash=sha256:9d793b08dd857e38d0b6ffe9e6b7145d7c485a42dcfea04905ca0cdb6017cc3c
+patchelf==0.17.2.4 \
+    --hash=sha256:d9b35ebfada70c02679ad036407d9724ffe1255122ba4ac5e4be5868618a5689 \
+    --hash=sha256:970ee5cd8af33e5ea2099510b2f9013fa1b8d5cd763bf3fd3961281c18101a09
+build==1.5.0 \
+    --hash=sha256:13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f \
+    --hash=sha256:302c22c3ba2a0fd5f3911918651341ebb3896176cbdec15bd421f80b1afc7647
+pyproject_hooks==1.2.0 \
+    --hash=sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913 \
+    --hash=sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8
+pyproject-metadata==0.12.1 \
+    --hash=sha256:f7162d580a96386a8eb096da06215f981f547d1490f03055ef99e323bc2da427 \
+    --hash=sha256:8809a4df6fe08279b39a8890669506ed3158e0617855ac9aff098fcbe772ae4c
+packaging==26.2 \
+    --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
+    --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
+pytest==8.3.4 \
+    --hash=sha256:50e16d954148559c9a74109af1eaf0c945ba2d8f30f0a3d3335edde19788b6f6 \
+    --hash=sha256:965370d062bce11e73868e0335abac31b4d3de0e82f4007408d242b4f8610761
+iniconfig==2.0.0 \
+    --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374 \
+    --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3
+pluggy==1.5.0 \
+    --hash=sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669 \
+    --hash=sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1
+
+# State A's backend.  Same two versions, same digests, as
+# ../verification/requirements-toolchain.txt.
+setuptools==69.0.3 \
+    --hash=sha256:385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05 \
+    --hash=sha256:be1af57fc409f93647f2e8e4573a142ed38724b8cdd389706a867bb4efcf1e78
+wheel==0.42.0 \
+    --hash=sha256:177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d \
+    --hash=sha256:c45be39f7882c9d34243236f2d63cbd58039e360f85d0913425fbd7ceea617a8

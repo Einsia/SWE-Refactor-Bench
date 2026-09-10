@@ -1,0 +1,104 @@
+# Packages retired by this migration.
+#
+# These are the Express/Connect web layer and the dependencies that exist in
+# State A only to make Express work. None of them is present anywhere in the
+# State B closure, and no package that a migrated State B may legitimately keep
+# requires any of them -- both properties are checked mechanically, so this list
+# can be enforced without collateral damage.
+#
+# This file is the ban list, and a ban list is not by itself an enforcement. Every
+# image that ships a pruned mirror builds it by removing these 54 from a complete
+# one, and where a mirror is pruned there is no packument, so npm answers 404 and a
+# manifest requiring one cannot install there.
+#
+# Which mirror a stage installs against is that stage's own decision, stated in its
+# own Dockerfile header. Read that header rather than assuming, because the paths
+# are not spelled the same way in every image: /opt/npm-registry is the COMPLETE
+# mirror in the behavioural stage and the PRUNED one in the agent environment and in
+# the verification stage, where the complete copy is /opt/npm-registry-baseline.
+#
+# The behavioural stage installs against the complete mirror. It has to: State A
+# declares express, and that stage's install module is required, so a pruned mirror
+# there would 404 the reference tree and score the stage 0. A submission that moved
+# its server to Fastify and left express in package.json installs cleanly at
+# grading time.
+#
+# So the registry enforces nothing when a result is measured. What enforces this
+# list is stage 1's `old_stack_retired` gate, over the manifest, the lockfile and
+# the source, with both trees open.
+#
+# This comment is identical in all four copies of this file and is checked to be
+# (infra/tests/test_layout.py::test_shipped_task_layout), so it is written from no
+# single image's point of view. A sentence here that says "this image" is a bug.
+
+# --- the framework and its router -------------------------------------------
+express
+express-urlrewrite
+path-to-regexp
+array-flatten
+merge-descriptors
+utils-merge
+methods
+finalhandler
+parseurl
+
+# --- the middleware stack json-server composes ------------------------------
+body-parser
+raw-body
+bytes
+content-type
+compression
+compressible
+on-headers
+connect-pause
+cors
+errorhandler
+method-override
+morgan
+basic-auth
+on-finished
+ee-first
+serve-static
+send
+destroy
+encodeurl
+fresh
+range-parser
+
+# --- Express request/response plumbing --------------------------------------
+qs
+etag
+type-is
+accepts
+negotiator
+media-typer
+vary
+cookie-signature
+proxy-addr
+forwarded
+unpipe
+
+# --- the Express-shaped test client -----------------------------------------
+supertest
+superagent
+cookiejar
+formidable
+dezalgo
+hexoid
+fast-safe-stringify
+
+# --- the bridges ------------------------------------------------------------
+# The shortcut this task exists to rule out: mounting the untouched Express
+# application inside Fastify through an adapter, so the router, the middleware
+# stack and the response plumbing all survive while `fastify` appears in the
+# manifest. @fastify/express loads Express itself; middie re-implements the
+# connect signature so `app.use(req, res, next)` keeps working; connect is the
+# stack itself; the pillarjs router and express-promise-router are the Express
+# router extracted from the framework. A migration that needs any of these has
+# translated its interface and kept its implementation.
+@fastify/express
+@fastify/middie
+middie
+connect
+router
+express-promise-router

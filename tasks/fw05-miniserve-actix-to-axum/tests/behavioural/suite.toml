@@ -1,0 +1,256 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "fw05-miniserve-actix-to-axum"
+
+# Fourteen independent processes. One builds the submission and plays the whole
+# corpus against it; the other thirteen read that recording and compare it to the
+# frozen State A capture in data/. Nothing here opens a file in the submitted
+# tree -- there is no `repo` fixture to hand one to a module. A question about
+# source belongs to stage 1, which reads both trees and executes neither.
+#
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing?
+#
+# A module's own assertion count does not affect its share. `listing` runs some
+# 3,600 comparisons and `config` runs about 200, which does not make listing
+# eighteen times more important -- it makes listing more precisely diagnosed. That
+# is deliberate. The QR code is either generated or it is not, and "not" is the
+# same hole whether one assertion found it or a hundred did.
+#
+# The split is by observable surface rather than by assertion family, and
+# lib/routing.py records the reasoning at length. Briefly: a header module and a
+# body module would both touch every feature, so a submission that dropped
+# archives entirely would lose a few per cent of three modules instead of one
+# whole module, and the report would say "headers differ in 31 places" where the
+# useful sentence is "the archive endpoint is gone".
+#
+# `build` is first, and the other thirteen read the recording it publishes, so a
+# submission that will not compile leaves them nothing behavioural to measure: each
+# fails its own checks on its own evidence, and the stage pays nothing, because it
+# pays only for a submission that passed every scored check in every weighted
+# module.
+#
+# Two modules that fw01 carries are deliberately absent. There is no `closure`
+# module, and the reason is not that resolving would prove it: this image ships the
+# pruned delivery registry but compiles against the *complete* one, because State A
+# depends on actix and every expectation in this suite is defined by State A's
+# behaviour -- pruned, the reference could not compile and a `build` failure would
+# stop meaning that behaviour changed. So a closure module here could not lean on
+# resolution, and would have to re-read the manifest and the lock file to say
+# anything. Stage 1 already does exactly that, mechanically and in more detail than
+# this suite would: its `closure` scan reports on the four dependency tables, the
+# lock file, the feature table, `[patch]`/`[replace]`, the source vocabulary and the
+# published file names, and three reviews vote on what it found under a required
+# gate whose failure is worth the whole submission. Duplicating that here would add
+# a number, not a fact. Whether actix left the *source* is likewise stage 1's
+# question. There is no `differential` module either: its job is to
+# defeat a response lookup table, and the recorded corpus is grader-side -- an
+# agent that never sees the 612 cases cannot tabulate them. The cheat this task
+# is actually built against is delegation to the State A oracle, and this suite
+# defeats it structurally rather than with a check: `/opt/oracle/miniserve` exists
+# only in the agent's image, so a submission that shells out to it, symlinks to it
+# or proxies to it finds nothing here and fails every case in every module.
+
+default_timeout_sec = 1200
+lib_dir = "lib"
+
+[metadata]
+runtime = "rust 1.77.2"
+target_stack = "axum 0.7.9 on tower / tower-http / hyper 1"
+corpus_sessions = 62
+corpus_cases = 612
+cli_invocations = 53
+
+# --------------------------------------------------------------------------- #
+# The build everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "compiles, boots and answers"
+weight = 0.05
+timeout_sec = 5400
+about = """
+cargo build --release --offline --locked against the vendored registry, into a
+scratch target directory so nothing this module does is visible to stage 3. Then
+one replay of all 62 configurations and 612 requests into
+$SRB_SUITE_WORK/actual.json.
+
+Graded on six things: a tree arrived, it compiled, it did so inside the budget, it
+produced a binary named miniserve, that binary runs, and the replay finished.
+*How* it answered is the other thirteen modules' business -- the submission cannot
+tell which of them is looking, and the release profile (lto = true with
+codegen-units = 1) is not worth paying fourteen times.
+"""
+
+# --------------------------------------------------------------------------- #
+# The eleven observable surfaces. 0.87 between them.
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "listing"
+title = "directory listings"
+weight = 0.13
+about = """
+The largest surface, and what miniserve mostly is: 232 cases over 15
+configurations. Row order and contents, the humanised size and timestamp columns,
+breadcrumbs, hidden files, each sort key and direction, a served index.html, a
+rendered README, indexing disabled, and the three symlink policies. A port that
+renders no listing has not migrated anything.
+"""
+
+[[module]]
+id = "static"
+title = "serving a file"
+weight = 0.11
+about = """
+62 cases: the guessed content type, Accept-Ranges, ETag and Last-Modified, the
+disposition, ranged requests including unsatisfiable and suffix ranges, and
+conditional requests -- If-None-Match to 304, If-Match to 412. tower-http's
+ServeDir emits no ETag by default, which silently turns every conditional request
+into an unconditional one while leaving the status line looking right.
+"""
+
+[[module]]
+id = "upload"
+title = "multipart upload and directory creation"
+weight = 0.11
+about = """
+74 cases over 11 configurations: multipart upload, mkdir, an allowed-directory
+list, the overwrite policy, media-type restrictions, uploads into hidden or
+symlinked paths, and upload behind auth or a route prefix. The served tree is
+digested without mtimes at the end of each session, which is the only assertion in
+the suite that looks at the filesystem rather than at a response -- so a port that
+returns the right 303 and writes the wrong bytes fails here and nowhere else.
+"""
+
+[[module]]
+id = "archives"
+title = "tar, tar.gz and zip on demand"
+weight = 0.09
+about = """
+30 cases over 4 configurations, graded on the member list and member contents
+rather than on bytes, because two correct archivers disagree about tar padding and
+zip extra fields. What that leaves is what actually goes wrong: an archive rooted
+at the wrong prefix, a symlink inlined where the baseline skipped it, hidden files
+included when --hidden was off, a stream that does not unpack at all.
+"""
+
+[[module]]
+id = "auth"
+title = "HTTP basic auth"
+weight = 0.09
+about = """
+45 cases over 6 configurations: plaintext, sha256 and sha512 credentials, several
+accounts, accounts from a file, and auth behind a route prefix. Graded on what
+unauthenticated, wrongly authenticated and correctly authenticated requests each
+receive -- including the 401 that arrives without WWW-Authenticate, so no browser
+ever prompts, and the one route left answering without credentials. A security
+boundary, so a partial port is worse than none.
+"""
+
+[[module]]
+id = "routing"
+title = "paths, prefixes, redirects and method dispatch"
+weight = 0.08
+about = """
+60 cases over 5 configurations: the SPA fallback, extensionless pretty URLs,
+--route-prefix with and without surrounding slashes, the per-boot --random-route,
+the trailing-slash redirect, and which methods are answered. A prefix has to
+appear in the routes that match, in the links on every page, and in the Location
+of a redirect; a port that manages two of the three serves a page whose every link
+404s and passes anything that only reads status codes.
+"""
+
+[[module]]
+id = "errors"
+title = "what a request that cannot be served gets"
+weight = 0.07
+about = """
+27 cases: a missing file, a path escaping the served root, a hidden file when
+hidden files are off, a malformed query, a directory operation on a file.
+miniserve renders these as pages carrying the same shell, theme and footer as a
+listing, not as axum's bare "404 Not Found" -- and a port that turns a deliberate
+400 into a 404 has moved the boundary between "bad request" and "not here".
+"""
+
+[[module]]
+id = "presentation"
+title = "title, themes, QR code and footers"
+weight = 0.07
+about = """
+36 cases over 8 configurations: the <title> and its default, the colour scheme and
+the picker that switches it, the QR code, the wget footer, the version footer.
+Each is a whole feature a port can drop while still rendering a page that looks
+correct. The QR is the sharpest of them: matching its module count means the
+encoded text, the error-correction level and the version all agree.
+"""
+
+[[module]]
+id = "tls"
+title = "HTTPS"
+weight = 0.05
+about = """
+15 cases over 4 configurations: --tls-cert and --tls-key with PKCS#8, PKCS#1 and
+EC keys, plus one session that turns TLS on alongside everything else. Mostly a
+build question wearing a runtime hat -- TLS sits behind a Cargo feature, and a
+port that rewires Cargo.toml is one edit away from a binary whose --tls-cert flag
+no longer exists.
+"""
+
+[[module]]
+id = "encodings"
+title = "content encodings on the wire"
+weight = 0.04
+about = """
+16 cases over 2 configurations: what Accept-Encoding negotiates with compression
+on, and that the same requests get identity bodies with it off. The failure that
+matters is a port advertising an encoding it did not apply -- a body no client can
+read, behind a status line and a content length that both look reasonable.
+"""
+
+[[module]]
+id = "config"
+title = "configuration reaching the response"
+weight = 0.03
+about = """
+15 cases over 5 configurations: --header adding a response header, --header
+overriding one miniserve sets itself, the MINISERVE_* environment aliases, and the
+precedence between an alias and an explicit flag. Small, and the one place where
+plumbing is what gets graded: a port that reads a flag correctly and never applies
+it is indistinguishable from one that never read it.
+"""
+
+# --------------------------------------------------------------------------- #
+# Two modules that are not one surface
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "cli"
+title = "the command line"
+weight = 0.04
+about = """
+53 invocations of the built binary with no server involved: exit codes, which
+stream each message went to, byte-exact --help, --version, manpage and five
+completion scripts, and one check per flag the baseline declares -- short form and
+MINISERVE_* alias included. The flag inventory is derived from the baseline's own
+--help rather than written down here, so it cannot drift from what is graded. This
+is the one module besides `build` that runs the binary, and it reuses the binary
+`build` produced instead of compiling a second one.
+"""
+
+[[module]]
+id = "consistency"
+title = "cross-cutting properties of the whole run"
+weight = 0.04
+about = """
+Seven checks over the recording as a whole rather than case by case: a declared
+Content-Length that matches the bytes sent, an ETag that varies with the response,
+no template or Debug output leaking into a page, no archive member that would
+unpack outside its directory, no present-day date on a page whose baseline had
+none, connection-level behaviour matching, and no request left unanswered in a
+session that started. These hold of any correct server without consulting State A,
+which is why they are here and not in the eleven surfaces: mixed in, they would
+lift every surface's pass rate with checks that pass for free, and a surface's
+rate is meant to answer how much of *that part* of the migration is missing.
+"""

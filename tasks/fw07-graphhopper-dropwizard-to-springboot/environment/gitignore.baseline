@@ -1,0 +1,41 @@
+# Baseline .gitignore for the State A snapshot.
+#
+# The upstream tree has one of its own; it is not in the tarball, because a
+# snapshot that carried VCS files would let a submission read upstream intent out
+# of them.  This replaces it with the same idea reduced to what a trial container
+# actually produces: build output, editor droppings, and the artifacts a run of
+# the server leaves behind.
+#
+# Nothing here is graded.  It exists so `git status` in /workspace/repo answers
+# "what have I changed" rather than listing a few thousand class files.
+
+# Maven output
+target/
+*.class
+
+# Server run products.  A GraphHopper run writes a graph cache next to the
+# config and rotates its logs; neither is source.
+graph-cache/
+*-gh/
+*.osm.pbf
+*.osm.gz
+*.osm.xml
+logs/
+*.log
+*.log.gz
+
+# JVM crash and profiling output
+hs_err_pid*.log
+replay_pid*.log
+*.hprof
+
+# Editors and OS
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+*.swp
+*~
+.DS_Store

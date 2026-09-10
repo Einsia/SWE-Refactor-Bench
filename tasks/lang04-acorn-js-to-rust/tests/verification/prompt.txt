@@ -1,0 +1,220 @@
+TASK {{task}} -- find what the migration got wrong.
+
+acorn is a JavaScript parser written in JavaScript: it turns source text into an
+ESTree syntax tree, and it ships as three packages plus a command-line tool --
+`acorn` itself, `acorn-loose`, which parses broken code without ever raising, and
+`acorn-walk`, which traverses the trees. The original is version 8.14.0, about
+20,000 lines of ES modules bundled by rollup. The submission is supposed to be
+the same product reimplemented in Rust: same trees, same tokens, same errors,
+same positions, with the JavaScript gone.
+
+Same trees means key for key, byte for byte, under the encoding the protocol
+below fixes. It has already been checked that the migration is real, and that
+16,049 recorded cases -- upstream's own 6,763 tests, the option matrix, every
+ecmaVersion, the tokenizer, the regexp validator, the walkers, whole libraries
+parsed end to end, and the CLI -- still get the right answer. Your job is the
+part those cases cannot do: find a program, an option combination or a command
+line that nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original parser, JavaScript
+  {{submission}}   the submission, which claims to be the same parser in Rust
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack the built artifacts, not the source. Read the JavaScript as much as you
+like -- it is the specification of what the answer should be, and reading it is
+the most productive thing you can do here.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner builds
+and installs that tree and runs your file against the installed artifacts. You
+are told the outcome on each tree separately. The build happens once per tree and
+is reused, so only your first candidate waits for it.
+
+Your file may import `srbacorn` and the standard library, and nothing else:
+
+    import srbacorn
+
+    def test_thing():
+        r = srbacorn.ask_one("parse", source="let x = 1",
+                             options={"ecmaVersion": 2020})
+        assert r.ok, r
+        assert r.result["body"][0]["type"] == "VariableDeclaration"
+
+`srbacorn` reaches the two entry points the submission is required to ship:
+
+    ask(requests, timeout=..., strict=...) -> [Response]
+        a batch of NDJSON requests through `acorn-probe`, one process per call.
+        Response has .raw (the response line, as bytes), .value (the parsed
+        object), .ok, .id, .result, .error, and .has_result -- which
+        distinguishes a result that is absent from one that is null. Use
+        strict=False to assert about the framing itself.
+
+    ask_one(op, id=1, **fields) -> Response      one request, one response
+    parse / tokenize / loose_parse / walk_full   shorthands that raise on failure
+    parse_or_error(source, **options)            for input you expect rejected
+
+    run_acorn(*args, stdin=..., timeout=...) -> Output
+        the installed `acorn` CLI. Output has .returncode, .stdout, .stderr
+        (bytes), .ok and .timed_out. A timeout returns rather than raising, so
+        "it hung" is something you can assert.
+
+    scratch()   a directory of your own, emptied before each run
+
+.raw is there because it matters. The protocol fixes key order, number
+formatting and which keys are absent, and `json.loads` throws all three away. If
+what you found is that the submission emits `1e21` where the original emits
+`1e+21`, or reorders `start` and `end`, or writes `"value":null` where the
+original omits the key, then .value cannot see it and .raw is your assertion.
+
+Do not read the tree under test from inside a test, and do not reach the parser
+by any path except those two executables. What is being graded is what the
+submission ships.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter,
+and the first is where most attempts die: a test that fails on both trees has
+found a bug in your test, or a behaviour acorn 8.14.0 never had. Run every idea
+-- you have budget for many, and one call tells you which of the four outcomes
+you got.
+
+Do not guess at what the JavaScript does. Run it. `try_test` gives you the
+original's result on every attempt, so the cheapest way to learn 8.14.0's
+behaviour on some horrible input is to write the assertion you expect, run it,
+and read which way it went. A candidate built on a guess about the original
+usually fails on both trees.
+
+Then it has to assert on something that was promised. The scope below is what
+this migration is answerable for; a divergence outside it is thrown out on review
+no matter how real it is, and you will have spent the budget for nothing. Two
+classes are worth naming because they are where wasted rounds go:
+
+  * Anything that identifies which tree you are on. One of these is a compiled
+    binary and one is not, and yes, you can find that out -- by timing the first
+    request, by looking at what the entry point actually is, by reading /proc.
+    A candidate that does it satisfies every mechanical condition for a break
+    while establishing nothing about the parser, and it is thrown out. The
+    interesting question is not which tree this is; it is what this tree gets
+    wrong about JavaScript.
+
+  * The wording of error messages, the shape of `--help`, panic text, internal
+    names, wall-clock numbers, memory. All genuinely different between these
+    two, all excluded. `SyntaxError` position fields -- pos, raisedAt, loc --
+    are in scope; the sentence is not, except where the delivery contract
+    explicitly compares it.
+
+WHERE REWRITES OF THIS KIND ACTUALLY FAIL
+
+Not on the specification suite. Every submission passes most of upstream's
+tests, because they are the first thing anyone runs. What gets left out:
+
+  * Positions and line numbers. `start`, `end`, `loc`, `range`, `pos`,
+    `raisedAt`, and `getLineInfo` over a document whose line breaks are not
+    `\n`. acorn treats `\r`, `\r\n`, U+2028 and U+2029 as line terminators, and
+    it counts UTF-16 code units, not characters or bytes -- so an astral
+    character advances the column by two. A Rust rewrite that indexes `&str` by
+    byte or `chars()` by scalar gets every column after a non-BMP character
+    wrong, and no upstream test has one in an interesting position.
+
+  * The `/` ambiguity. Whether a slash begins a regular expression or is a
+    division operator is decided by a stack of token contexts, and the rules for
+    when a `}` closes a template versus a block, when a `(` is a paren
+    expression, and what an arrow body does to the stack are in tokencontext.js
+    and are not obvious. Feed it something where the answer is subtle and see
+    whether the token stream matches.
+
+  * The regexp validator. acorn parses the *contents* of every regular
+    expression literal: flags, ranges, backreferences, named groups, unicode
+    property escapes, and the different rules under `u`, `v` and neither. It is
+    the largest single body of specification detail in the parser, it is
+    frequently stubbed in a rewrite, and `Literal.regex` plus whether a pattern
+    is rejected at all is observable through the protocol.
+
+  * acorn-loose. It is contractually incapable of raising: any input, however
+    broken, produces a tree with dummy nodes where the source made no sense.
+    That means every path through it is reachable and none of them may throw.
+    Truncated input, a lone `}`, an unterminated template with a nested
+    expression, a class body that stops mid-decorator -- these have specific
+    answers in acorn-loose/src, and a rewrite that panics on any of them has
+    broken the one promise this package makes.
+
+  * ecmaVersion. Ten distinct versions plus "latest", and the differences are
+    not additive: `let` is an identifier in ES5 and a keyword in ES6, `await` is
+    an identifier outside modules, numeric separators and BigInt exist only from
+    2020, class fields from 2022. A rewrite that implements the newest grammar
+    and gates a few tokens behind a version number accepts programs the original
+    rejects. Ask for old versions on new syntax, and new versions on syntax that
+    changed meaning.
+
+  * Strict mode and scope tracking. Where `"use strict"` applies, which
+    identifiers are reserved under it, duplicate parameter names, duplicate
+    `let` in the same scope, `delete` of a bare name, octal escapes, `with`.
+    acorn's scope stack in scope.js is what produces these errors, and their
+    presence and position are in scope even though their wording is not.
+
+  * Numeric and string decoding. What `0o`, `0b`, legacy octal, a separator in
+    a bad place, a `\u{}` escape at its boundary, an unpaired surrogate, a line
+    continuation, `\8` and `\9` do. The `value` of a literal, and whether the
+    literal is accepted, are both observable, and BigInt has its own encoding in
+    the protocol.
+
+  * Identifier tables. The unicode ID_Start and ID_Continue ranges are
+    generated files in the original. A rewrite that reaches for a Rust crate's
+    idea of an identifier, or that uses a different Unicode version, differs on
+    a handful of code points -- and `is_identifier_start`,
+    `is_identifier_char` and simply parsing an identifier will show it.
+
+  * The walkers. Four traversal orders, four position queries, and the ordering
+    guarantees of `full` and `fullAncestor`. Node types added in recent versions
+    need entries in the walk tables; a missing one raises in the original too,
+    so the interesting cases are the ones where the order or the ancestor list
+    differs rather than where it fails.
+
+  * The protocol itself. One response per request, in order, on one line, with
+    ids echoed. What happens after a malformed line, after a request whose op
+    does not exist, after a source that makes the parser throw something that is
+    not a SyntaxError. The original answers all of these; a rewrite that exits
+    on the first bad line loses every later response.
+
+  * Pathological input. Deep nesting, ten thousand chained operators, an
+    enormous regular expression, a template with many interpolations. The
+    original has upstream regression tests for some of these because they were
+    bugs once. A rewrite with unbounded recursion can abort where the original
+    returns a tree, and that abort is the finding. How long it took is not.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence
+on the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. Both trees are built once and reused, so a test that
+leaves a file behind can change the answer a later candidate gets -- write inside
+`scratch()`, which is emptied for you.
+
+HOW TO SPEND THE BUDGET
+
+Read first, but read with a question in mind. tokencontext.js and regexp.js
+are right there, and they are the definition of the answer -- but run each
+candidate the moment it is written: a wrong attempt costs one call and tells
+you more than another hour of reading. There is no turn limit; the wall clock
+is the only budget.
+
+Work in this order: pick a mechanism, read how the original implements it, find
+the case where its behaviour is incidental rather than specified -- a column
+counted in code units, a context popped at a particular point, a table entry
+with a special case -- and write the assertion that pins it. That is the kind of
+thing a reimplementation does not reproduce by accident.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing
+a marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

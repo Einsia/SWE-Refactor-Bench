@@ -1,0 +1,163 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "fw03-conduit-vue-to-react"
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+# No [env] block. The nonce, the unpacked State A bundle, the tree the submission
+# was built in and the two observation files all live under $SRB_SUITE_WORK, which
+# the runner sets; pinning any of them to an absolute path here would let two runs
+# in one container read each other's observations.
+
+# Ten modules. `build` runs first, and the nine after it depend on what it writes: it
+# installs the submission offline, builds it, and drives 100 scenarios through one driver against both
+# the State A bundle and the bundle it just built, under a nonce minted this run.
+# The nine after it are comparisons of those two observations and nothing else.
+#
+# Weights are what a Conduit reader would say each surface is worth, not the
+# number of assertions behind it -- the home feed carries 5,057 DOM checks and
+# the editor 800, and the editor is not 1/6th of the app. Inside a module the
+# checks divide that weight equally, so a module's own rate is the fraction of
+# its questions the submission answered and nothing else is read into it.
+#
+# Every module here is a product surface. None of them can open a source file:
+# there is no `repo` fixture in this stage, on purpose. A test that read the
+# submission's code would be asserting on how the port was written, and how it
+# was written is stage 1's question.
+
+[[module]]
+id = "build"
+title = "Install offline, build, drive both bundles"
+weight = 0.06
+command = ["python3", "run.py"]
+timeout_sec = 3600
+about = """
+Installs from the offline cache, runs the project's own build script, and looks
+at what came out: an entry document that loads a script, a JavaScript bundle, the
+PWA manifest and the service worker State A shipped. Then it mints the nonce and
+records both sides. Every other module reads the two files it writes, so if this one
+scores nothing they have nothing to compare and each fails its own checks on its own
+evidence -- the stage pays nothing, and no module had to veto it to get there.
+"""
+
+[[module]]
+id = "shell"
+title = "App shell and navigation"
+weight = 0.08
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+Boot, the header, and moving between the top-level routes -- including whether
+the header knows who is signed in before the first API response comes back.
+"""
+[module.env]
+SRB_GROUP = "shell"
+
+[[module]]
+id = "home"
+title = "Home feed"
+weight = 0.13
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+The global and personal feeds, pagination, the tag sidebar, and the empty states
+each of them can reach.
+"""
+[module.env]
+SRB_GROUP = "home"
+
+[[module]]
+id = "article"
+title = "Article page"
+weight = 0.13
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+The rendered body, the meta bars above and below it, the comment list, and what
+favourite and follow do to the page without a reload.
+"""
+[module.env]
+SRB_GROUP = "article"
+
+[[module]]
+id = "profile"
+title = "Profiles and settings"
+weight = 0.11
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+The two author tabs, the follow button's own state, and the settings form --
+which is the one place in Conduit that renders a value the user typed back into
+the field it came from.
+"""
+[module.env]
+SRB_GROUP = "profile"
+
+[[module]]
+id = "editor"
+title = "Editor"
+weight = 0.11
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+New and edit, the tag input that turns text into pills on Enter, and where a
+publish leaves the browser.
+"""
+[module.env]
+SRB_GROUP = "editor"
+
+[[module]]
+id = "auth"
+title = "Sign in and sign up"
+weight = 0.10
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+Both forms, and the error list Conduit renders from the API's nested 422 shape --
+which is a rendering, not a message, and reads differently if flattened.
+"""
+[module.env]
+SRB_GROUP = "auth"
+
+[[module]]
+id = "quirks"
+title = "Awkward corners"
+weight = 0.06
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+Unknown routes, a token that is no longer valid, a click during an in-flight
+navigation. State A has a defined answer for each; a port usually has a different
+one.
+"""
+[module.env]
+SRB_GROUP = "quirks"
+
+[[module]]
+id = "traffic"
+title = "API traffic"
+weight = 0.14
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+Every request each of the 100 scenarios sends: method, path, query, ordering, and
+whether it carried a token. This is where a port that fetches the same data in a
+different shape -- two requests where State A sent one, or a feed loaded eagerly
+that State A loaded on tab click -- shows up.
+"""
+[module.env]
+SRB_GROUP = ""
+
+[[module]]
+id = "session"
+title = "Browser session"
+weight = 0.08
+command = ["bash", "run.sh"]
+timeout_sec = 900
+about = """
+What is in storage after each scenario and under which key. `id_token` in
+localStorage is the contract: a port that stores the same token as `token` or
+`auth.jwt` signs every existing user out the moment it ships.
+"""
+[module.env]
+SRB_GROUP = ""

@@ -1,0 +1,486 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "lang02-zlib-c-to-java"
+
+# 4062 behavioural cases over 4992 assertions, split into fifteen modules along
+# the boundaries the frozen case catalog already used, plus `build` (which
+# produces what the other seventeen read), `structure` (71 cases over the
+# installed tree) and `provenance` (35 gates with an artifact to point at).
+#
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing? They are deliberately
+# not proportional to case count. `deflate-strategy` holds 950 of the 4062 cases
+# because five strategies times the payload corpus is a large cross product, not
+# because strategy selection is a quarter of zlib; `memory` holds 60 because
+# there are only so many ways to ask whether a caller's zalloc/zfree is honoured,
+# and a rewrite that ignores them has broken every embedder that passes one.
+#
+# `deflate-params` carries the most because bit-exact deflate output at every
+# level, window size and memLevel is this library's definition of correctness:
+# every other zlib implementation in the world is judged against it, and a port
+# that merely produces *valid* deflate streams has written a different library.
+# `structure` comes next, because a Java rewrite that compresses correctly but
+# ships no modular jar a Java consumer can `require` has not replaced the
+# library.
+
+# Every module's run.sh is a symlink to lib/run-module.sh, which reads
+# $SRB_MODULE_ID and asks lib/driver.py for that slice. One script rather than
+# eighteen copies: the modules here differ in which cases they own, not in how
+# they run. A module that needs its own logic replaces its symlink with a real
+# script and nothing else changes.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+SWEREFACTOR_ASSETS = "/opt/assets"
+# Grading always enforces the compiler shim: repository C must fail to compile
+# rather than merely be logged as having compiled.
+#
+# Do not switch the self-test on by setting this to `off` on the command line.
+# swerefactor's runner applies this table *over* the process environment, so the value
+# below wins over the operator's and the shim refuses every compile anyway.
+# `SRB_SELFTEST=1` is the name that reaches the driver, and selftest.py beside this
+# file is the committed way to invoke it. vlib.shim_enforced is the one definition
+# both names resolve through.
+SRB_SHIM = "enforce"
+
+[metadata]
+runtime = "openjdk 17.0.16 + cmake 3.25.1"
+reference_version = "zlib 1.3.1"
+cases = 4062
+assertions = 4992
+# Not link configurations: a Java artifact has one binary form. These are the two
+# ways a consumer reaches it, and they fail differently -- the module path
+# enforces module-info's exports, the class path ignores them entirely.
+build_configs = ["static", "shared"]
+# Not the same axis. BUILD_SHARED_LIBS is meaningless for a jar and both values
+# are still configured, built and installed, because an option a build no longer
+# needs must still be accepted -- refusing it breaks the build interface
+# downstreams depend on. The linkage modes are how a consumer reaches the jar,
+# and they fail differently: the module path enforces module-info's exports, the
+# class path ignores them entirely.
+linkage_modes = ["module", "classpath"]
+
+# --------------------------------------------------------------------------- #
+# The build everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "configure, build and install both configurations; compile the probe"
+weight = 0.07
+timeout_sec = 5400
+about = """
+Copies the submission, discards anything it left built, and drives cmake for both
+BUILD_SHARED_LIBS=ON and OFF with the compiler shim in place -- so a tree that
+still needs a C compiler fails here rather than quietly succeeding. Then probes
+the build interface seven ways: rebuild, reconfigure, the CMake cache, ctest, an
+out-of-source build, an alternate prefix, and configure-without-install.
+
+Also reads the generated makefiles for how many targets own each output. The
+graded build passes `--parallel` and the task requires two target names over one
+jar, so a tree that gives both targets the same custom-command OUTPUT gets the
+recipe copied into both and may run it twice at once. That is measured on the
+build system rather than on whether the build happened to fail: over seven runs
+of one unchanged tree, before this check existed, the same submission passed no
+scored check three times, 97.54% of them three times and 97.40% once -- a build
+that corrupts its own artifact was certified gate-passing four times out of
+seven.
+
+Publishes both install prefixes and, per linkage mode, the whole
+`java -p <jar> --add-modules org.zlib -cp <classes> Probe` argv to
+$SRB_SUITE_WORK; every module after this one runs that argv verbatim. It has to
+be published rather than recompiled per module because javac copies a
+`static final int` into the class file at its use site: a probe compiled twice
+against two jars is two different programs, and the difference would be scored
+against the submission.
+"""
+
+# --------------------------------------------------------------------------- #
+# The installed artifacts: is this still a library a Java program can require?
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "structure"
+title = "release contract, jar layout, module descriptor, class files"
+weight = 0.09
+timeout_sec = 2400
+about = """
+71 cases over the installed tree rather than the source: the jar at the path the
+contract publishes, its entries and manifest, module-info's name, exports and
+`requires`, the class file major version, the public type and member inventory
+against the frozen surface, the pkg-config-equivalent metadata CMake installs,
+and the seven build-interface probes' results.
+
+This is where a rewrite that produced working Java but not a working *library* is
+caught, and it is scored rather than gated because "the jar is installed one
+directory too deep" and "there is no jar at all" are not the same failure.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: State A's output, bit for bit
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "deflate-params"
+title = "compression level, window size and memLevel"
+weight = 0.12
+timeout_sec = 3600
+about = """
+644 cases over the three parameters that decide what a deflate stream looks like:
+levels 0-9 including the documented default, windowBits 9 through 15 plus three
+raw sizes and three gzip sizes, and six memLevel values between 1 and 9. Compared
+bit for bit against output frozen from zlib 1.3.1 at image build time.
+
+This is the module that separates a port from a reimplementation. Any correct
+deflate encoder produces a stream `inflate` accepts; only a faithful port of
+this one produces the same bytes, because the output is decided by the exact
+hash chain, the exact lazy-match thresholds and the exact tie-breaking in
+longest_match. A rewrite that is merely correct fails here and passes almost
+everything else.
+"""
+
+[[module]]
+id = "deflate-strategy"
+title = "the five strategies, match selection and literal histograms"
+weight = 0.08
+timeout_sec = 3600
+about = """
+950 cases: Z_DEFAULT_STRATEGY, Z_FILTERED, Z_HUFFMAN_ONLY, Z_RLE and Z_FIXED over
+the payload corpus, plus 306 match-selection cases and 74 literal/length
+histogram cases. Each strategy is an independent claim -- a port that gets the
+default strategy right and approximates the other four passes the level sweep and
+fails here, which is why the strategies are graded separately rather than as one
+family.
+
+The histogram cases exist because two encoders can emit the same compressed size
+from different token streams; comparing the distribution of literals against
+matches catches an encoder that reached the right length by a different route.
+"""
+
+[[module]]
+id = "streaming"
+title = "the flush modes and incremental deflate"
+weight = 0.07
+timeout_sec = 2400
+about = """
+183 cases feeding deflate() in chunks with the input split at every interesting
+boundary, across Z_NO_FLUSH, Z_PARTIAL_FLUSH, Z_SYNC_FLUSH, Z_FULL_FLUSH and
+Z_BLOCK. A rewrite that buffers the whole input and compresses at the end passes
+the one-shot families and fails here: the flush modes are observable in the
+output, and Z_FULL_FLUSH additionally resets the dictionary, so its stream is
+recoverable from the flush point in a way an ordinary one is not.
+"""
+
+[[module]]
+id = "dictionary"
+title = "preset dictionaries on both sides"
+weight = 0.05
+about = """
+244 cases over deflateSetDictionary and inflateSetDictionary, each a full round
+trip: dictionaries longer than the window, where only the tail is kept;
+dictionaries that overlap the payload; and raw deflate with a dictionary, where
+there is no header to carry the Adler-32 so the decompressor has to be told out of
+band and the bytes differ.
+
+A dictionary changes the zlib header -- the FDICT bit is set and the dictionary's
+Adler-32 is written into the stream -- so inflate reports Z_NEED_DICT and refuses
+to continue until the caller supplies the same bytes. Every case records whether
+that happened and what setDictionary returned, which is the part a port that
+treats a preset dictionary as an optimisation silently drops.
+"""
+
+[[module]]
+id = "inflate"
+title = "the decompressor, its window and inflateBack"
+weight = 0.07
+timeout_sec = 2400
+about = """
+178 cases: 62 inflating the corpus, 50 sweeping windowBits on both sides of the
+round trip across the zlib, raw, gzip and auto-detect wrappings, 16 feeding and
+draining inflate in chunks from one byte upward, and 50 inflateBack cases. The
+compressed input is produced inside the probe by a fixed recipe, so these grade
+inflate independently of deflate: a submission whose compressor is byte-perfect
+but whose decompressor mis-decodes a distance code fails here and nowhere else.
+
+inflateBack is a
+separate entry point with its own callback-driven interface and its own window
+ownership rules -- a port that implements inflate and stubs inflateBack passes
+every round-trip case in the suite and fails these fifty.
+"""
+
+[[module]]
+id = "errors"
+title = "corrupt input: the specific refusal, not just a refusal"
+weight = 0.04
+about = """
+176 cases that damage a valid stream ten ways -- flip a byte, flip a bit, truncate
+the tail, truncate the head, zero a run, append trailing bytes, corrupt the
+Adler-32, corrupt the two-byte header, present an empty input, swap two bytes --
+and compare the return code, the error message and how many bytes were produced
+before the failure.
+
+The expected answer is a specific refusal at a specific offset. A port cannot
+pass by being more thorough than the original: detecting corruption zlib accepts
+fails these cases exactly as accepting corruption zlib detects does.
+"""
+
+[[module]]
+id = "recovery"
+title = "inflateSync over damaged streams"
+weight = 0.03
+about = """
+200 cases that damage a stream and then ask inflateSync to find the next full
+flush point and resume. This is the recovery path a caller reading a damaged
+archive depends on, and it is the hardest part of inflate to reproduce from the
+specification rather than from the source: what counts as a sync point, and how
+much of the stream after it is recoverable, is decided by zlib's own bit-level
+scan.
+"""
+
+[[module]]
+id = "oneshot"
+title = "compress, uncompress, compressBound and the checksums"
+weight = 0.06
+about = """
+484 cases over the API most consumers actually call: compress, compress2,
+uncompress, output buffers deliberately too short, trailing bytes
+after a complete stream, 176 compressBound cases and 166 adler32/crc32 cases
+including the combine entry points.
+
+compressBound is graded because it is a promise, not an estimate: a caller sizes
+a buffer with it and a port that returns a larger bound wastes memory everywhere
+while one that returns a smaller bound corrupts data. The checksums are graded
+because adler32_combine and crc32_combine have closed-form implementations a
+rewrite is likely to replace with a loop that is right for small inputs and wrong
+at the boundaries.
+"""
+
+[[module]]
+id = "deflate-state"
+title = "the deflate stream's own state: copy, reset, params, prime, tune"
+weight = 0.04
+about = """
+170 cases over deflateCopy, deflateReset, deflateParams, deflatePrime,
+deflateTune, deflatePending and deflateGetDictionary. These are the operations
+that treat a compression stream as an object rather than a pipe: deflateCopy has
+to duplicate a live state including its hash chains, deflateParams has to change
+level or strategy mid-stream and flush exactly as much as that requires, and
+deflatePrime inserts bits ahead of the stream. None of this is visible in a
+round-trip test, and all of it is used by real callers -- deflateParams by
+anything adapting to its input, deflateCopy by anything trying multiple
+strategies from one point.
+"""
+
+[[module]]
+id = "inflate-state"
+title = "the inflate stream's own state: mark, copy, reset2, prime, sync"
+weight = 0.04
+about = """
+180 cases over inflateMark, inflateCopy, inflateReset, inflateReset2,
+inflatePrime, inflateSync, inflateSyncPoint, inflateCodesUsed,
+inflateValidate, inflateUndermine and inflateGetDictionary. inflateMark returns
+the bit position packed into a long in a documented, sign-sensitive way;
+inflateReset2 changes windowBits on a live stream; inflateCodesUsed reports an
+internal table count that a port with a different table layout cannot reproduce
+by accident. inflateValidate and inflateUndermine exist to relax checks the
+library normally enforces, so their cases are the ones where correct behaviour is
+to accept something invalid.
+"""
+
+[[module]]
+id = "gzip"
+title = "the gzip wrapper and the gzFile stdio-like API"
+weight = 0.05
+timeout_sec = 2400
+about = """
+286 cases: 72 over gzip headers through deflateSetHeader and inflateGetHeader
+(the extra field, name, comment, OS byte, mtime and the header CRC), and 214 over
+the gzFile family -- gzopen/gzread/gzwrite round-trips, gzgets, gzgetc/gzungetc,
+gzputc, gzprintf, gzseek and gzfread.
+
+gzFile is a second public surface with its own error model, its own buffering and
+its own end-of-file semantics, layered over the same codec. A port that
+implements the stream API and treats gzFile as a thin convenience wrapper gets
+gzseek on a compressed file wrong, because seeking backwards means re-inflating
+from the start.
+"""
+
+[[module]]
+id = "compose"
+title = "payloads composed of several shapes in one buffer"
+weight = 0.03
+about = """
+200 cases over 96 payloads built by concatenating two to six members of the other
+corpus families -- a run, then noise, then structured data, then text, inside one
+stream. Deflated at the default level and at 1 and 9, inflated, and deflated again
+with the gzip wrapping.
+
+What these grade is block-boundary choice at a transition. A compressor that
+handles each shape correctly in isolation can still decide badly where two
+adjacent shapes meet: when to end a block, whether to emit stored, fixed or
+dynamic, and which tree to build for a window that spans the seam. Those
+decisions are invisible in a corpus of homogeneous payloads and they are where an
+independently-written encoder diverges from this one first.
+"""
+
+[[module]]
+id = "memory"
+title = "the caller-supplied allocator"
+weight = 0.03
+about = """
+60 cases over zalloc/zfree/opaque: a custom allocator has to be used for every
+allocation the library makes, on both sides of the codec, and freed through the
+same pair. 20 of the cases make an allocation fail at a chosen ordinal and
+require Z_MEM_ERROR with the stream left in a state the caller can still destroy.
+
+A Java rewrite gets this wrong by default, because its allocation is implicit and
+its failure mode is an OutOfMemoryError that unwinds rather than a return code
+the caller inspects.
+"""
+
+[[module]]
+id = "api-surface"
+title = "the ABI constants and a real consumer on both linkage paths"
+weight = 0.03
+timeout_sec = 2400
+about = """
+24 cases: the constants a compiled consumer bakes in at its use site, and a
+separately compiled Java consumer reaching the installed jar three ways -- on the
+module path, on the class path, and interoperating with a stream the reference C
+library produced.
+
+Both linkage paths are graded because they fail differently. The module path
+enforces module-info: a jar that exports the wrong package, or forgets to export
+it at all, compiles for the submission's own tests and fails for a consumer. The
+class path ignores module-info entirely, so a submission whose descriptor is
+wrong passes there -- which is exactly why the module-path cases cannot be
+dropped as redundant.
+"""
+
+[[module]]
+id = "drivers"
+title = "the installed example and minigzip programs"
+weight = 0.02
+about = """
+83 invocations of the two programs zlib's own build installs: minigzip over
+stdin/stdout and over files, at every level, with the strategies, decompressing
+gzip input, and round-tripping; plus the example program's self-test. Compared on
+stdout, stderr and exit status together, because a tool that writes the right
+bytes to the wrong stream has broken every script that pipes it.
+
+These are graded lightly. They are the thinnest layer over the library and a
+submission that ports the codec faithfully gets them nearly free -- but they are
+graded at all because they are what the build actually installs, and a port that
+ships a library nobody can invoke has left the deliverable incomplete.
+"""
+
+# --------------------------------------------------------------------------- #
+# Where the artifacts came from
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "provenance"
+title = "the artifacts came from a Java build and nothing else ran"
+weight = 0.08
+# No check here is marked `required`, and none can be: every check costs an equal
+# share of this module's weight and nothing more.
+#
+# The consequence is worth stating plainly rather than leaving to arithmetic. This
+# module is 0.08 of the stage, so delegating the entire library to java.util.zip --
+# which produces byte-identical output, earns full marks from every behavioural case
+# and gives six adversaries nothing to report -- costs a fraction of 0.08 rather than
+# all of it. That is why the same question is asked in stage 1, where
+# `no-jdk-compression` is required and a failure zeroes the submission before this
+# module is reached.
+timeout_sec = 2400
+about = """
+21 gates, each with a built artifact to point at: the compiler shim's ledger,
+cc1/as execution, the class files' own compiler metadata, C provenance in the
+shipped jar, java.util.zip references in the constant pool, native methods, the
+Unsafe and foreign-function surfaces, the module descriptor's `requires`, a
+system libz on the link line, System.load/loadLibrary, ProcessBuilder and exec,
+file reads outside the declared inputs, the corpus digests, one implementation
+per prefix, environment-dependent answers, the default path, the version on four
+published surfaces, the recorded compile flags, the public API's width, the module
+descriptor's audit, and six renderings of a payload composed at grading time
+from random bytes.
+
+The gates that are not here at all are claims about the submitted *files* -- a
+checked-in .c, a vendored pure-Java zlib, a fetch declared in the build, LICENSE's
+contents -- and answering them means reading source. They are stage 1's, where a
+read-only scan does the reading and a model with both trees open does the judging.
+Scoring them here put "a stale header is checked in" and "the library does not
+reproduce the reference on unseen input" on the same footing, which was never
+right.
+
+Of the 21 this module runs, 17 are scored and 4 carry no weight and are therefore
+deleted at collection -- they do not reach `behavioural.json`, this module's counts, or
+the report. The line between them is the gate's subject. A gate that asks which
+toolchain produced the artifact is asking whether the migration happened at all, and
+that question is stage 1's, asked there as a required gate with both trees open;
+pricing it again
+here charges one defect twice. A gate that asks what the delivered library does at
+run time -- what it spawns, loads, opens, reads, or answers -- is asking whether the
+migration preserved anything, which is this stage's whole subject. Seventeen are
+the second kind, and each names a constraint the C satisfies: it spawns no helper
+process, loads no library at run time, opens no file on the compression path, ships
+no answer table, gives the same answer under a hostile environment, installs one
+implementation per prefix, and reports 1.3.1 on all four published surfaces.
+
+The four carrying no weight are `compiler-shim-clean`, `no-compile-syscalls`,
+`class-java-provenance` and `no-c-provenance`: whether the shimmed drivers were
+invoked, whether a compiler back end was reached around them, whether the shipped
+classes name a .java as their source, whether any names a .c. All four are stage
+1's, asked required, before this image starts -- `no-c-in-build` owns the two
+compiler questions, `java-is-real` and `no-c-implementation` own the two provenance
+ones. That is where a submission shipping C behind a Java facade is caught, and a
+gate failing there is harsher than any rate this module could produce. They still run
+here, and the module still logs what they found; what they no longer do is appear in
+the graded record, because a check worth nothing is deleted rather than reported as
+worth nothing.
+
+What State A scores here is worth stating. `selftest.py` beside this file runs the
+frozen corpus against State A, and this module reports 3 pass and 18 skip. Sixteen
+of the seventeen scored gates have no answer at all: their evidence is read out of a
+jar, and State A installs libz.so. They are skipped rather than failed, which is the
+distinction vlib.NotApplicable exists to make -- "the classes do not name a .java"
+and "there are no classes" are different statements, and a gate that reports the
+first while observing the second is reporting on something it never saw. All sixteen
+name that one absence, in one of two spellings depending on which reader asked for
+the jar: four report "there is no installed jar to observe", from the LD_PRELOAD
+round trip, and fourteen report the published path "is not installed", from the
+reader that walks the install tree -- two of them both, once per config.
+
+The absence is recorded on every run and not only in the self-test, because the
+alternative is a sentence a grader cannot tell from a real finding. With no jar to
+observe, a gate that answered anyway would have `no-file-access` saying "the
+compression paths reach the filesystem" and `no-env-dispatch` saying "the library's
+behavior depends on the environment", about a round trip that never ran.
+
+`no-corpus-answers` is the one scored gate that does answer, because a C tree ships
+no digest-keyed lookup, and it is what keeps the pool non-empty: an all-skipped pool
+rates 0.0 and is charged its own weight, which would put State A's own oracle at
+zero on this module for observing an absence correctly. Of the four unweighted gates
+two pass rather than fail -- `compiler-shim-clean` because nothing invoked the
+shimmed drivers, and `no-compile-syscalls` because its subject is a back end reached
+*around* the shim, which upstream's plain `gcc` never names -- and the other two
+skip with the sixteen.
+
+`no-jdk-deflate` is not among the four, which is worth saying plainly because it
+is the check a reader reaches for first. Its subject is java.util.zip, a shortcut
+inside the *target* platform rather than a trace of the retired one, and "the
+compressed bytes come from this repository's own Java" is a requirement stated to
+the agent in instruction.md. A stated requirement is part of the deliverable, not
+detection of whether a migration happened, so it stays scored and stays blocking
+for the reason given above. `no-corpus-answers` is the same shape.
+
+Two gates are asked in both places on purpose. `no-jdk-deflate` is the central
+cheat for this task -- java.util.zip's deflate is bit-compatible with zlib's, so
+*no behavioural case can separate a forwarder from an honest port* -- and
+`no-corpus-answers` is the other way to pass without porting anything. Stage 1's
+gates are unscored pass/fail, so asking twice costs the submission nothing it did
+not already owe.
+"""
+

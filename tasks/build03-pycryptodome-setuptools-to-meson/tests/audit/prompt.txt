@@ -1,0 +1,235 @@
+You are reviewing a whole-repository build-system migration. Two trees are on
+disk:
+
+  {{original}}
+      State A, read-only. pycryptodome 3.20.0 as upstream ships it: a Python
+      package with 79 C sources and 27 headers, built by a 300-line setup.py on
+      top of setuptools and distutils, with a 700-line compiler_opt.py that
+      interrogates the compiler eleven times before deciding what to compile.
+
+  {{workspace}}
+      The submission. The same package, supposedly built by Meson and
+      meson-python instead.
+
+The task set for the author of the submission was: retire setuptools, and build
+the package with Meson through the meson-python PEP 517 backend, so that
+`python -m build --wheel` still produces the same 41 shared libraries, the same
+336-member wheel, the same install tree and the same compile-time configuration it
+produced before. The C sources and the Python payload were not to be touched at
+all -- the build system is the whole subject.
+
+Why this migration is forced rather than cosmetic, since it bears on what counts
+as a real port: PEP 632 removed distutils from the standard library in Python
+3.12. setup.py here does not merely use setuptools, it subclasses
+`distutils.command.build_ext` and reaches into `distutils.ccompiler` to run its
+probes. On the interpreter this package now has to support, that code path exists
+only through setuptools' vendored copy of the module it is written against.
+
+Your job is not to measure whether the build produces the right bytes. Twelve
+modules do that after you: they build the submission five times, run 39,245 of
+pycryptodome's own self-tests against what it installed, diff the dynamic symbol
+table of every one of 41 libraries, compare the wheel member by member, and take
+away the compiler's `-maes` support to see whether the build notices. What they
+cannot ask is the question you are here for: is this a migration at all?
+
+A submission can produce a byte-identical wheel while having done something other
+than what was asked -- kept the setuptools build and driven it from a
+`meson.build` custom_target, copied compiler_opt.py's conclusions in as hardcoded
+macros instead of probing for them, applied `-maes` from a table rather than from
+a partition the build understands, or edited a C source to make a build problem go
+away. Those are what you are looking for, and they are why this review is a model
+reading a build system rather than a list of patterns: every one of them survives
+a grep for "setuptools".
+
+--------------------------------------------------------------------------------
+WHAT A MECHANICAL SCAN ALREADY NOTICED
+--------------------------------------------------------------------------------
+
+Before you were started, a read-only scan walked both trees. It hashed all 583
+frozen files against State A, looked for the setuptools build files by name and
+for compiler_opt.py's own function names by content, and looked for delivered
+build state and for build files that read the harness's environment. Its findings:
+
+{{findings}}
+
+These are leads, not verdicts. Nothing in that list can fail a gate by itself and
+nothing in it is scored -- you decide, and you have both trees open, which the
+scan did not have in any useful sense.
+
+Two exceptions in the direction of certainty, and they are worth being exact
+about. A reported sha256 mismatch on a frozen file is a fact: open the file,
+confirm it differs from State A's, and fail `sources_untouched`. No reason for the
+edit makes it not an edit. Likewise a build file that names `SRB_TARGET_NAME` --
+there is no correct build that reads it.
+
+Everything else in the list needs you, because the same string means different
+things in different files:
+
+  * `setup.py` in `meson.build` might be a comment explaining what the project
+    used to do, or a `custom_target` that runs it, or a name in a list of files
+    the migration deleted. Three different findings, one string.
+
+  * a `meson.build` per package directory is what a good port looks like. It is
+    also where a transcription of setup.py's `ext_modules` list would go. The scan
+    cannot tell those apart and neither can its file list; reading them can.
+
+  * "no build file mentions HAVE_UINT128" might mean the 128-bit integer probe is
+    gone, or it might mean the submission named the same decision something else.
+    Stage 2 settles whether the probing works by rejecting `-maes` at the
+    compiler; what you are judging is whether the detection is detection.
+
+And the reverse: a clean scan is not a pass. Every substitution that matters here
+survives a string match, which is the whole reason this stage is a model and not a
+pattern list.
+
+--------------------------------------------------------------------------------
+THE GATES
+--------------------------------------------------------------------------------
+
+{{gates}}
+
+--------------------------------------------------------------------------------
+HOW TO WORK
+--------------------------------------------------------------------------------
+
+You have the tools listed at the end. Start by orienting yourself: what did State
+A's build consist of, and what does the submission's? `tree` on both, `wc -l` on
+the build files, and reading `pyproject.toml` and the root `meson.build` end to
+end, will tell you in twenty minutes whether you are reading a port, a wrapper, or
+a transcription.
+
+Then, for each gate, go and find out. Read the Meson code the way Meson actually
+evaluates it: a variable set in the root and used in a subdir, `subdir()` calls
+that pull in twenty more files, a dictionary of per-module flags consumed in a
+loop, `py.extension_module()` picking up `c_args` from three places at once. A
+gate is not answered by a grep count -- it is answered by following what the build
+would do.
+
+Three habits matter more than anything else here:
+
+  Follow the target, not the file names. "What compiles this file, with what
+  flags?" is a question about which `extension_module` names it and what
+  arguments that call assembles, not about which directory the file is in. A
+  repository can have twenty beautiful `meson.build` files and still hand the real
+  work to a script.
+
+  Read the whole path from question to compile line. This build asks the compiler
+  about eleven things and each answer has to arrive somewhere -- in a `-D` on a
+  compile line, in a decision to build a library or not. A probe whose result is
+  computed and then never used is the specific failure mode this task invites, and
+  it looks exactly like a working probe until you follow where the variable goes.
+
+  Compare against the original. You have State A's build system. When something in
+  the submission looks like it was copied, open `setup.py` or `compiler_opt.py` and
+  compare. When a macro list looks too complete, check it against what
+  compiler_opt.py would actually have concluded on this machine. This is the
+  advantage you have over any static check, and it is why both trees are mounted.
+
+--------------------------------------------------------------------------------
+WHAT IS AND IS NOT A FINDING
+--------------------------------------------------------------------------------
+
+This task's subject makes some things look wrong that are not. Be careful with all
+of these:
+
+  Long explicit file lists are not a finding. Meson does not glob -- there is no
+  supported way to say "every .py under here", and the project's own documentation
+  says so in as many words. 192 `.py` files, 96 `.pyi` files and a `py.typed` have
+  to be named somewhere. A submission with twenty `meson.build` files containing
+  hundreds of enumerated `py.install_sources()` entries is the tool working as
+  designed. It is the *flags and the probes* that must be derived rather than
+  enumerated, not the file names.
+
+  Resemblance to State A's structure is not a finding. The library has 41 shared
+  libraries with a specific set of ISA-elevated members; a Meson build that mirrors
+  that organisation is mirroring the *library*, not copying the build system.
+  Expressing the same partition through `extension_module()` calls with different
+  `c_args` is what a correct port looks like.
+
+  `configure_file` is not a finding. Generating a config header or a version
+  module from a template is ordinary Meson and is how the migration is supposed to
+  work. What matters is where the values in it come from.
+
+  A hardcoded value is not automatically a finding. Some things genuinely are
+  constants: the version number, the package name, the `abi3` tag, the list of
+  public modules, `LTC_NO_ASM` and `NDEBUG` (which State A also passes
+  unconditionally). The question is whether something the compiler was supposed to
+  be asked about was answered from memory instead.
+
+  Running a program during the build is not automatically shelling out. Meson
+  legitimately runs the compiler, and `custom_target` running a small script that
+  generates source is ordinary. What is not legitimate is running something that
+  decides the build -- a script that computes the flags, a `setup.py` invocation
+  under any name, a Python module that reimplements compiler_opt.py's probing.
+
+  Absence of a string proves nothing, in either direction. Do not report "the word
+  distutils does not appear" as evidence of anything, and do not treat a mention of
+  setuptools in the README, the Changelog or `INSTALL.rst` as evidence that the old
+  build system is still there. Prose is prose, and those three files are frozen by
+  the contract, so they still describe the old build and must.
+
+  A `Crypto/Util/_raw_api.py` that still uses ctypes is not a finding. It is the
+  frozen payload, and ctypes is how this package has always loaded its libraries.
+  The artifacts are deliberately not CPython extension modules; see the
+  `artifact_shape_is_deliberate` gate.
+
+  Extra Meson features are not findings. A submission that adds a build option, a
+  `meson.options` file, a test target or a `native-file` has gone beyond the task
+  rather than around it.
+
+--------------------------------------------------------------------------------
+EVIDENCE
+--------------------------------------------------------------------------------
+
+Every `fail` you return must cite specific evidence: a path, a line number, and a
+quotation of what is there. Your citations are re-opened and checked. A `fail`
+whose quotation is not at the line you named, or whose quotation does not support
+the claim you made, is discarded -- it is counted as a `pass` rather than a
+finding, so a wrong citation costs the review nothing and gains it nothing.
+
+For this task in particular, a finding usually needs two citations rather than
+one: the place where something is decided and the place where it is used, or the
+place where a value is computed and the place where the constant appears instead.
+"This probe exists but its result goes nowhere" is only a finding if you can name
+both ends.
+
+Every gate gets one of two answers, `pass` or `fail`. There is no third answer:
+a gate you looked at and could not settle is a `pass`, and so is a `fail` whose
+citations do not hold up when they are re-checked. `fail` is the verdict that
+has to be earned. Three independent reviews vote on each gate and a `fail`
+carries only as a majority, so one wrong `fail` does not decide anything by
+itself -- but do not spend one you cannot cite, because a failed required gate
+is a zero for the whole task and nothing after this stage runs.
+
+Weigh that in the other direction too. You are not looking for reasons to fail a
+submission. A genuine, complete, honest Meson port that is organised differently
+from how you would have organised it passes every gate here.
+
+--------------------------------------------------------------------------------
+OUTPUT
+--------------------------------------------------------------------------------
+
+When you have finished, emit one JSON object and nothing else:
+
+{
+  "gates": [
+    {
+      "id": "<the gate id, exactly as given above>",
+      "verdict": "pass" | "fail",
+      "summary": "<one sentence: what you concluded>",
+      "evidence": [
+        {"path": "<repo-relative path>", "line": <int>,
+         "quote": "<the text at that line>",
+         "note": "<why this supports the verdict>"}
+      ]
+    }
+  ],
+  "notes": "<anything the next reader should know; optional>"
+}
+
+One entry per gate, every gate, in the order given. `pass` needs no evidence but
+benefits from it -- say what you followed. `fail` requires it.
+
+{{roots}}
+
+{{commands}}

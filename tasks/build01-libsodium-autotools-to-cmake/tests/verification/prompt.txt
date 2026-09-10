@@ -1,0 +1,275 @@
+TASK {{task}} -- find what the migration got wrong.
+
+libsodium is a C cryptography library: 119 translation units, fifteen of them
+compiled with elevated instruction sets and selected at run time by CPU dispatch,
+67 public headers, 80 test programs. The original is built by GNU Autotools --
+autogen.sh, configure, make, make install. The submission is supposed to be the
+same library built by CMake instead, producing the same libsodium.so.26.2.0, the
+same install tree, the same exported symbols, the same macros on every compile
+line and the same machine code in every object, with Autotools deleted.
+
+No C source was allowed to change, and none did -- every source file is checksummed
+against the original. So this is not a search for a bug in the library. It is a
+search for something the build system stopped delivering.
+
+It has already been checked that the migration is real rather than a wrapper around
+the old build, and several thousand recorded checks over the build matrix, the
+install tree, the symbol table, the macro set, the ISA flags and the 80 test
+programs have already been run. Your job is the part those cannot do: find
+something nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the library as it is built today, by Autotools
+  {{submission}}   the submission, which claims to be the same library built by CMake
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack what the builds produce, not the source. Read the original's build system as
+much as you like -- configure.ac, the seven Makefile.am files and the m4 macros are
+the specification of what the answer should be, and reading them is the most
+productive thing you can do here.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. It is run against each tree
+separately and you are told the outcome on each.
+
+The two trees do not have the same build system, so you do not get to spell out a
+configure line -- you ask for a configuration by name and the helper expresses it
+in whichever dialect the tree in front of it speaks:
+
+    import srbsodium
+
+    def test_soname():
+        t = srbsodium.tree("default")
+        assert srbsodium.elf_dynamic(t.shared_lib())["SONAME"] == ["libsodium.so.26"]
+
+The five configurations, and what each means to the two build systems:
+
+    default        --                        /  -DCMAKE_BUILD_TYPE=Release
+    minimal        --enable-minimal          /  -DSODIUM_MINIMAL=ON
+    static-only    --disable-shared          /  -DSODIUM_BUILD_SHARED=OFF
+    shared-only    --disable-static          /  -DSODIUM_BUILD_STATIC=OFF
+    debug          --enable-debug            /  -DCMAKE_BUILD_TYPE=Debug
+
+Building one takes minutes and is cached across every candidate and every round,
+so the first to ask pays and the rest are free. Ask for what you need; do not ask
+for all five out of thoroughness.
+
+What `srbsodium` gives you, all of it addressing the INSTALL rather than the build.
+Return shapes are stated because getting one wrong costs you a candidate: a test
+that compares bytes to str does not raise, it just quietly fails on both trees and
+is discarded as "does not pass on the original".
+
+    tree(name) -> Tree
+        configure + build + install, cached. Raises BuildFailed if the tree will
+        not build in that configuration -- which is not a finding, see below.
+
+    t.prefix, t.libdir, t.includedir, t.bindir, t.pc_file  -> Path
+    t.shared_lib() / t.static_lib()  -> Path       the installed library, by
+                                                  exact name, not by glob
+    t.installed()             -> list[str]        every installed path,
+                                                  prefix-relative, sorted
+    t.symlinks()              -> dict[str, str]   installed link -> its RAW
+                                                  target, unresolved
+    t.read(relpath)           -> bytes            an installed file
+    t.pkg_config(*args)       -> list[str]        pkg-config's output, split into
+                                                  tokens and decoded. [] means
+                                                  pkg-config failed, which for a
+                                                  broken .pc file is the answer.
+                                                  e.g. == ["1.0.20"]
+    t.run_tests()             -> TestRun          .passed, .failed: tuple[str],
+                                                  .names, .all_passed
+    t.staged_install()        -> (Output, Path)   install again under a DESTDIR,
+                                                  and the staging root
+    t.rebuild()               -> Output           build again, expecting a no-op
+    t.source_tree_dirty()     -> list[str]        what the build wrote into the
+                                                  source tree. Read the note
+                                                  below before using this one.
+    t.source_package()        -> (Output, list[str])   make dist / cpack, and the
+                                                  archive's member names
+
+    CProgram(t, source, static=False, use_pkg_config=True)
+        A C program compiled against the install with flags from its own
+        libsodium.pc.
+        .compile() -> Output      the compiler's output, RETURNED not raised,
+                                  because "compiles against the original and not
+                                  against this" is exactly a finding
+        .build()   -> CProgram    compile and assert it worked; chains
+        .run(*args, stdin=) -> Output
+        Pass use_pkg_config=False to fall back to -I/-L instead, which is how you
+        tell "the library is wrong" apart from "the .pc file is wrong".
+
+    ar_members(path)          -> dict[str, Path]  extract the archive; member
+                                                  name -> the extracted file
+    objdump_isa(path)         -> set[str]         which instruction families an
+                                                  object contains, e.g.
+                                                  {"avx2", "sse2"}. Use on
+                                                  archive members: the .so
+                                                  contains every code path by
+                                                  design, so asking it this
+                                                  question tells you nothing.
+    nm_defined(path)          -> set[str]         exported symbol names
+    nm_undefined(path)        -> set[str]         symbols it IMPORTS. This is
+                                                  where the compile flags show:
+                                                  _FORTIFY_SOURCE turns memcpy
+                                                  into __memcpy_chk, and
+                                                  -fstack-protector introduces
+                                                  __stack_chk_fail. Works on an
+                                                  archive member too, which is
+                                                  how you ask whether one
+                                                  translation unit was fortified.
+    elf_dynamic(path)         -> dict[str, list[str]]  tag -> values. Keys are
+                                                  readelf's names: "SONAME",
+                                                  "NEEDED", "RPATH", "RUNPATH",
+                                                  "FLAGS", "FLAGS_1".
+    elf_program_headers(path) -> list[tuple[str, str]]   (type, flags), e.g.
+                                                  ("GNU_RELRO", "R  ")
+
+Output.stdout and Output.stderr are bytes, not str, in every one of these. That is
+deliberate -- libsodium's test programs are compared byte for byte and decoding
+would hide the difference -- and `out.text()` decodes stdout when you want a str.
+`out.ok` is the returncode-zero-and-not-timed-out predicate.
+
+Do not read the tree under test from inside a test. What is graded is what the
+build ships.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+here the first half is a sharper constraint than it looks, because the original is
+NOT held to the instruction the submission was given. The original writes
+`configure` and `Makefile.in` into its own source tree, has no CMake package
+config, cannot be asked for `cmake -LAH`, and does not build its test programs
+until `make check`. Anything you assert that only the submission was asked for
+fails on the original and is worth nothing, however true it is. Those are stage
+2's subject, and stage 2 has already measured them.
+
+So the productive shape is always the same: something a *consumer* of this library
+gets from the original and does not get from the submission. A symbol. A header
+that compiles. A link that succeeds. A test that passes. An object without an
+AVX2 instruction in it. A relocatable .pc file.
+
+Do not guess at what the original does -- build it and look. `try_test` gives you
+the original's result on every attempt, so the cheapest way to learn what State A
+installs is to write the assertion you expect and read which way it went.
+
+A note on build failures. If the submission does not build in some configuration,
+`tree()` raises and your candidate fails on the submission -- but a submission
+that does not build is stage 2's verdict, not a finding here, and the adjudicator
+knows the difference. Do not spend the round hunting for a configuration that
+breaks the build; spend it on a configuration that builds and ships something
+wrong.
+
+WHERE MIGRATIONS OF THIS KIND ACTUALLY FAIL
+
+Not on "does it produce a libsodium.so". Everyone gets that. What gets left
+behind:
+
+  * The flags that were probed rather than written. configure.ac probes about
+    fifteen compile and link flags and every one lands on every translation unit:
+    an optimisation level, -fvisibility=hidden, PIC, -fno-strict-aliasing,
+    -fno-strict-overflow, -fstack-protector, _FORTIFY_SOURCE at the highest level
+    the libc accepts, and -Wl,-z,relro / -z,now / -z,noexecstack. They are visible
+    from outside: visibility decides the symbol table, fortification decides
+    whether the library imports __explicit_bzero_chk or explicit_bzero, and RELRO
+    and BIND_NOW are program headers and dynamic flags. A port that set
+    CMAKE_BUILD_TYPE and stopped loses several of them silently.
+
+    One of these is worth stating outright, because it is a divergence a careful
+    port walks into and a careless one avoids. --enable-debug adds
+    `-U_FORTIFY_SOURCE` to CPPFLAGS, and it does not work: AX_ADD_FORTIFY_SOURCE
+    runs later in configure.ac and appends `-D_FORTIFY_SOURCE=3` after it, so the
+    last definition wins. State A's debug build is fortified at level 3 -- its
+    shared object imports __memcpy_chk, __memset_chk and __explicit_bzero_chk,
+    the same three the default build imports. Verified, not inferred. A port that
+    read configure.ac, saw the intent, and made its Debug configuration honestly
+    unfortified now differs from the original in a way `nm_undefined` sees in one
+    call. The reverse is also worth checking: a port that hardcoded
+    `-D_FORTIFY_SOURCE=2` matches on "is it fortified" and differs on the level,
+    which shows up as __sprintf_chk-family symbols appearing or not.
+
+  * The per-file ISA partition. Seven convenience libraries -- aesni, armcrypto,
+    sse2, ssse3, sse41, avx2, avx512f -- each compile a handful of files with their
+    own -m flags, and the other hundred-odd files must get none of them. Extract
+    the archive and compare member by member. Both directions are defects: a
+    baseline object holding an AVX2 instruction faults with SIGILL on hardware
+    without it, and a specialised object that lost its flags means the run-time
+    dispatch selects a path that was compiled generically.
+
+    Three things State A does here will cost you a candidate if you assume
+    otherwise, so check them before you assert them:
+      - libsodium_la-sandy2x.o is a NON-elevated member and contains AVX. It is
+        hand-written .S assembly with its own run-time guard, not a -mavx file, so
+        "no baseline member is above SSE2" is false on the original.
+      - the three libarmcrypto members contain no instructions at all on x86-64 --
+        their sources are #if-guarded for ARM -- so "every elevated member contains
+        its family" is also false on the original.
+      - SSE2 is in the x86-64 baseline ABI. Roughly half the archive reports it
+        with no flags involved, and its presence proves nothing.
+
+  * The minimal configuration. --enable-minimal drops nine test programs and a set
+    of primitives from the symbol table. It is the configuration nobody checks,
+    and a port that made SODIUM_MINIMAL a cache variable that nothing reads
+    produces a full library that claims to be minimal.
+
+  * The static archive. It is a separate output and gets a fraction of the
+    attention the shared object gets. Does it contain every object? Does
+    Libs.private name what it needs? Does a program link against it and run? Does
+    the runtime dispatch work from it?
+
+  * The package config, relocatably. libsodium.pc is what every downstream
+    consumer uses, and the requirement is that its paths go through ${prefix} --
+    which means moving the install and asking again must give the moved answers.
+    A .pc file generated with absolute paths baked into the body passes every
+    check made in the directory it was built in.
+
+  * The install tree's edges. The symlink chain (libsodium.so -> libsodium.so.26
+    -> libsodium.so.26.2.0, and each link's raw target, not its resolution).
+    libsodium.la, which is a libtool artifact and must not be installed. Test
+    binaries, which must not be installed. An RPATH pointing at the build
+    machine's directory, which works here and nowhere else.
+
+  * The generated header. version.h comes from version.h.in in both build systems
+    and carries SODIUM_VERSION_STRING and the two library-version integers. A
+    substitution that produced a subtly different file is invisible until someone
+    compiles against it.
+
+  * Headers compiling standalone. There are 67 of them and downstream code
+    includes them individually. A port that installs them with different
+    permissions, or omits one, or installs a version of sodium.h that only works
+    when the whole set is present, breaks a real consumer.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence on
+the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. Note that configurations are built once and shared, so
+a test that mutates an install prefix changes the answer a later candidate gets --
+work in your own scratch directory, which CProgram and ar_members already do.
+
+HOW TO SPEND THE BUDGET
+
+Read configure.ac and src/libsodium/Makefile.am first. Between them they state
+every probe, every macro, every flag and the whole ISA partition -- they are the
+definition of what the submission was supposed to reproduce. Read them with a
+question in mind, and run each candidate the moment it is written: a wrong
+attempt costs one call and tells you more than another hour of reading. There
+is no turn limit; the wall clock is the only budget.
+
+Work in this order: pick something the original's build system guarantees, find
+where that guarantee becomes visible in what gets installed, and write the
+assertion that pins it. Then check the assertion against the original before you
+believe it.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

@@ -1,0 +1,89 @@
+schema = "swerefactor.scan-suite/1"
+task = "lang05-goyaml-go-to-zig"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Stage 1 answers ten questions about a migration -- did the Go leave, is the Zig the
+# implementation, is the graded path the default one -- and it answers them by
+# reading, because there is no toolchain in its image to do anything else with. Some
+# of those questions have sub-questions a string can settle. Which of State A's
+# twenty-four `.go` files is still on disk. Whether `LICENSE`'s bytes moved. Whether
+# `build.zig.zon` declares a dependency, in an image whose build has no network.
+# Those are answered by opening files, and the answer does not improve for being
+# reasoned about instead.
+#
+# So they run here as a pytest, and their output is substituted into the reviewer's
+# prompt as findings. `swerefactor.scan` records every check with required = false and
+# `scoring.grade_audit` gates on the required checks -- which are the eight
+# required gates in evaluation.toml and nothing else. A scan finding costs a
+# submission nothing on its own. What it does is tell the reviewer where to look,
+# and the reviewer has both trees open.
+#
+# The inversion is deliberate and it is this task's answer to a specific failure.
+# A regex cannot decide whether 7,609 lines of Go became an implementation or a
+# shell around one; it is an excellent way to decide which forty lines to read
+# first. Two checks in `provenance` are the exception, and the prompt says so: a
+# file whose first four bytes are `0x7f E L F`, and a source that branches on an
+# `SRB_*` variable. Those admit no innocent reading. Everything else here is a lead.
+#
+# Weights are recorded and unused: nothing in this suite is scored. They are kept
+# because the module contract -- `SRB_REPO`, `SRB_RESULT`, a JSON list of checks -- is
+# byte-for-byte stage 2's, so a module can move between the stages without a
+# rewrite, and the weight is what stage 2 would need.
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check here can fail the audit gate; the gate is the ten prose
+questions in evaluation.toml, eight of them required, answered by a model that
+reads both trees and cannot run either one.
+
+103 checks against a real pair of trees, 85 at build time -- the difference is the
+lists parametrized off /opt/original, which collapse to their fallbacks when the
+mount is empty. Both numbers are measured rather than intended: collect-check.sh
+runs the lower one at image build time and fails the build under a floor of 80.
+"""
+
+[[module]]
+id = "closure"
+title = "did the Go leave, and is there Zig where it was"
+weight = 1.0
+about = """
+Per Go file, named from /opt/original rather than from a list written here; the
+twenty-four Go, C-family and binary suffixes; the seven forbidden paths the
+contract names; build.zig and build.zig.zon present; and the 4,000-line Zig logic
+floor, against State A's 7,609 lines of graded Go. Plus whether every .zig is
+reachable from an @import, which is how a tree padded to clear the floor looks
+different from one that was written.
+"""
+
+[[module]]
+id = "provenance"
+title = "where the answer comes from"
+weight = 1.0
+about = """
+Checked-in compiled artefacts by extension and by ELF, `ar` and wasm magic on any
+name whatever; base64 and hex runs too long for a constant anybody typed; whether
+build.zig.zon declares a dependency, in a build with no network; the nine ways Zig
+can be made to link code it did not compile; @embedFile; subprocess, dynamic
+loading and socket calls; source that names the grading harness; and a Go
+invocation in build.zig, in an image with no Go.
+"""
+
+[[module]]
+id = "contract"
+title = "the retained files, the attribution, and the declared toolchain"
+weight = 1.0
+about = """
+LICENSE and NOTICE against State A by hash, and the upstream copyright holders --
+Canonical and Kirill Simonov, parsed out of State A's own LICENSE -- present
+somewhere in the tree even if the file holding them moved. README.md is exempt from
+the hash, because documenting the migration is asked for. SPDX identifiers outside
+{Apache-2.0, MIT}, which is what go-yaml v3's dual licence permits. The pinned Zig
+version as build.zig.zon declares it, read out of State A's manifest so the pin has
+one home. And every file in the submission hashed against State A's Go, which is
+the check `cp scannerc.go scanner.zig.bak` does not survive.
+"""

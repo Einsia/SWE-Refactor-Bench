@@ -1,0 +1,54 @@
+#!/bin/bash
+# Run a wasm module the way the verifier runs it.
+#
+# The invocation is part of the contract, not a detail.  A WASI guest can only reach
+# directories the host preopens for it, so "does my port work" is not a question about
+# the port alone -- the same module passes or fails depending on how it was launched.
+# This script is the launch the verifier uses, so that a port developed against it is
+# developed against the thing that scores it.
+#
+#   wasi-run [module] -- <sqlite3 args...>
+#   wasi-run                     # defaults to ./sqlite3.wasm, opens an interactive shell
+#
+# The sandbox is $PWD/.wasi-sandbox unless PF02_SANDBOX names another directory.
+#
+# Three preopens, and the third is the one worth understanding:
+#
+#   --dir <sandbox>::/data   an absolute guest path, for cases that name /data/x.db
+#   --dir <tmpdir>::/tmp     temp files; SQLITE_TMPDIR and TMPDIR both point here
+#   --dir <sandbox>::.       the *same* directory again, mapped as the guest cwd
+#
+# Without the third, a bare relative name like `ar.db` has nothing to resolve against
+# and fails, while the native build -- which simply runs with its cwd set -- succeeds.
+# Every command built on relative names (.archive, .import, fsdir) would be untestable.
+# It grants no additional reach: it is the same directory under a second name.
+set -euo pipefail
+
+MODULE="${PF02_MODULE:-./sqlite3.wasm}"
+if [ $# -gt 0 ] && [ "$1" != "--" ]; then
+  MODULE="$1"; shift
+fi
+[ $# -gt 0 ] && [ "$1" = "--" ] && shift
+
+WASMTIME="${PF02_WASMTIME:-/opt/wasmtime/wasmtime}"
+SANDBOX="${PF02_SANDBOX:-$PWD/.wasi-sandbox}"
+TMPDIR_HOST="$SANDBOX/.tmp"
+
+[ -f "$MODULE" ] || { echo "wasi-run: no such module: $MODULE" >&2; exit 2; }
+mkdir -p "$SANDBOX" "$TMPDIR_HOST"
+
+# The environment is pinned for the same reason as the preopens: LANG and LC_ALL decide
+# collation, TZ decides how dates render, and a run that inherited them from the shell
+# would agree with the recorded expectations on one machine and not the next.
+exec "$WASMTIME" run \
+  --dir "$SANDBOX::/data" \
+  --dir "$TMPDIR_HOST::/tmp" \
+  --dir "$SANDBOX::." \
+  --env LANG=C \
+  --env LC_ALL=C \
+  --env TZ=UTC \
+  --env PATH=/usr/bin:/bin \
+  --env HOME=/tmp \
+  --env TMPDIR=/tmp \
+  --env SQLITE_TMPDIR=/tmp \
+  "$MODULE" "$@"

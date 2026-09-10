@@ -1,0 +1,91 @@
+schema = "swerefactor.scan-suite/1"
+task = "lang01-cmark-c-to-rust"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Stage 2 configures and builds both link configurations under a shimmed C compiler,
+# reads rustc's producer metadata out of the shipped ELF, diffs the installed CLI
+# against a reference build on documents composed at grading time from `os.urandom(16)`,
+# and runs the whole install twice under thirteen hostile environment variables to see
+# whether the answer moves. Those are measurements. A check standing next to them that
+# walks the submitted tree looking for a `.o`, hashes `COPYING`, or greps a Cargo
+# manifest for a feature whose name contains "legacy" is asserting on the repository --
+# and it was doing so with points attached, so "a stale object file is checked in" and
+# "the library does not reproduce the reference on unseen input" were the same kind of
+# evidence as far as the score was concerned.
+#
+# Three of them were also grep-shaped in a way that fails honest work. `no-dlopen`
+# matched `dlopen` anywhere in any `.rs`, so a comment saying the port deliberately does
+# not load code at run time failed a submission. `no-exec-helpers` matched
+# `std::process::Command`, which a build script may legitimately use. And
+# `single-implementation` matched a Cargo feature whose name contained `c`, `native` or
+# `ffi` as a word -- `ffi` being what an honest port calls the module holding its
+# `extern "C"` layer. All three keep their artefact halves in stage 2, where they are
+# claims about imported symbols in a built ELF and about how many libraries land in one
+# install prefix, and those are the halves worth failing a submission over.
+#
+# So the reading runs here, in the stage that may read and may not execute, and its
+# output is evidence: `swerefactor.scan` records every check with required = false, and
+# `scoring.grade_audit` gates on the required checks -- which are the twelve prose
+# gates in evaluation.toml and nothing else. A scan finding costs a submission nothing
+# on its own. What it does is tell the reviewer where to look, and the reviewer has both
+# trees open.
+#
+# Weights are recorded and unused: nothing here is scored. They are kept so a module can
+# move back to a scored stage without a rewrite, which is the same reason the module
+# contract -- `SRB_REPO`, `SRB_RESULT`, a JSON list of checks -- is byte-for-byte stage
+# 2's.
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check in this suite can fail the audit gate; the gate is the
+ten prose questions in evaluation.toml, answered by a model that reads both
+trees and cannot run either one. These modules answer the sub-questions a string
+can answer -- which of State A's twenty translation units is still on disk, whether
+COPYING's bytes moved -- so that the reviewer spends its turns on the ones a string
+cannot: whether the Rust is an implementation or a shell around something else, and
+whether it is a port or a transliteration.
+"""
+
+[[module]]
+id = "closure"
+title = "did the C leave, and is there Rust where it was"
+weight = 1.0
+about = """
+Per translation unit and per private header, named from `original/src` rather than
+from a list written in the suite; the twenty-four C-family suffixes; the public
+header's declared surface against State A's; the 3,000-line Rust logic floor from
+source-contract.json; and whether every `.rs` is reachable from a `mod`
+declaration. Reads both trees; builds nothing.
+"""
+
+[[module]]
+id = "provenance"
+title = "where the answer comes from"
+weight = 1.0
+about = """
+Checked-in compiled artefacts by extension, by ELF and `ar` magic on
+extensionless files, and by magic on files named like data; long base64 and hex
+runs in Rust; what the build declares about fetching and about compiling C;
+Cargo's dependency policy; feature and cache-variable names that suggest a
+retained second engine; dynamic loading and subprocess mentions; source that names
+the evaluation harness; and hashing or file embedding as corroboration for stage
+2's novel-document diff.
+"""
+
+[[module]]
+id = "contract"
+title = "the licence, the conformance record, and the preserved paths"
+weight = 1.0
+about = """
+`COPYING` against State A by hash, by copyright line and by operative clause; SPDX
+identifiers that are not BSD-2-Clause; the four conformance data files unedited or
+absent but not rewritten, and not shrunk; the five preserved paths present, with a
+line-level diff when one changed; the pinned release version as the build declares
+it; the removable paths, checked only for C left inside them; and any State A C
+file present under a new name, found by hash.
+"""

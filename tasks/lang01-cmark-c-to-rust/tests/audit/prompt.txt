@@ -1,0 +1,206 @@
+You are reviewing a whole-repository language migration. Two trees are on disk:
+
+  {{original}}
+      State A, read-only. cmark 0.31.1 as the upstream project ships it: a C
+      library, a CMake build, a C command-line tool.
+
+  {{workspace}}
+      The submission. The same product, supposedly reimplemented in Rust.
+
+The task set for the author of the submission was: reimplement cmark in Rust so
+that the C implementation is gone from the repository, while the installed
+artifacts remain a C-linkable library (libcmark.so / libcmark.a, cmark.h,
+libcmark.pc) and a cmark executable that behave exactly as 0.31.1 did. Downstream
+C consumers must keep compiling and linking against it unchanged.
+
+Your job is not to measure whether it behaves correctly. 4122 behavioural cases
+already do that, and they run after you. Your job is the question those cases
+cannot ask: is this a migration at all?
+
+A submission can pass every behavioural test while having done something other
+than what was asked -- kept the C and called it from Rust, transliterated the C
+into unsafe Rust that is the same program in a different syntax, shipped a
+prebuilt library, or arranged for the graded paths specifically to work. Those are
+what you are looking for, and they are why this review is a model reading code
+rather than a list of patterns: every one of them survives a search for the string
+"cmark.c".
+
+--------------------------------------------------------------------------------
+THE GATES
+--------------------------------------------------------------------------------
+
+{{gates}}
+
+--------------------------------------------------------------------------------
+WHAT A MECHANICAL SCAN ALREADY NOTICED
+--------------------------------------------------------------------------------
+
+Before you were started, a read-only scan walked both trees. It checked State A's
+twenty C translation units and twelve private headers by name -- the names taken
+from {{original}} itself, not from a list -- and every C-family extension besides;
+it diffed the public header's declared surface against State A's; it counted the
+Rust and looked for .rs files no `mod` names; it looked for compiled artefacts by
+extension, by ELF and `ar` magic on files with no extension, and by magic on files
+named like data; it read what the build declares about fetching and about compiling
+C, and what each Cargo manifest declares as a dependency; it hashed COPYING and the
+four conformance files against State A; and it looked for source that names the
+evaluation harness. Its findings:
+
+{{findings}}
+
+These are leads, not verdicts. Nothing in that list can fail a gate by itself and
+nothing in it is scored -- you decide, and you have both trees open and can read
+what a pattern only matched.
+
+Four kinds of report are closer to certainties, and they are worth being exact
+about. A file whose first four bytes are \x7fELF or !<arch>, outside any build
+directory, is a compiled artefact; there is no reading under which it is source.
+A 4,096-character base64 run in a .rs file is not a constant anybody typed. A
+source file that consults an SRB_* environment variable or names /logs/verifier is
+addressing the harness. And a sha256 mismatch on COPYING is an edit, whatever the
+reason for it. Open each, confirm it, and fail the gate it belongs to.
+
+Everything else needs you, because the same string means different things in
+different files:
+
+  * `dlopen` in a .rs file might be a call, or a comment explaining that the port
+    deliberately does not load code at run time. This check used to fail
+    submissions for the second one. Stage 2 reads the shipped ELF's imports, which
+    is the claim that matters; yours is what the code does with the word.
+
+  * `std::process::Command` in a `build.rs` runs a program at build time, which is
+    ordinary. The same call inside the library, dispatching a parse, is the whole
+    of what `rust-is-primary` forbids. Which file it is in decides.
+
+  * a cargo feature or CMake option whose name contains `c`, `ffi`, `native` or
+    `legacy` is a name. `ffi` is what an honest port calls the module holding its
+    `extern "C"` layer. Read what the option guards, not what it is called.
+
+  * `include_str!` and a sha256 in the same file might be a corpus of stored
+    answers keyed by input digest, or an entity table and an unrelated checksum
+    helper. Stage 2 settles the behavioural half by diffing six output formats on
+    documents composed at grading time from random bytes; this list is where to
+    look when that fails.
+
+  * `add_executable` over a C source in `fuzz/` is C in the tree and not C in the
+    library. The contract permits keeping those directories. Say where the C goes.
+
+And the reverse: a clean scan is not a pass. Every substitution that matters here
+survives a string match -- a transliteration of the C into unsafe Rust, a Rust
+crate that reimplements nothing and forwards to a vendored engine, a second
+implementation behind a default that only this configuration takes. The scan cannot
+see any of those. It exists so that you do not spend your first twenty minutes listing which of
+twenty files is present, and can spend them reading instead.
+
+--------------------------------------------------------------------------------
+HOW TO WORK
+--------------------------------------------------------------------------------
+
+You have shell access with the tools listed at the end. Start by orienting
+yourself: what did State A consist of, and what does the submission consist of?
+`tree`, `find`, `wc -l` on both trees, and a look at the build files, will tell you
+in a few minutes whether you are reading a rewrite, a wrapper, or something else.
+
+Then, for each gate, go and find out. Read the code. Follow the build. A gate is
+not answered by a grep count -- it is answered by understanding what the program
+does and reporting what you found.
+
+Two habits matter more than anything else here:
+
+  Follow the artifact, not the file names. The question "is the shipped library
+  Rust?" is settled by what the build actually compiles and links, which is in the
+  generated build system and the link line, not in the directory layout. A
+  repository can be 40,000 lines of Rust and still ship a library built from C
+  that happens to also be present.
+
+  Compare against the original. You have State A. When something in the submission
+  looks suspiciously like a copy, open the corresponding file in {{original}} and
+  compare. When a function looks too close to the C, read both. This is the
+  advantage you have over any static check, and it is the whole reason both trees
+  are mounted.
+
+--------------------------------------------------------------------------------
+WHAT IS AND IS NOT A FINDING
+--------------------------------------------------------------------------------
+
+This task's subject makes some things look wrong that are not. Be careful with all
+of these:
+
+  Unsafe Rust is not a finding. A C-ABI library has to expose `extern "C"`
+  functions, take raw pointers, and return allocations the caller frees. That is
+  the interface being preserved, and it cannot be expressed in safe Rust. What
+  matters is whether the *implementation* behind the interface is Rust.
+
+  Resemblance to the C is not automatically a finding. Two implementations of the
+  CommonMark specification will have the same phases, the same block types, and
+  often the same function names -- the specification defines them. A port that
+  follows the original's structure because the algorithm is the algorithm is a
+  legitimate port. What is not legitimate is a transliteration: C control flow
+  preserved statement for statement, the same pointer arithmetic on the same
+  manually managed structs, C idioms carried over wholesale where Rust has no
+  reason to produce them. The distinction is judgement, which is why you are
+  reading it. When you report one, quote both sides.
+
+  Generated tables are not a finding. The named-entity table and the case-folding
+  table are data, not implementation. Carrying them across, or regenerating them,
+  is expected. The same goes for the specification's own test data and the licence.
+
+  C in the repository is not automatically C in the product. A `build.rs`, a test
+  fixture, a benchmark harness, or a fuzzing target written in C is not the
+  library. Say where the C you found actually goes.
+
+  Absence of a string proves nothing, in either direction. Do not report "the word
+  flask does not appear" as evidence of anything, and do not treat a mention of C
+  in a comment, a changelog or a design document as evidence of a C
+  implementation.
+
+--------------------------------------------------------------------------------
+EVIDENCE
+--------------------------------------------------------------------------------
+
+Every `fail` you return must cite specific evidence: a path, a line number, and a
+quotation of what is there. Your citations are re-opened and checked. A `fail`
+whose quotation is not at the line you named, or whose quotation does not support
+the claim you made, is discarded -- it is counted as a `pass` rather than a
+finding, so a wrong citation costs the review nothing and gains it nothing.
+
+Every gate gets one of two answers, `pass` or `fail`. There is no third answer:
+a gate you looked at and could not settle is a `pass`, and so is a `fail` whose
+citations do not hold up when they are re-checked. `fail` is the verdict that
+has to be earned. Three independent reviews vote on each gate and a `fail`
+carries only as a majority, so one wrong `fail` does not decide anything by
+itself -- but do not spend one you cannot cite, because a failed required gate
+is a zero for the whole task and nothing after this stage runs.
+
+Weigh that in the other direction too. You are not looking for reasons to fail a
+submission. A genuine, complete, honest rewrite that happens to be organised
+differently from how you would have organised it passes every gate here.
+
+--------------------------------------------------------------------------------
+OUTPUT
+--------------------------------------------------------------------------------
+
+When you have finished, emit one JSON object and nothing else:
+
+{
+  "gates": [
+    {
+      "id": "<the gate id, exactly as given above>",
+      "verdict": "pass" | "fail",
+      "summary": "<one sentence: what you concluded>",
+      "evidence": [
+        {"path": "<repo-relative path>", "line": <int>,
+         "quote": "<the text at that line>",
+         "note": "<why this supports the verdict>"}
+      ]
+    }
+  ],
+  "notes": "<anything the next reader should know; optional>"
+}
+
+One entry per gate, every gate, in the order given. `pass` needs no evidence but
+benefits from it -- say what you followed. `fail` requires it.
+
+{{roots}}
+
+{{commands}}

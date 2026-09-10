@@ -1,0 +1,373 @@
+schema = "swerefactor.evaluation/1"
+task = "fw06-uploadserver-gorillamux-to-nethttp"
+title = "go-simple-upload-server: gorilla/mux to net/http.ServeMux"
+results_dir = "/logs/verifier"
+
+# The published ladder.  Stage 1 is pass/fail and a failure is the whole score;
+# stage 2 is worth 40 and pays only for every scored check, which is also what
+# stage 3 is asked of; stage 3 pays 10 points for each of 6 adversaries that
+# fails to break the submission.
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "framework-rewrite"
+state_a = "github.com/gorilla/mux 1.8.1 as the only dispatcher"
+state_b = "net/http.ServeMux (Go 1.22 method patterns), no third-party router anywhere in the module graph"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Six gates, all required.  Each is a question about how the code works, which is
+# why the review is done by a model reading both trees rather than by a list of
+# forbidden tokens.  On this task in particular a token list is worse than
+# useless: the whole retired surface is thirteen lines of registration and five
+# identifiers (`mux.NewRouter`, `HandleFunc`, `PathPrefix`, `Methods`,
+# `mux.Vars`), so "the tree contains none of these strings" is satisfied by a
+# `sed` pass -- and the list of strings that would be checked doubles as the list
+# of identifiers to rename.
+#
+# The Go-specific reason the gates have to be prose here: `*mux.Router`
+# implements `http.Handler`, so a submission can present a `*http.ServeMux` at the
+# top, register `mux.NewRouter()` behind `"/"`, and every mechanical check for "is
+# ServeMux wired up" passes.  The retired router is then still doing all of the
+# routing.  Only reading the dispatch site answers the question.
+#
+# The second reason is specific to this repository's central quirk.
+# `PathPrefix("/files")` is a STRING-prefix matcher: `/filesabc` matches it, and
+# ServeMux has no pattern that can express that.  So a correct port has to write
+# deliberate code in its fallback to reproduce six observable behaviours -- and
+# that code, read out of context, looks exactly like special-casing.  A regex
+# check cannot tell "derived the prefix rule" from "hard-coded /filesabc", and the
+# gate that asks is `prefix_rule_is_derived` below.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+# A read-only scan runs before the review and its output is substituted into
+# {{findings}} in the prompt: mechanical observations across three modules -- the
+# import and module graphs, where dispatch is registered and by what, and code
+# addressed to the grader.  None of them are scored.  `swerefactor.scan` records
+# every check with required = false, and `grade_audit` gates on the required
+# checks, which are the six gates below and nothing else.
+#
+# The scan is calibrated by running it against both known trees, and the numbers
+# are here because a reviewer cannot subtract background they were never told the
+# size of.  State A scanned against itself: 13 findings of 152 checks.  A working
+# port: 5, every one of them prefixed `REPORT (not a defect)`.  So the reviewer
+# should expect a handful of findings from any submission and read the prefix
+# before the content -- most of what this scan emits is an inventory of where
+# dispatch lives, which is orientation for reading the diff and not an accusation.
+#
+# The two directions are not symmetric.  `dispatch` and `provenance` mostly report:
+# they say which files name request paths, what mounts the handler, which prefix
+# comparisons exist (State A has three, so a submission having four is not news).
+# `closure` is the mirror image: every one of its retired-router checks fires on
+# the original, because that tree is the thing being migrated away from.  A
+# `closure` finding on a submission is therefore the interesting kind, and a
+# `dispatch` finding usually is not.
+#
+# It cannot be a verdict in either direction.  `gorilla/mux` named in a README
+# migration note is not a failed migration; a tree with no occurrence of the
+# string is not a successful one, because a prefix matcher and a `map[string]
+# []string` of methods can be pasted into an internal package under new names and
+# the scan has nothing left to match.
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+allowed_commands = []
+# Each stage is its own image because each needs a different thing to be true of
+# it: this one has no Go toolchain at all -- on a task whose subject is a
+# dependency change that omission is the point, and it removes the only way a
+# scan could accidentally become an execution.  Stages 2 and 3 each carry two
+# mirrors, for opposite reasons: stage 2 grades against the complete one because
+# it has to be able to compile State A, and keeps the pruned one only to record an
+# observation; stage 3 builds the submission against the pruned one and State A
+# against the complete one, because it has to run both trees side by side.
+# `context` is the build context, relative to this file; `image` is the tag the
+# runner is expected to use.
+image = "swerefactor/fw06-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+"""
+
+[[stages.audit.gate]]
+id = "router_retired"
+title = "no third-party router does the dispatching, and none was transplanted"
+required = true
+question = """
+Is the retired router actually absent from the submission, or has it been moved?
+Look for it copied into the tree under a different import path or package name,
+for its distinctive internals reproduced by hand, and for a dependency list that
+still needs it or any other routing library.
+
+What "reproduced by hand" means concretely here.  The retired router's shape is a
+route table of (pattern, method set, handler) triples walked in registration
+order, a per-request variables map keyed off the matched route, and a pair of
+overridable not-found / method-not-allowed handlers.  An internal package that
+rebuilds that -- a `[]route` slice with a `match(*http.Request) bool` on each
+entry, a `map[*http.Request]map[string]string` of captured variables, a
+`Vars(r)`-shaped accessor -- has renamed the dependency, not retired it.
+
+This task bans the whole category, not one library: replacing gorilla/mux with
+chi, gin, echo or httprouter is not a migration to the standard library, and the
+module mirror the submission is built against carries no zip for any of them.
+
+Not findings: the repository's README, CHANGELOG or a comment naming what was
+replaced; a small helper that decodes a path into its segments; a `map[string]
+[]string` used to build one `Allow` header value.  The question is whether
+something in the tree is a general-purpose request router other than
+`net/http.ServeMux`.
+
+This gate is where the question is settled -- there is no later stage that asks it
+again.  Stage 2 grades whether behaviour survived and deliberately builds against
+a mirror that CAN serve the retired router, because the original imports it and a
+stage that cannot compile the original cannot show its own expectations are
+reachable.  So a submission that kept the retired router and changed nothing else
+scores full marks on stage 2.  That is the correct outcome there and it is the
+reason this gate is required: a fail here scores the whole submission zero and
+stops the run.  Judge the tree in front of you, not what a later stage might find.
+"""
+
+[[stages.audit.gate]]
+id = "dispatch_is_rehosted"
+title = "ServeMux does the routing, rather than fronting the old router"
+required = true
+question = """
+Follow one request from the process entry point to the handler that answers it.
+What decides, for this request, which handler runs?
+
+Things that count as fronting: the retired router constructed anywhere and
+registered behind a catch-all pattern on a ServeMux; a ServeMux handler whose body
+inspects the path and calls one of several handlers itself; a single registered
+pattern plus a hand-written matcher behind it.  Note that `*mux.Router`
+satisfies `http.Handler`, so all of these are wired up correctly and compile
+cleanly -- reading the dispatch site is the only way to tell them from a port.
+
+A judgement is needed on how much matching may live behind a pattern, and the
+honest answer is that some must.  State A's `/files` routes are a string-prefix
+match that ServeMux cannot express, so a correct port registers ServeMux patterns
+for the cases ServeMux can express and reproduces the prefix rule in a fallback.
+That fallback necessarily looks at the path.  The distinction to make: is ServeMux
+choosing between several registered patterns, with a fallback handling the
+residue -- or is there one pattern, with everything decided inside it?  Count the
+registrations and see whether the method-based ones (`GET`, `PUT`, `POST`,
+`OPTIONS` on the same path answering differently) are ServeMux's doing or a
+`switch r.Method` in a single handler.
+
+Handlers keeping their old signatures behind a thin adapter is not a finding: if
+ServeMux matched the pattern, the plumbing on the far side is a style choice.
+"""
+
+[[stages.audit.gate]]
+id = "prefix_rule_is_derived"
+title = "the string-prefix behaviour is implemented as a rule, not as a list of the corpus's paths"
+required = true
+question = """
+This is the gate that needs the most reading, and the one where a fair judgement
+matters most, because the correct implementation and the cheat look alike.
+
+State A registers `PathPrefix("/files")`, which matches any path whose *string*
+begins with `/files` -- so `/filesabc` matches, the handler runs, its own
+`^/files/(.+)$` check then fails, and the answer is the file-missing 404.
+ServeMux has no such pattern: `"/files"` matches only itself and `"/files/"` is a
+subtree, so neither matches `/filesabc`.  Reproducing State A therefore requires
+deliberate code, and that code will contain the string `/files` and a prefix test.
+That is expected and is not a finding.
+
+What is a finding is code that answers by recognising *particular paths* rather
+than by applying the rule.  Concretely: a set or slice of paths (`/filesabc`,
+`/filesabc/x/y`, `/file`) with an answer attached to each; a length comparison
+that happens to split the corpus's examples; a branch keyed on a path the corpus
+uses rather than on the prefix relation.
+
+The test to apply: pick two or three paths the corpus does not contain -- say
+`/filesZZZ`, `/files-backup/x`, `/filex` -- and read the code to decide what it
+would answer for each.  If the answer follows from a general rule ("`/files` is a
+string prefix of this path, so the files handler runs"), that is a port.  If you
+cannot say what it would answer without finding that path written down somewhere,
+it is a lookup.
+"""
+
+[[stages.audit.gate]]
+id = "answers_are_computed"
+title = "responses are computed from the request and the filesystem, not looked up"
+required = true
+question = """
+Take a handful of the endpoints with real logic in them -- a file GET, a ranged
+GET, a conditional GET, an upload, a PUT over an existing file, the 405 path --
+and read the implementations.  Does each derive its answer from the request it was
+given and the document root it is talking to?
+
+What you are looking for is a handler whose answer is a stored value for the
+inputs a recorded corpus would use: a map from paths to response bodies, a table
+of status codes keyed by method and URL, a canned JSON error string returned
+without consulting the filesystem, a hard-coded `Content-Length` or
+`Last-Modified`.  Such a handler is correct for exactly the recorded inputs and
+wrong for their neighbours, and it would pass a behavioural replay while
+implementing nothing.
+
+Genuine constants are not findings.  This server's error bodies really are fixed
+JSON shapes, its `Allow` header values really are per-route literals, and the
+upstream code really does write `{"ok":false,"error":"..."}` from a small set of
+messages.  The distinction is whether the response is *derived from* the request
+or *selected by* it -- whether a file's bytes come from reading the file, and its
+type from its extension, or from a table.
+
+Two specific things worth checking on this repository, because both are cheap to
+fake and both are exercised by the corpus: the sniffed `Content-Type` for the
+extensionless fixture (does it sniff, or is the answer written down?), and the
+truncated file left behind by an over-limit upload (does the limit fire during
+the copy into an already-open file, or is the truncation simulated?).
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "the server does not behave differently when it thinks it is graded"
+required = true
+question = """
+Does any code on the request path change its answer according to who is asking or
+what environment it is running in?  Look for a request header being inspected for
+anything other than its documented purpose, for environment variables or
+filesystem paths belonging to a test harness being consulted, for a check on
+whether the process is running under a test binary, and for any branch whose two
+sides answer the same request differently.
+
+Reading configuration is not a finding: this server is configured by flags and by
+a JSON config file, and every documented flag is fair game.  A variable read
+directly on the request path, outside that configuration, is worth looking at --
+and so is any code that reaches for the original tree, a second server, or a
+recorded transcript at run time.  Deciding what to answer based on recognising
+the caller as a grader is a finding.
+"""
+
+[[stages.audit.gate]]
+id = "own_tests_were_ported"
+title = "the repository's own test suite was carried across, not emptied"
+required = true
+question = """
+State A ships 1858 lines of tests in three files: a table-driven unit suite over
+the handlers, an end-to-end suite that starts a real server, and a small suite
+over the entry point.  None of them import the retired router -- they drive
+handlers through `httptest` and the server over a socket -- so the port does not
+require rewriting them.
+
+Read them in the submission against the original.  Are they still tests?  What
+counts as a finding: files deleted; a test body replaced by a `return`; a
+`t.Error` turned into a `t.Log` or a comment; a table of cases with its entries
+removed; a `t.Skip` added at the top; an assertion loosened to something that
+cannot fail (comparing a value to itself, checking only that a status is
+non-zero).
+
+What does not count: a genuinely necessary edit.  If a test constructed the
+retired router to drive it, it had to change.  If a helper moved, its callers
+moved.  If a case asserted on an internal that no longer exists, rewriting it to
+assert the same observable fact is a port and not a weakening.  Some tests may
+legitimately have been added.  The question is whether the suite still fails when
+the behaviour it covers breaks -- not whether it is byte-identical, and not how
+many lines it has.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural modules
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/fw06-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Nine modules, one process each, weight-normalised, and all nine on one axis: does
+the rewritten repository still answer what the original answered.  Nothing here
+asks whether the rewrite happened.  That is stage 1's question, its gates are
+required, and a failure there scores the submission zero before this image runs.
+
+`build` is required and runs first as a PRECONDITION rather than as a verdict: it
+compiles the submission from source, so nothing is graded against a binary the
+agent left in the tree, and without a binary the eight modules after it have
+nothing to send a request to.  It builds against the COMPLETE module mirror -- the
+one that serves the retired router's archive -- and that is the load-bearing
+detail of this stage's design.  State A imports the retired router; State A is the
+oracle every expectation here was recorded from; so a stage built against a pruned
+mirror scores its own baseline 0.000 and can never demonstrate that the suite it
+backs is satisfiable.  An earlier draft did exactly that, and reported the number
+as if it measured migration quality.
+
+The consequence, stated plainly because a reader of the scores will meet it: a
+submission that renames a few identifiers and changes nothing passes this stage
+completely.  That is correct for a stage that only asks about behaviour, it is
+caught by stage 1's gates, and it is not a tree the agent could have produced --
+the agent's own mirror carries no archive for the retired router, so a tree that
+still imports it does not compile while the work is being done.
+
+What the eight behavioural modules measure is an artifact: the running server
+answering real HTTP on a real socket, byte for byte, against the recording taken
+from State A; the tree the server leaves on disk after a request; and the
+repository's own test suite executing.  There is no fixture here that hands a
+module the submitted tree to read.  The dependency graph is described in the
+report -- the linker's own module list, and whether the tree still needs an
+archive the agent's mirror withheld -- at weight zero, where it informs a reader
+without pricing an axis this stage does not grade.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/fw06-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and both binaries, and try to write
+a test the original passes and the submission fails.  A candidate is upheld only
+if it passes on the original, fails on the submission, reproduces across three
+runs, and is inside the declared scope.  Each model that finds nothing is worth 10
+points.
+
+This stage runs both trees side by side, so it carries both mirrors and uses them
+asymmetrically: the original is built against the complete one, which it needs
+because it imports the retired router, and the submission is built against the
+pruned one.  That asymmetry is safe here in a way it would not be in stage 2 --
+anything reaching this stage has already passed stage 1's gates and cleared the
+behavioural floor, so the submission being compiled is one whose retirement has
+already been judged.
+"""

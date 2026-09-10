@@ -1,0 +1,28 @@
+{
+ "build_config_class": "com/google/gson/internal/GsonBuildConfig.class",
+ "build_config_source": "com/google/gson/internal/GsonBuildConfig.java",
+ "build_config_version": "7.11.3",
+ "jars": {
+  ":extras": "gson-extras-7.11.3.jar",
+  ":gson": "gson-7.11.3.jar",
+  ":metrics": "gson-metrics-7.11.3.jar",
+  ":proto": "gson-proto.jar"
+ },
+ "manifest": {
+  "Bundle-Version": "7.11.3",
+  "Export-Package-versions": [
+   "7.11.3",
+   "7.11.3",
+   "7.11.3",
+   "7.11.3"
+  ]
+ },
+ "module_version": "7.11.3",
+ "pom": {
+  "artifactId": "gson",
+  "groupId": "com.google.code.gson",
+  "version": "7.11.3"
+ },
+ "probe_version": "7.11.3",
+ "property": "version"
+}

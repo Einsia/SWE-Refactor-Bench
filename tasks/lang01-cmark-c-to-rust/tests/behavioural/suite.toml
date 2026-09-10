@@ -1,0 +1,291 @@
+schema = "swerefactor.behavioural-suite/1"
+task = "lang01-cmark-c-to-rust"
+
+# 4122 behavioural cases over 4420 assertions, split into thirteen modules along
+# the boundaries the case catalog already used, plus `build` (which produces what
+# the other fourteen read) and `provenance` (which asks where it came from).
+#
+# Weights are relative shares of the behavioural stage's rate, normalised by the
+# runner, and they answer one question: if this module were the only thing that
+# regressed, how much of the migration would be missing?  They are deliberately
+# not proportional to case count.  `renderers` holds 1114 of the 4122 cases
+# because five writers times the construct corpus is a large cross product, not
+# because the writers are 27% of the library; `memory` holds 88 because there are
+# only so many ways to ask whether a custom allocator is honoured, and a rewrite
+# that ignores cmark_mem has broken every embedder that passes one.
+#
+# `conformance` carries the most because it is the definition of correctness the
+# upstream project publishes about itself. `api` and `structure` come next
+# together: a Rust rewrite that renders correctly but cannot be linked against by
+# a C consumer has not replaced the library, it has replaced the executable.
+
+# Every module's run.sh is a symlink to lib/run-module.sh, which reads
+# $SRB_MODULE_ID and asks lib/driver.py for that slice. One script rather than
+# fifteen copies: the modules here differ in which cases they own, not in how
+# they run. A module that needs its own logic replaces its symlink with a real
+# script and nothing else changes.
+
+default_timeout_sec = 1800
+lib_dir = "lib"
+
+[env]
+SWEREFACTOR_ASSETS = "/opt/assets"
+# The compiler shim records repository C compiles; it does not refuse them.
+#
+# Refusing is what this said until it was measured: the untouched C library rated
+# 0.102 here, `conformance` 0/691, because a refused compile fails the build module
+# and leaves 4,122 behavioural cases with nothing to ask. Every one of
+# those expectations was recorded *from* that library, so the number was a fact
+# about the shim.
+#
+# Recording keeps the evidence and moves the charge. The ledger still receives every
+# compile and `compiler-shim-clean` still fails on it in the provenance module's own
+# log, at the weight zero it already had -- so the finding survives where a reader can
+# see it, and the weightless check itself is dropped at collection rather than reaching
+# the report. Stage 1 does the charging, where `no-c-sources`, `no-c-in-build` and
+# `rust-is-primary` are required and failing one zeroes the submission before this
+# image starts. `enforce` and `off` remain as diagnostics and annotate the result.
+SRB_SHIM = "record"
+
+[metadata]
+runtime = "rust 1.90.0 + cmake 3.25.1"
+reference_version = "cmark 0.31.1"
+cases = 4122
+assertions = 4420
+link_configs = ["shared", "static"]
+
+# --------------------------------------------------------------------------- #
+# The build everything else stands on
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "build"
+title = "configure, build and install both link configurations"
+weight = 0.08
+timeout_sec = 5400
+about = """
+Copies the submission, discards anything it left built, and drives cmake for both
+BUILD_SHARED_LIBS=ON and OFF with the compiler shim in place -- so a tree that
+still needs a C compiler is recorded as needing one, in a ledger, per invocation.
+This module grades whether the published build argv produces an installable
+library; whether it needed cc to do it is `compiler-shim-clean`'s finding and
+stage 1's charge. Publishes both install prefixes and the compiled consumer probe
+to $SRB_SUITE_WORK; every module after this one reads them.
+
+Both configurations are graded because they fail differently: a Rust cdylib and a
+Rust staticlib have different symbol visibility and different link requirements,
+and a submission that only ever tried one usually cannot install the other.
+"""
+
+# --------------------------------------------------------------------------- #
+# The installed artifacts: is this still a library a C program can link?
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "structure"
+title = "artifacts, install inventory, ABI surface, packaging"
+weight = 0.11
+timeout_sec = 2400
+about = """
+46 cases over the installed tree rather than the source: the shared object's
+soname and version, the static archive, the exported symbol list against the
+frozen reference, cmark.h and cmark_export.h, libcmark.pc read back through
+pkg-config, and a C consumer compiled and linked against the result.
+
+This is where a rewrite that produced a working Rust binary but not a working C
+library is caught, and it is scored rather than gated because "the .pc file has
+the wrong prefix" and "there is no library at all" are not the same failure.
+"""
+
+# --------------------------------------------------------------------------- #
+# Behaviour: State A's output, byte for byte
+# --------------------------------------------------------------------------- #
+
+[[module]]
+id = "conformance"
+title = "the CommonMark specification corpus"
+weight = 0.13
+timeout_sec = 3600
+about = """
+691 examples from the specification the upstream project treats as its definition
+of correctness, each rendered through cmark_markdown_to_html -- the one-call entry
+point most consumers actually use. Compared byte for byte against output frozen
+from the pinned C release at image build time.
+"""
+
+[[module]]
+id = "renderers"
+title = "every writer over the construct corpus"
+weight = 0.09
+timeout_sec = 3600
+about = """
+HTML, XML, man, LaTeX and CommonMark writers across block, inline and UTF-8
+construct families, plus markdown->AST->markdown round-trips and the file-input
+parser. Each (construct family, writer) pair is an independent claim: a rewrite
+that ports the HTML writer properly and approximates the rest passes conformance
+and fails here, which is the point of grading the writers separately.
+"""
+
+[[module]]
+id = "data-tables"
+title = "named entities and Unicode case folding"
+weight = 0.05
+about = """
+The two generated tables. 2125 named entities and the case-folding map are data,
+not logic, and a rewrite that regenerates them from a newer Unicode release or
+transcribes them by hand gets most of them right -- which is why they are checked
+rather than assumed.
+"""
+
+[[module]]
+id = "encoding"
+title = "UTF-8 validation and replacement"
+weight = 0.05
+about = """
+Overlong sequences, lone surrogates, truncated multi-byte characters, embedded
+NULs and BOMs. The C original has specific, documented answers here that a
+rewrite in a language whose strings are validated UTF-8 does not get for free:
+Rust's String cannot hold the invalid input this library is required to accept
+and replace.
+"""
+
+[[module]]
+id = "robustness"
+title = "pathological inputs and wrap widths"
+weight = 0.04
+timeout_sec = 2400
+about = """
+Deeply nested emphasis, long link-reference chains, unbalanced brackets and the
+quadratic-blowup documents upstream has fixed CVEs for, plus the wrapping widths.
+Includes cases whose expected answer is a specific refusal, so a rewrite cannot
+pass by being slower and more thorough than the original.
+"""
+
+[[module]]
+id = "options"
+title = "the option flags, alone and in combination"
+weight = 0.06
+about = """
+sourcepos, hardbreaks, nobreaks, safe, unsafe, normalize, smart, validate_utf8,
+and 120 combinations of them. sourcepos carries the most cases because byte
+offsets into the source are the hardest part of the AST to reproduce and the
+easiest to get subtly wrong.
+"""
+
+[[module]]
+id = "streaming"
+title = "the incremental parser"
+weight = 0.07
+timeout_sec = 2400
+about = """
+cmark_parser_feed with the input split at every interesting boundary -- inside a
+multi-byte character, between CR and LF, mid-fence, mid-entity. A rewrite that
+buffers everything and parses at the end passes the whole-document corpus and
+fails here.
+"""
+
+[[module]]
+id = "tree"
+title = "the AST: accessors, links, consolidation, invariants"
+weight = 0.07
+about = """
+Node types, parent and sibling navigation, literal text, headings levels, list
+data, link destinations and titles, text consolidation, and the tree invariants
+cmark_node_check enforces. This is the interface an embedder walks, and it is not
+visible in rendered output at all.
+"""
+
+[[module]]
+id = "iterators"
+title = "the iterator API"
+weight = 0.04
+about = """
+cmark_iter over enter and exit events, including mutation during iteration and
+reset to an arbitrary node -- the two things an iterator implementation gets
+wrong when it was written as a recursive walk and retrofitted.
+"""
+
+[[module]]
+id = "memory"
+title = "the pluggable allocator"
+weight = 0.04
+about = """
+cmark_mem: a custom allocator has to be used for every allocation the library
+makes, including inside the parser and the writers, and freed through the same
+vtable. A Rust rewrite gets this wrong by default, because its own allocator is
+implicit and global.
+"""
+
+[[module]]
+id = "api"
+title = "programmatic construction, mutation, lifecycle, errors"
+weight = 0.06
+about = """
+Building documents node by node, mutating them, unlinking and freeing, the
+documented failure modes (appending a child to a leaf, inserting a block into an
+inline), and the ABI constants a compiled consumer has baked into it. The error
+cases matter as much as the successes: a rewrite that panics where the original
+returned 0 has changed the contract for every caller.
+"""
+
+[[module]]
+id = "provenance"
+title = "the artifacts came from a Rust build and nothing else ran"
+weight = 0.08
+timeout_sec = 2400
+about = """
+Twelve gates, each with a built artifact to point at: the compiler shim's ledger,
+cc1/as execution, rustc producer metadata in the shipped ELF, C translation units
+recorded in the archive, DT_NEEDED, dlopen and exec imports in the shipped symbol
+table, one library per install prefix, environment-dependent answers, the version
+on four published surfaces, the exported ABI width, and six renderings of a
+document composed at grading time from random bytes.
+
+Eight of the twelve are scored. The dividing line is the one the whole stage runs
+on: an expectation is scored here only if it was recorded from State A, and State A
+-- the C library every case in this suite was captured from -- must be able to
+answer it. Eight can be. Nothing about a whitelisted DT_NEEDED set, an absent
+dlopen, an absent exec helper, an answer that does not change with the environment,
+one library per prefix, an unchanged version, an unwidened ABI, or six correct
+renderings of a document nobody had seen before is specific to which language
+produced the artifact; a C build satisfies all eight, and a Rust rewrite that
+breaks any of them has broken something a consumer relies on.
+
+Four cannot be, and they carry no weight: `compiler-shim-clean`,
+`no-compile-syscalls`, `elf-rust-provenance`, `no-c-provenance`. Each asks whether
+the artifact came out of a Rust toolchain, which State A fails by construction and
+by definition -- it is the C implementation. Those four are stage 1's to judge, and
+stage 1 already judges them, through three required gates: `rust-is-primary` (the
+library target's artifact comes from the Rust build), `no-c-sources`, and
+`no-c-in-build`. That is a strictly harder place to fail, because a stage-1 gate
+failing scores the whole submission zero before this image ever starts. They still run
+here and their findings are still in this module's own log, so a submission that ships
+a C shim is visible in the evidence -- but a check worth nothing is deleted at
+collection rather than carried into the report as one worth nothing, so they do not
+reach `behavioural.json`, this module's counts, or the graded record. It is not charged
+twice, and it is not reported as a charge that was never made.
+
+Four audit claims are measured nowhere in this stage -- a checked-in object file,
+a fetch declared in the build, COPYING's contents, the conformance data's contents.
+All four are claims about the submitted *files*, and answering them means reading
+source. They are stage 1's, where a read-only scan does the reading and a model with
+both trees open does the judging.
+
+The weight is unchanged at 0.08. Weights in this file answer "if this module were
+the only thing that regressed, how much of the migration would be missing", not
+"how many checks does it hold" -- and the eight that remain include the two that
+matter most: the fresh-document rendering, which is the only place in the suite
+that grades against input no submission could have seen, and the no-cheating set.
+"""
+
+[[module]]
+id = "cli"
+title = "the installed executable"
+weight = 0.03
+about = """
+253 invocations of the installed cmark binary: every documented flag, stdin and
+file input, multiple files, missing files, unreadable files, --help, --version,
+and the exit codes. Compared on stdout, stderr and exit status together, because
+a tool that prints the right answer to the wrong stream has broken every script
+that pipes it.
+"""

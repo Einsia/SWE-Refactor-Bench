@@ -1,0 +1,391 @@
+# --------------------------------------------------------------------------- #
+# lang01 -- cmark, C to Rust: how a submission is graded
+# --------------------------------------------------------------------------- #
+# Three stages, in order, each able to end the grading run:
+#
+#   1. an audit review, by a model that may read both trees and may run
+#      nothing, preceded by a 145-check read-only scan that hands it findings
+#   2. 15 behavioural modules, 40 points, all or nothing, measuring the built
+#      artifacts against a reference build of State A
+#   3. 6 adversaries with both trees and both builds, 60 points
+#
+# The agent never sees this file, or anything else under tests/.
+schema = "swerefactor.evaluation/1"
+task = "lang01-cmark-c-to-rust"
+title = "cmark 0.31.1: reimplement a C library in Rust, ABI intact"
+results_dir = "/logs/verifier"
+
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it, and short of all of it stage 3 does not run:
+# paying six models to look for a hole in a library whose own conformance suite
+# has already found one tells you nothing you did not already know.  The hole is
+# named in the behavioural report.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "language-rewrite"
+state_a = "cmark 0.31.1: ~40 C11 translation units, CMake 3.13, libcmark.so.0.31.1 + libcmark.a + cmark(1)"
+state_b = "the same three artifacts and the same cmark.h, implemented in Rust (1.90 in the image), C ABI unchanged"
+scale = "~22k lines of C across src/, plus the CommonMark 0.31.2 specification suite"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Eight gates, all of them required. They are the judgements about this task that
+# cannot honestly be settled by a pattern.
+#
+# Twelve more observe rather than judge -- a line in the compiler shim's ledger, a
+# note in an ELF header, two installs run under thirteen hostile environment
+# variables and a diff -- and they are stage 2's `provenance` module, where each
+# earns its own credit. "The .pc file has the wrong prefix" and "there is no Rust in
+# this repository" must not be the same verdict, which is what a suite behaving like
+# a tripwire instead of a measurement would make them.
+#
+# Claims about files in the repository rather than about built artefacts are not
+# gates at all. A licence file and the conformance data have nothing to do with
+# whether the library works, and grading never reads the submission's conformance
+# copies -- the verifier holds its own frozen ones -- so editing them cannot change
+# a score. An advisory gate would not help: `grade_audit` builds its verdict
+# from the conjunction of the *required* checks, so an advisory answer is read by
+# nothing, and the submission would be paying a model to judge a file hash that goes
+# nowhere. If either question should be able to void a submission, the honest form
+# of that is `required = true`.
+#
+# Nothing is lost by keeping them out, because the reading and the vote are
+# separate. The 145 scan checks below still hash COPYING and the four conformance
+# files, and the scan's findings reach the transcript whatever gates exist, so an
+# edited licence is still visible to anyone reading the report.
+#
+# The scan below is the mechanical half of all of it. 145 file-reading checks --
+# State A's twenty translation units by name, the twelve private headers, the
+# licence by hash and by copyright line, compiled artefacts by extension and by
+# magic byte, what the build declares about fetching and about compiling C -- run
+# before the review and are substituted into the prompt as findings. Nothing they
+# emit is scored: `swerefactor.scan` forces required = false on every check.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+image = "swerefactor/lang01-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+
+The review is bounded by wall clock alone, and it needs the room: this is
+22,000 lines of C against however much Rust replaced it, and no one can tell a
+port from a transliteration without reading a fair amount of both.
+
+There is deliberately no build toolchain in this image. A review that can build
+starts grading build logs, which is stage 2's job and which it does better.
+"""
+
+[[stages.audit.gate]]
+id = "no-c-sources"
+title = "the C implementation left the repository"
+required = true
+question = """
+State A's library is about forty C translation units under src/, plus a re2c
+scanner and generated tables. Are they gone, and is what replaced them a Rust
+implementation rather than the same C somewhere else?
+
+The interesting cases are C that moved rather than left: relocated to a directory
+CMakeLists.txt no longer names but a script still compiles, renamed to an
+extension nobody scans for, embedded as a string literal or byte array and written
+out at build time, vendored under a dependency path, or fetched during the build.
+
+C that is genuinely not the library is not a finding: a build script, a test
+fixture, a benchmark, a fuzz harness, an example downstream consumer. When you
+report C, say what compiles it and where the result goes -- "C is present" and "C
+is the product" are different claims and only the second one is this gate.
+"""
+
+[[stages.audit.gate]]
+id = "no-foreign-headers"
+title = "only the published header remains"
+required = true
+question = """
+State A ships one installed header, src/cmark.h, plus the generated
+cmark_export.h and cmark_version.h. Everything else under src/*.h was internal to
+the C implementation: node.h, parser.h, buffer.h, chunk.h, inlines.h, houdini.h
+and the rest.
+
+Is src/cmark.h still there, and does it still declare the same interface -- the
+same functions, types, enum values and macros? A migration may not quietly change
+the contract downstream code compiles against, and an enum whose values a compiled
+consumer has already baked in cannot be reordered. Formatting, comments and
+include-guard names do not matter; additions are judged under the ABI check in
+stage 2, not here.
+
+And are the internal headers gone, or are they still there describing structs that
+Rust code now mirrors by hand? The second is worth reporting: it usually means the
+Rust is holding the C's data layout rather than its own.
+"""
+
+[[stages.audit.gate]]
+id = "no-c-in-build"
+title = "nothing in the build compiles C for the library"
+required = true
+question = """
+Read the build as the build sees it, from `cmake -S . -B build` through to the
+installed artifacts. Does anything on that path compile C or C++?
+
+The cases worth finding are indirect: a build.rs that invokes cc or the cc crate,
+a CMake custom command that calls a compiler directly, an included Makefile
+fragment, a vendored crate whose build script compiles bundled C, a pre-build step
+that produces objects the Rust link then picks up, a pkg-config lookup that
+resolves to a C library doing the real work.
+
+Follow it wherever it goes and name the file and line that does the compiling.
+Do not leave this to the build. Stage 2 watches the compilers themselves -- a shim
+ledger, cc1 and as syscalls, rustc metadata in the shipped ELF, C translation units
+named in the archive -- but it runs after you and it scores none of those four:
+which toolchain produced the artifact is your judgement, not its. So this gate is
+the only place a build arranged to compile C costs anything. Read the declarations
+-- what this build is *arranged* to do, including on a machine configured
+differently from this one -- and decide here.
+
+The scan read the declarations for you: enable_language(C), project(LANGUAGES C),
+add_library and add_executable over a C source, the cc and cmake crates, bindgen,
+and separately every fetch the build declares -- FetchContent, ExternalProject,
+file(DOWNLOAD), git clone, curl, a cargo git dependency. It also lists every
+dependency each Cargo manifest declares, against a contract that allows std, core
+and alloc only.
+
+Two of those are close to certainties: `cc::Build` in a build script compiles C by
+definition, and a cargo git dependency is an outside implementation by definition.
+The rest are leads -- an `add_executable` over a C source in a directory the port
+kept but no longer installs from is C in the tree without being C in the library,
+and the scan cannot tell those apart. A fetch that State A already carried is not
+reported at all; the upstream Makefile clones a corpus repository for its benchmark
+target, and a port that leaves that file alone has introduced nothing.
+"""
+
+[[stages.audit.gate]]
+id = "rust-present"
+title = "there is a real Rust implementation here"
+required = true
+question = """
+Is there enough Rust in this repository to be an implementation of CommonMark, and
+is it an implementation rather than filler?
+
+A line count is the wrong instrument and you have a better one: read it. Blocks and
+inlines, entity and numeric-reference handling, UTF-8 validation and case folding,
+the six output writers, the node tree and its iterator, the memory allocator hook.
+Are those things implemented, or are there large files that no path reaches,
+generated repetition padding out a directory, or modules that exist so a size check
+passes?
+
+Report what is missing as well as what is there. A submission whose HTML writer is
+real and whose LaTeX writer returns empty output has done most of a migration, and
+that is a finding worth writing down precisely.
+"""
+
+[[stages.audit.gate]]
+id = "rust-is-primary"
+title = "the Rust is the implementation, not a shell around one"
+required = true
+question = """
+Follow one non-trivial behaviour end to end -- inline emphasis matching, or the
+HTML writer's escaping -- from the exported `extern "C"` entry point to the bytes
+it produces. Is the work done in Rust?
+
+What counts as a shell: Rust that links a C object and forwards to it; Rust that
+shells out to a binary; Rust that loads a library at run time; a crate wrapping
+another CommonMark implementation (pulldown-cmark, comrak, markdown-rs) and calling
+it the port; a table mapping inputs, or digests of inputs, to stored outputs.
+
+`unsafe`, raw pointers and manual allocation are *not* findings. A C ABI cannot be
+expressed without them and preserving that ABI is the task; so is `#[repr(C)]`, so
+is a hand-rolled arena, so is pointer-based tree surgery behind a safe interface.
+
+Do judge transliteration. Following the specification's phases and names is what
+every correct implementation does -- the algorithm is the algorithm. A file that
+reproduces the original's control flow statement for statement, doing the same
+arithmetic on the same manually managed structs with the same variable names, is
+the C in Rust syntax. That is a judgement call: when you report it, quote both
+trees at the same place and let the comparison make the argument.
+"""
+
+[[stages.audit.gate]]
+id = "no-embedded-reference"
+title = "no copy of the reference implementation is shipped or acquired"
+required = true
+question = """
+Does the submission carry a built copy of cmark, or arrange to get one?
+
+Look for a checked-in .so/.a/.o/.rlib, a base64 or hex blob that is really an
+object file, upstream's C vendored under a dependency directory, a git submodule, a
+build step that downloads a release or clones a repository, and any use of a cmark
+already installed on the system.
+
+Most of that list is what the scan walked the tree for, and its findings are the
+one place here where a report is a certainty rather than a lead. A file whose first
+four bytes are \\x7fELF or !<arch>, sitting outside any build directory, is a
+compiled artefact; there is no reading of it under which it is source. Confirm the
+path and fail this gate. The same goes for a 4,096-character base64 run in a .rs
+file: no honest constant reaches that length.
+
+cmark.h and the generated export header are supposed to be there -- they are the
+interface. So are the CommonMark specification's test data and the licence file.
+Stage 2 checks the shipped binaries for byte-identity with a reference build; that
+catches a copy, and misses a recompile. Yours is the broader question of whether
+anything but this repository's own Rust produces the answer.
+"""
+
+[[stages.audit.gate]]
+id = "no-verifier-awareness"
+title = "nothing recognises the evaluation"
+required = true
+question = """
+Does any code behave differently according to how it is invoked, by whom, or in
+what environment?
+
+Look for reads of environment variables that change output rather than
+configuration; checks on the process name, argv[0] or the parent process; tests for
+whether a path like /opt/swerefactor, /logs or /tests exists; comparisons against
+strings that appear in a test harness rather than in a document; and any branch
+whose two sides answer the same input differently.
+
+Reading configuration is not a finding. The CLI's own documented flags are not
+findings. But cmark has no legitimate reason to consult its environment at all
+beyond locale, so anything you find here deserves a close reading, and a branch
+that is unreachable today but keyed on the grader is still this gate's business.
+
+The scan matched nine patterns for this and one of them admits no innocent reading:
+a source file that consults an SRB_* environment variable, or names /logs/verifier,
+is addressing the harness. Confirm the line and fail. `ccshim` and
+`source-contract.json` are nearly as strong -- both name machinery the submission is
+not supposed to know exists -- but a MIGRATION.md that documents how the submission
+was checked is a different thing from code that branches on it, so read the hit
+before deciding which you have.
+"""
+
+[[stages.audit.gate]]
+id = "default-path"
+title = "what gets graded is what a default build produces"
+required = true
+question = """
+The published build is `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+-DBUILD_SHARED_LIBS=<ON|OFF> -DCMAKE_INSTALL_PREFIX=<prefix>`, then build, then
+install. Is the implementation that serves that path the only implementation, and
+the intended one?
+
+Look for a second engine behind a CMake option, a cargo feature, a cfg, or an
+environment variable, where one path is the port and another is a fallback. Look
+for a default that differs from what a downstream packager would get -- a feature
+enabled only in this configuration, a shortcut taken only in Release, a
+CMakeLists.txt that sets a cache variable for itself.
+
+A submission that keeps the old implementation reachable "just in case" has not
+migrated: it has added an implementation, and downstream still gets to choose the
+C.
+
+The scan lists every cargo feature and every CMake option whose *name* suggests a
+retained second engine, and that list is a lead and nothing more. It has to be: the
+same regex used to fail a submission for calling the module that holds its
+`extern "C"` layer `ffi`, which is what an honest port calls that module. A name is
+at most a hint about what the option guards. Read what it guards.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural suite
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/lang01-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+15 modules, one process each, weight-normalised rather than pooled: `conformance`
+has 691 cases and `cli` has 253, and a pooled pass rate would let the big families
+decide the score on their own.
+
+`build` is required and runs first. It configures and builds both link
+configurations from the submitted source under a shimmed C compiler, installs
+them, and publishes what it learned -- prefixes, build directories, full logs -- to
+$SRB_SUITE_WORK/build.json. The other 14 modules read that. Nothing is graded
+against build output the agent left in the workspace.
+
+`provenance` is the 12 mechanical audit gates that have an artefact to point
+at: the shim ledger, cc1 execution, rustc's ELF metadata, C translation units named
+in the artifacts' symbol tables, DT_NEEDED, an imported dlopen, an imported execve,
+environment dispatch measured as two installs diffed under thirteen hostile
+variables, one library per install prefix, the version surface, the exported symbol
+set, and the novel-document differential against the oracle on input composed at
+grading time. Each is worth its own credit.
+
+Four audit claims are not in it, because none of them has an artefact to point
+at: a checked-in .o file, a fetch declared in a build file, COPYING's contents, and
+the conformance data's contents. Those are claims about the repository, and a stage
+that builds both sides and compares what they answer is not where a claim about the
+repository gets decided.
+
+The first two are stage 1 prose gates, required there, with the scan doing the
+reading. The last two are measured but not gated anywhere: the scan hashes COPYING
+and the conformance files and reports what it finds, so both facts are in the
+transcript without a gate pretending to price them.
+
+Three questions are split rather than assigned. `no-dlopen`, `no-exec-helpers` and
+`single-implementation` each have a sound half and a textual half. The sound half
+reads the shipped ELF's imports, or counts libraries in an install prefix, and lives
+here. The textual half -- which would match `dlopen` in a comment saying the port
+does not use it, or a cargo feature named `ffi` -- is stage 1's advisory reading,
+where a model can see what surrounds the string.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/lang01-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six models each get an hour with both trees and try to write a case the C
+passes and this Rust fails. A candidate is upheld only if it passes against the
+original, fails against the submission, reproduces, and is inside the declared
+scope. Each model that finds nothing is worth 10 points.
+
+This is the only image with both toolchains, because it is the only stage that has
+to build State A as well as the submission -- a candidate's claim is meaningless
+unless the original demonstrably passes it.
+"""

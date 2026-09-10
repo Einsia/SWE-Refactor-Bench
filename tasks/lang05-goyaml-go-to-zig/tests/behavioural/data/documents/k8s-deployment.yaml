@@ -1,0 +1,127 @@
+# Deployment, Service and ConfigMap in one stream.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: production
+  labels:
+    app.kubernetes.io/name: web-frontend
+    app.kubernetes.io/version: "2.14.0"
+    app.kubernetes.io/managed-by: helm
+  annotations:
+    deployment.kubernetes.io/revision: "7"
+    checksum/config: 3f786850e387550fdab836ed7e6dc881de23001b
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web-frontend
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: server
+          image: registry.example.com/web-frontend:2.14.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: LOG_LEVEL
+              value: info
+            - name: MAX_CONNECTIONS
+              value: "512"
+            - name: FEATURE_FLAGS
+              value: "search:on,export:off"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              echo "starting $POD_NAME"
+              exec /usr/local/bin/server \
+                --listen=:8080 \
+                --metrics=:9090 \
+                --config=/etc/web/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/web
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: web-frontend-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: web-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-frontend-config
+  namespace: production
+data:
+  config.yaml: |
+    listen: :8080
+    upstreams:
+      - name: api
+        url: http://api.production.svc.cluster.local:8000
+        timeout: 2s
+      - name: auth
+        url: http://auth.production.svc.cluster.local:8001
+        timeout: 500ms
+    cache:
+      ttl: 300
+      size: 10000
+  motd.txt: >-
+    This cluster is managed by configuration in the platform
+    repository.  Changes made with kubectl edit will be
+    reverted on the next reconcile.

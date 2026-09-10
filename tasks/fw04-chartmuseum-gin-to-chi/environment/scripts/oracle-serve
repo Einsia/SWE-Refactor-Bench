@@ -1,0 +1,164 @@
+#!/bin/bash
+# =============================================================================
+# oracle-serve -- drive the read-only State A oracle.
+#
+# fw02's oracle was one long-running server, because json-server's behaviour is
+# fixed once it boots.  ChartMuseum's is not: --depth, --depthdynamic,
+# --enablemetrics, --bearerauth, --basicauth-*, --per-chart-limit, --contextpath,
+# --cors-alloworigin, --web-template-path, --disabledelete, --disableapi and
+# --anonymous-get each change the observable surface.  So the oracle is a pinned
+# State A binary that gets launched once per configuration.
+#
+# Every launch gets a FRESH storage directory seeded from the frozen chart bytes
+# at /opt/testdata, so an upload in one configuration cannot leak into the next.
+#
+#   oracle-serve start [--port N] [--depth N] [...any chartmuseum flag]
+#   oracle-serve stop  [--port N]
+#   oracle-serve run   -- <flags>          start, print the pid, do not wait
+#
+# Exits nonzero if the server does not answer /health within the timeout, so a
+# misconfigured launch fails loudly instead of producing empty golden data.
+# =============================================================================
+set -euo pipefail
+
+BIN=${CM_ORACLE_BIN:-/opt/oracle/chartmuseum}
+FROZEN=${CM_ORACLE_CHARTS:-/opt/testdata}
+RUNROOT=${CM_ORACLE_RUNROOT:-/tmp/oracle}
+
+usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+
+cmd=${1:-}; shift || true
+[ -n "$cmd" ] || usage
+
+port=8899
+args=()
+seeds=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --port) port=$2; shift 2 ;;
+    --port=*) port=${1#*=}; shift ;;
+    # --seed <dest>=<chart>[,<chart>...]
+    #   dest ""      -> flat in the storage root (for --depth=0)
+    #   dest "org/r" -> under that repo prefix (for --depth>=1)
+    #   chart is a path relative to the frozen testdata root
+    --seed) seeds+=("$2"); shift 2 ;;
+    --seed=*) seeds+=("${1#*=}"); shift ;;
+    --) shift ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+
+rundir="$RUNROOT/$port"
+pidfile="$rundir/pid"
+logfile="$rundir/log"
+storage="$rundir/storage"
+
+# A ChartMuseum local backend keeps chart tarballs flat in the rootdir, or under
+# a <repo>/ prefix when --depth > 0.  Charts are COPIED from the frozen bytes at
+# $FROZEN, never repackaged, so every configuration sees identical digests.
+# Without --seed the store starts empty, which is what most captures want.
+seed_storage() {
+  rm -rf "$storage" && mkdir -p "$storage"
+  local spec dest list item src target
+  for spec in ${seeds+"${seeds[@]}"}; do
+    dest=${spec%%=*}
+    list=${spec#*=}
+    target="$storage${dest:+/$dest}"
+    mkdir -p "$target"
+    local IFS=,
+    for item in $list; do
+      src="$FROZEN/$item"
+      if [ ! -f "$src" ]; then
+        echo "oracle-serve: no such frozen chart: $item" >&2
+        echo "              (looked in $FROZEN)" >&2
+        exit 1
+      fi
+      cp -p "$src" "$target/"
+    done
+  done
+}
+
+do_stop() {
+  if [ -f "$pidfile" ]; then
+    pid=$(cat "$pidfile")
+    if kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      for _ in $(seq 1 50); do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.1
+      done
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$pidfile"
+  fi
+}
+
+case "$cmd" in
+  start|run)
+    do_stop
+    mkdir -p "$rundir"
+    seed_storage
+    test -x "$BIN" || { echo "oracle-serve: no oracle binary at $BIN" >&2; exit 1; }
+
+    "$BIN" --port="$port" \
+           --storage=local \
+           --storage-local-rootdir="$storage" \
+           "${args[@]}" >"$logfile" 2>&1 &
+    echo $! > "$pidfile"
+
+    # The readiness URL is derived from the flags, not hardcoded.  /health is
+    # registered with an empty auth action, so basic/bearer auth never hides it --
+    # but --context-path moves it (match() strips the prefix before routing, so
+    # --context-path=/cm serves it at /cm/health) and --tls-cert makes it https.
+    # Probing a fixed http://.../health would time out on those launches and
+    # report "never became healthy" for a server that is working perfectly.
+    probe_scheme=http
+    probe_prefix=
+    probe_insecure=()
+    for i in ${args+"${args[@]}"}; do
+      case "$i" in
+        --context-path=*) probe_prefix=${i#*=} ;;
+        --tls-cert=*)     probe_scheme=https; probe_insecure=(-k) ;;
+      esac
+    done
+    # The self-signed pair the fixtures ship cannot chain to a real CA, so -k is
+    # required; nothing here is asserting anything about the certificate.
+    probe_url="$probe_scheme://127.0.0.1:$port${probe_prefix}/health"
+
+    ok=
+    for _ in $(seq 1 100); do
+      if curl -fsS ${probe_insecure+"${probe_insecure[@]}"} \
+              -o /dev/null "$probe_url" 2>/dev/null; then ok=1; break; fi
+      # a crashed process will never answer; fail fast rather than waiting out
+      # the whole timeout
+      kill -0 "$(cat "$pidfile")" 2>/dev/null || break
+      sleep 0.1
+    done
+    if [ -z "$ok" ]; then
+      echo "oracle-serve: server on port $port never became healthy" >&2
+      echo "--- probed: $probe_url" >&2
+      echo "--- flags: ${args[*]}" >&2
+      echo "--- log ---" >&2
+      tail -30 "$logfile" >&2 || true
+      do_stop
+      exit 1
+    fi
+    # NB: a bare `[ ... ] && cat` here would make the script exit 1 under
+    # `set -e` whenever cmd is "start", i.e. succeed and report failure.
+    if [ "$cmd" = "run" ]; then
+      cat "$pidfile"
+    fi
+    ;;
+  stop)
+    do_stop
+    ;;
+  storage)
+    echo "$storage"
+    ;;
+  log)
+    cat "$logfile"
+    ;;
+  *)
+    usage
+    ;;
+esac

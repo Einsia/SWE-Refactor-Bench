@@ -1,0 +1,232 @@
+schema = "swerefactor.verification-probe/1"
+task = "build01-libsodium-autotools-to-cmake"
+prompt = "prompt.txt"
+
+# One candidate is a pytest file. It asks for a configuration by name --
+# "default", "minimal", "static-only", "shared-only", "debug" -- and the helper
+# configures, builds and installs that configuration in whichever dialect the tree
+# in front of it speaks: `./configure && make` for the original, `cmake` for the
+# submission. A candidate therefore sees an install prefix and cannot tell which
+# build system produced it, except by the answers it gets. That is what makes a
+# comparison between two DIFFERENT build systems mean something.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: no two build
+# systems produce identical output, and a candidate could always find some
+# difference in a log, a timestamp or an intermediate file.
+#
+# The allow list is what a build system's users consume: the install tree, the
+# library inside it, the programs built against it, and the build's own contract
+# about how it may be invoked. The deny list is what instruction.md told the agent
+# is not compared, plus the class of thing that is genuinely unattackable here --
+# see the note on CMake-only features below.
+[scope]
+allow = [
+  "the install tree: every installed path, the SONAME, the symlink chain from libsodium.so to libsodium.so.26.2.0, file modes, and that nothing outside the documented set is installed",
+  "the exported symbol set of the installed shared object and archive: every symbol sodium.h declares must be present, and a symbol that -fvisibility=hidden should have hidden must not be exported, in every configuration",
+  "the installed public headers: all 67 of them, byte for byte against State A's, including the generated version.h",
+  "compiling and linking a C program against the installed library, through pkg-config, against both the shared object and the archive -- including whether Libs.private names what the archive actually needs",
+  "libsodium.pc's fields and their semantics: Name, Version, Description, Cflags, Libs, Libs.private, and that the paths in it are expressed through ${prefix}/${exec_prefix}/${libdir}/${includedir} rather than baked in absolutely",
+  "the runtime behaviour of the installed library, exercised through a C program: any documented libsodium API, sodium_init, the runtime CPU dispatch, sodium_runtime_has_*, and every primitive's answers against known vectors",
+  "the test suite the repository ships: which of the 80 programs are registered and run, whether they pass, and whether they still pass under a parallel run -- in the default and minimal configurations",
+  "the per-file instruction-set partition as it survives into the shipped archive: an object compiled with an ISA flag the corresponding State A object was not compiled with, or missing one it was",
+  "the hardening and optimisation properties of the shipped objects: RELRO, BIND_NOW, a non-executable stack, position independence, the fortified libc symbols the library imports, and hidden visibility -- in every configuration, Debug included, where State A is fortified at level 3 even though --enable-debug passes -U_FORTIFY_SOURCE",
+  "the option matrix: each of the five configurations must configure, build, install and behave, and the differences between them must be the differences State A has -- a minimal build's smaller symbol set, a static-only build's absent shared object",
+  "installation under DESTDIR: the staged tree must match a direct install, and nothing may be written outside the staging root",
+  "an incremental rebuild: building a second time in the same build directory must not relink the library, regenerate a header, or reconfigure",
+  "what the build writes into the source tree, compared against what State A's build writes there",
+  "the source package the build produces: the library sources, public headers and test suite in it, build products and version-control data out of it",
+  "anything that makes the installed library unusable to a consumer where State A's is usable: a broken symlink, an RPATH pointing into the build machine's filesystem, a header that does not compile standalone, an archive that will not link",
+]
+deny = [
+  "wall-clock build time, compile time, and the size of any artifact as a number -- a CMake build may be slower or faster and neither is a migration defect",
+  "compiler and linker diagnostics: which warnings appear, their wording, their order, and whether the build is warning-clean. The instruction says warnings are non-fatal.",
+  "the contents of the build directory, the names and layout of intermediate artifacts, and anything in a build log",
+  "the internal organisation of the submission's build system: how many CMakeLists.txt files there are, what its functions and variables are called, which directory each target is declared in, and whether it uses a helper module the original had no equivalent of",
+  "the exact text of anything the build prints, including configuration summaries and progress output",
+  "features only one of the two build systems can express. `find_package(libsodium)`, `cmake -LAH`, generator expressions and CPack's configuration are required of the submission and impossible for the original, so a candidate asserting them fails on the original and is worth nothing. They are stage 2's subject.",
+  "prose files -- README, ChangeLog, THANKS, AUTHORS, LICENSE, CITATION -- and their mention of either build system",
+  "the presence, absence or content of the Autotools files themselves, which stage 1 judges and stage 2 measures",
+  "symbol addresses, section layout, object file ordering inside the archive, and any byte of the shared object that a different linker invocation would legitimately change -- the exported ABI is in scope, the image's layout is not",
+  "behaviour the original also gets wrong. A candidate must pass on the original, which is what makes it a migration defect rather than an upstream bug -- and note that the original fails several things the instruction requires of the submission, out-of-source cleanliness among them.",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times. Almost nothing in scope here is timing
+# adjacent, but a flake that costs a submission ten points is a bug in the
+# benchmark rather than a finding, and the parallel test suite is exactly where a
+# borderline one could appear.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# One candidate, on one tree, including whatever configurations it asks for. A
+# configuration is a full libsodium build -- 119 translation units, then 80 test
+# programs if the candidate runs the suite -- and it is cached across every
+# candidate and every round, so only the first to ask for one pays. 3600s is the
+# ceiling for a candidate that asks for a cold configuration and then runs the
+# whole suite in it.
+candidate_timeout_sec = 3600.0
+run_timeout_sec = 600.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets. It does not get a shell: `try_test` is how it runs things, and a candidate
+# that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one thing the Autotools build
+gets right and the CMake build does not -- an installed artifact, an exported
+symbol, a compiled consumer, a test the suite runs, a property of a shipped
+object. A round that finds nothing pays the submission 10 points; a round that
+errors pays nothing and is reported as an error rather than as either verdict.
+
+The candidate reaches the library through an install prefix and, for anything with
+no command line, through a C program compiled against it -- which for a
+cryptography library is almost everything.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another. Ids name the
+# round, so two rounds on one model with different briefs stay distinguishable.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific. Six unguided rounds
+# converge on the same two obvious things -- the symbol table and the install
+# listing -- and both are already stage-2 modules. Six pointed ones cover the
+# build.
+
+[[adversary]]
+id = "a01-install-and-pkgconfig"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the install tree as a package manager sees it: every path, the three-name
+symlink chain and where each link points, file modes, whether libsodium.la or
+any other libtool artifact got installed, whether anything landed outside the
+documented set, and whether a DESTDIR install stages to exactly the same
+layout.
+
+Then libsodium.pc itself: every field against the original's, relocatability
+(move the whole prefix elsewhere and ask pkg-config again -- the answers must
+move with it), --static against --libs, and what happens with a prefix
+containing a space.
+"""
+
+[[adversary]]
+id = "a02-symbols-and-dispatch"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the exported ABI in every configuration: every symbol sodium.h declares
+present in the shared object and in the archive, nothing exported that
+-fvisibility=hidden should have hidden, and the minimal configuration's symbol
+set being exactly State A's minimal set -- the nine primitives it drops are
+the interesting part.
+
+Then the runtime CPU dispatch, from a C program: sodium_runtime_has_* against
+what the machine actually supports, each primitive giving the same answer as
+the original on known vectors, and the implementation selection working when
+the library is loaded from the static archive as well as the shared object --
+a build that got the ISA flags right and the dispatch wiring wrong passes
+every install check.
+"""
+
+[[adversary]]
+id = "a03-consumer-and-headers"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+compiling and linking real consumers through pkg-config: shared and static,
+with and without --static, a program that includes only <sodium.h> and one
+that includes individual headers directly, a program built in a directory with
+no relation to the prefix, and whether Libs.private names everything the
+archive actually needs.
+
+Then the installed headers themselves: all 67 byte-for-byte against the
+original's, the generated version.h and its macros, every header compiling
+standalone as its own translation unit, in C99 and C11, and under a compiler
+warning about anything the original's headers do not warn about.
+"""
+
+[[adversary]]
+id = "a04-isa-partition-and-hardening"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the per-file instruction-set partition in the shipped archive: extract its
+members and compare, member by member, which instruction families appear
+against what the original's members contain. A baseline object holding an AVX2
+or AES-NI instruction is a SIGILL on hardware without it, and a specialised
+object that lost its flags is a silent performance cliff.
+
+Then the hardening properties of the shipped objects, configuration by
+configuration: full RELRO and BIND_NOW, a non-executable stack, position
+independence, hidden visibility, and the fortified libc symbols the library
+imports (__explicit_bzero_chk rather than explicit_bzero is the tell) -- in
+Debug too, where the original is fortified at level 3 despite --enable-debug
+asking for the opposite.
+"""
+
+[[adversary]]
+id = "a05-test-suite-and-configurations"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+the repository's own 80 test programs: which are registered and run in the
+default configuration, which nine disappear in the minimal one, whether they
+all pass, whether they still pass run in parallel, and whether any of them is
+registered but silently not built.
+
+Then the option matrix around them: each of the five configurations
+configuring, building, installing and behaving, and each difference between
+them being a difference State A has -- static-only installing no shared
+object, shared-only installing no archive, minimal exporting less and testing
+less, Debug still passing its tests.
+"""
+
+[[adversary]]
+id = "a06-build-contract-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the build's contract about how it may be invoked: a second build in the same
+directory doing nothing, a DESTDIR install staging correctly and writing
+nothing outside it, what the build writes into the source tree compared with
+what the original writes there, and the source package's contents.
+
+Then, with whatever budget remains, nothing in particular: read State A's
+build system and follow what looks least likely to have survived. The other
+five rounds were told where to look, so this tail is where anything they were
+not told about has to be found.
+"""

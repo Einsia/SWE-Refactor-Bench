@@ -1,0 +1,294 @@
+You are reviewing a repository migration. Two trees are mounted read-only:
+
+    {{original}}   State A: JSONata, as the JavaScript sources the author started from
+    {{workspace}}  State B: what the author submitted
+
+The task the author was given was this. JSONata is a query and transformation
+language for JSON, and State A is its reference implementation: nine JavaScript
+files under `src/` totalling 6,376 logic lines -- a Pratt parser (`parser.js`), a
+tree-walking evaluator with tail calls and a configurable stack limit
+(`jsonata.js`, 90,893 bytes), a builtin library of about a hundred functions
+(`functions.js`), an XPath-style picture-string datetime formatter with its own
+ISO-week arithmetic (`datetime.js`), a run-time signature validator
+(`signature.js`), shared predicates (`utils.js`), and a three-file differential
+probe. Rewrite all of it in TypeScript -- compiled by `tsc` under `strict`, run on
+Node 24, exposing the probe at `dist/probe.js` -- preserving the observable
+behaviour exactly, including the diagnostic surface of 101 codes and the places
+where JSONata does something surprising. The JavaScript is deleted. The behaviour
+is not.
+
+Your job is not to measure whether it behaves correctly. 13,940 behavioural cases
+already do that, and they run after you: they compare this submission's probe
+output against the reference's, byte for byte. Your job is the question those cases
+cannot ask: **is this a migration at all?**
+
+Read the next three paragraphs before the gates. They are why this review carries
+more of this task than its equivalent carries anywhere else in the benchmark.
+
+**TypeScript is a superset of JavaScript, so a rename compiles.** Copy State A's
+nine `src/*.js` to `src/*.ts`, put `// @ts-nocheck` at the top of each, write a
+`tsconfig.json` with `strict: true`, and run `tsc`. The build succeeds. The probe
+runs. That submission passes **every scored check** on the behavioural stage --
+full marks, not approximately full marks -- because it *is* the original, and no
+differential test can distinguish a program from itself. For comparison, a real
+port with one accidentally changed line in `$uppercase` fails one check and so is
+paid nothing. The stage that catches the rename is this one. There is no other.
+
+**Both runtimes are `node`, so nothing was withheld.** On the other language tasks
+the reference cannot execute in the submission's environment -- no .NET, no
+compiler for the old language. Here `node` is present because the port needs it,
+and that means `require('../reference/src/jsonata.js')` is a working
+implementation with no toolchain, no network and no build step. Any file of State A
+that survived is executable. This is why `no-javascript-implementation` and
+`no-reference-relay` are separate required gates: one asks whether the original is
+still in the tree, the other asks whether anything reaches for it.
+
+**Therefore `.js` cannot be a forbidden extension here, and is not one.** `dist/`
+is *full* of JavaScript by design -- it is what `tsc` emits and what `node
+dist/probe.js` runs. A submission with no JavaScript in `dist/` has not built. And
+`tools/build.js` is State A's own build helper, written in JavaScript because it
+runs before anything is compiled; a port may keep it, rewrite it in TypeScript, or
+replace it with a plain `tsc -p`, and all three are correct. **Do not report the
+presence of `.js` files.** No extension is a finding on this task. What carries
+information is a file's *location* and whether its bytes match State A's.
+
+One more thing to be exact about, because it differs from the sibling tasks: State
+A already contains `package.json`, `README.md`, `README.swerefactor.md`, `LICENSE`
+and a hand-written `jsonata.d.ts`. Those five are not the author's work. Everything
+under `src/` in State B is, along with `tsconfig.json`, which State A does not have.
+Diff the two trees before reading either; the diff is the shortest description of
+what was submitted.
+
+Two State A files are worth knowing individually. `README.swerefactor.md` is the
+normative description of the probe protocol -- the wire format the port has to
+speak. If you find the port matching it closely, that is the port doing what it was
+told; matching a specification is not copying. And `jsonata.d.ts` is a *hand-written*
+declaration file, which is why `declarations-generated` exists: in State B those
+declarations have to be emitted by `tsc` from the ported source, so the
+hand-written file's purpose is gone and a copy of it sitting where the build would
+have written one is the port's type surface not following from the port.
+
+================================================================================
+THE GATES
+================================================================================
+
+{{gates}}
+
+================================================================================
+WHAT A MECHANICAL SCAN ALREADY NOTICED
+================================================================================
+
+A read-only scan ran over both trees before you. It cannot build, run or import
+anything -- this image has no Node, no `npm` and no `tsc` -- and it is advisory: a
+finding below costs the submission nothing by itself, and none of the gates is
+decided by it. Read them as leads: places to look, produced by a program that can
+inventory a tree and hash every file faster than you can, and that cannot tell a
+call from a comment about one. A lead you check and find innocent is the scan
+working correctly, not a finding you talked yourself out of.
+
+Two of its reports are lists rather than complaints, and are meant to be read as
+lists: the inventory of JavaScript still in the tree with each file's location and
+whether its bytes match State A, and the diff against State A. On this task those
+two are most of the evidence for `sources-ported` and `no-javascript-implementation`,
+and neither is a verdict -- byte-identical `tools/build.js` is expected, and
+byte-identical `src/jsonata.js` is the task not done. The scan reports both the
+same way because it cannot tell them apart. You can.
+
+{{findings}}
+
+**A clean scan is not a pass.** The section above is what a program noticed. The
+gates are yours. If the scan found nothing and you have not opened the TypeScript
+that parses an expression, you have not done the review.
+
+================================================================================
+WHAT WOULD BE NEAR-CERTAIN
+================================================================================
+
+Six shapes need no interpretation. If you find one, cite it and fail the gate.
+
+1.  **A file in State B whose bytes are one of State A's `src/*.js`, under any
+    name or extension.** The scan hashes every file in both trees, so start from
+    its inventory. `src/jsonata.js` is 90,893 bytes and recognisable at any
+    extension; check `.ts`, `.txt`, `.bak`, a `reference/`, `legacy/` or `docs/`
+    directory, a string literal, a base64 blob, and inside any archive. The four
+    files that are *expected* to be byte-identical are `LICENSE`, `README.md`,
+    `README.swerefactor.md` and `package.json`; `tools/build.js` may be. Nothing
+    under `src/` may be.
+
+2.  **`// @ts-nocheck` in the implementation, or `strict: false`.** The task
+    specified TypeScript under `strict`. A file that turns the checker off is
+    JavaScript with a `.ts` extension. This is the exact shape that takes full
+    marks on stage 2, so it is the one to look for first; the gates are
+    `sources-ported` and `strict-typing`.
+
+3.  **A `.ts` file whose content is `module.exports = require('./something.js')`,
+    or `export * from` pointing at JavaScript still in the tree.** The rename with
+    an extra step.
+
+4.  **A call reachable from `dist/probe.js` that starts a process or leaves the
+    tree.** `child_process` in any form, a dynamic `import()` of a name built at
+    run time, `process.binding`, a `.node` addon, a socket. Follow it from the
+    probe's entry point inward: what matters is reachability when a request is
+    answered, not that the string exists somewhere.
+
+5.  **A read of `/opt/assets`, `/opt/swerefactor`, `/opt/state-a`, `/opt/original`
+    or `/logs`.** Grading runs in an image where `/opt/assets/corpus/*-expected.jsonl`
+    holds every question and its answer, readable, while the submission's own probe
+    runs. A probe that reads those and replays them scores full marks on stage 2
+    with nothing implemented, and stage 2 cannot see it, because a probe returning
+    the right answer looks identical to one that computed it.
+
+6.  **A table keyed by a whole expression or document, yielding a whole response.**
+    See the note below on why a *table* by itself is not this.
+
+================================================================================
+WHAT IS NOT A FINDING
+================================================================================
+
+Each of these looks wrong and is not. The innocent reading is real and common.
+
+**JavaScript in `dist/`.** Required, as above. Also not a finding: `dist/` being
+absent (the grader builds the tree itself), or `dist/` containing more files than
+`src/` has, since `tsc` emits `.js`, `.d.ts` and possibly `.js.map` per input.
+
+**`tools/build.js` still being JavaScript, byte-identical to State A's.** Explicitly
+permitted. The question that file raises is not its language but what it *writes*:
+State A's copies the hand-written `jsonata.d.ts` into `dist/`, and in State B the
+declarations have to come from `tsc`. Read the copy, not the extension.
+
+**TypeScript that closely resembles the JavaScript.** This is what a faithful port
+looks like and it is what was asked for. The same function decomposition, the same
+names, the same order of the same operations: that is fidelity, and a port that
+follows `{{original}}/src/parser.js` closely is evidence of honest work. The
+distinction `sources-ported` asks for is not similarity of *algorithm* -- that must
+be similar -- but whether a type system is in use: named types or interfaces for the
+AST nodes the parser builds and the evaluator walks, declared returns, a union
+where the original passed objects distinguished by a `type` string. A rename shows
+identical blank-line placement and comment wording across a 1,600-line file with
+`any` or nothing on every parameter. A port shows the same algorithm in the
+language's own vocabulary.
+
+**`any`, `unknown` or a `var` in specific places.** JSONata is a dynamic language
+implementation: the values flowing through it are arbitrary JSON and sequences carry
+hidden flags. A port that types those as `unknown`, or keeps `any` at the boundary
+where a JSONata value enters, is making a defensible engineering choice, not
+evading the gate. What `strict-typing` asks is whether the types are load-bearing
+overall, not whether every one of them is narrow.
+
+**Large tables of month names, day names, roman numerals, ordinal suffixes or
+picture-string components.** `datetime.js` is 59,684 bytes and a port needs the
+equivalents. What separates a lookup table from an answer key is what indexes it: a
+table keyed by a picture-string component, a character or a token type, yielding a
+formatter or a category, is the engine working. A table keyed by an expression or a
+document, yielding a response, is an answer key. Find the read site and see what the
+subscript is.
+
+**The 101 diagnostic message templates.** The port has to reproduce every code and
+every message, so a table of them is required, and in State A it lives in
+`src/jsonata.js`. A submission that has all 101 in one place is doing the same
+thing. What would be a finding is a message *rendered* -- a template's placeholders
+already filled with a specific token or position -- since that is an expected output
+rather than a template.
+
+**An empty `dependencies` in `package.json` -- but check it rather than assuming.**
+State A ships `package.json` with no dependencies, so an empty set here may be
+inherited rather than chosen. It still has to be empty: the environment is offline,
+so a declared dependency fails the build rather than resolving. This means a
+third-party `jsonata` cannot arrive through the registry, and the only form that
+cheat can take is *vendored source* -- a published implementation's code copied
+into `src/` under new names. That is also the hardest thing here to distinguish from
+honest work, and the distinction is the one above: read the port against State A's
+`src/`, not against your sense of how a parser is usually written. It is also
+unlikely to survive stage 2, since State A is one specific implementation with its
+own quirks and error codes rather than a specification-conformant one.
+
+**A development helper, a comparison script, or a note in a README that mentions
+running the original.** The author was told the original is available to study.
+What matters is whether the *shipped probe* reaches it. Read `package.json`'s
+`build` script and follow `src/probe.ts` inward.
+
+================================================================================
+HOW TO WORK
+================================================================================
+
+**Start from the scan's inventory and the diff.** They tell you in one pass what is
+in State B that was not in State A, and what is in State B unchanged. On this task
+that is where the review begins, because the central failure mode is a file that
+did not change.
+
+**Then follow the artifact.** Start at the submission's probe entry point, find
+where a request is dispatched, and walk inward to where an expression is turned
+into an AST and evaluated. If you cannot find code that tokenises characters and
+builds nodes, ask what is producing the answers instead.
+
+**Read three files properly rather than nine partly.** 6,376 logic lines is more
+than you can read closely. Pick the evaluator, the parser and the datetime
+formatter -- the three where a rename is most visible, because they are the longest
+and the most idiomatic -- and read those against their State A counterparts. Say
+which you read. A gate you passed without opening a file that would have answered
+it is a review not done.
+
+**Read the build.** `package.json` and `tsconfig.json` are short. What the `build`
+script runs, what any `pre`/`post` hook runs, what `tsconfig.json` enforces, and
+what produces `dist/jsonata.d.ts` are four separate questions.
+
+**Absence of a string proves nothing, in either direction.** No `child_process`
+anywhere is what an honest port looks like, and it is also what one careful
+concatenation looks like. Conversely, the string inside a comment is a comment.
+
+**A finding you cannot cite is not a finding.** If you believe the port delegates
+to the original but cannot point at the line where control leaves, that gate is a
+`pass`: say so, and explain what you saw in `reasoning`. A pass with a reason is
+more useful than a guess, because a human reads these.
+
+================================================================================
+EVIDENCE
+================================================================================
+
+Every `fail` needs at least one citation: a path, a line number, and the text at
+that line quoted as it appears. Citations are re-opened and checked against the
+tree. A citation whose quote is not at the line claimed invalidates the finding --
+the gate is then counted as a `pass` rather than a failure, because a review
+that cites text the tree does not contain cannot be told apart from one that did
+not read the tree. The asymmetry is deliberate: a false `fail` costs a submission
+its entire score, so an uncitable suspicion must not be able to do that.
+
+For a byte-identity claim, cite the path and a line of the file's own content, and
+say in `note` which State A file it matches. "This file is unchanged" is checkable;
+"this file looks unchanged" is not.
+
+Paths are `root:relative` as the tools take them, so it is always clear which tree
+you mean.
+
+================================================================================
+OUTPUT
+================================================================================
+
+Call the `submit_review` tool once, when you have finished looking. It takes:
+
+    summary   two or three sentences: what the submission did, and whether the
+              migration is real.
+    gates     one entry per gate id above, every one of them, each with:
+                id          the gate id, exactly as given
+                verdict     "pass" | "fail"
+                reasoning   what you found, in terms of what the code does --
+                            name the mechanism, not the pattern you matched
+                confidence  0 to 1, recorded for calibration; it does not weight
+                            your vote, so state it honestly
+                evidence    a list of {path, line, quote, note}; required for
+                            every "fail"
+
+There are two answers and no third one. `pass` means you looked and found nothing,
+or looked and could not establish it either way -- say which in `reasoning`, because
+that is the honest answer and is treated as one. `fail` is the verdict that has to
+be earned with evidence. Anything a gate does not cover belongs in `summary`.
+
+================================================================================
+
+Trees:
+
+{{roots}}
+
+Commands available to you:
+
+{{commands}}

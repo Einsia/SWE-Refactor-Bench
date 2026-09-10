@@ -1,0 +1,116 @@
+schema = "swerefactor.scan-suite/1"
+task = "fw05-miniserve-actix-to-axum"
+
+# The read-only scan that runs before the review and hands it its findings.
+#
+# Everything here is a question a string can answer, and every one of them is
+# advisory: `swerefactor.scan` records each check with required = false, and
+# `scoring.grade_audit` gates on the required checks -- which are the six
+# prose gates in evaluation.toml and nothing else. A scan finding costs a
+# submission nothing on its own. What it does is tell the reviewer where to look,
+# and the reviewer has both trees open.
+#
+# The reason that inversion is not a formality on this subject: `actix` appears in
+# the original tree in four places that have nothing to do with the dependency
+# being live. `src/listing.rs:155` cites the actix-web 0.7 source that
+# `directory_listing` was adapted from, in a doc comment two lines above the
+# function a correct migration rewrites. The CHANGELOG records the 2.0, 3.0 and
+# 4.0 upgrades. The README links to actix.rs. A submission that migrated properly
+# and kept the citation fails a grep; one that reimplemented
+# `actix_files::NamedFile` under the name `served_file` and deleted the comment
+# passes it. The string is evidence about a file, not a verdict about a
+# repository, and only reading tells you which.
+#
+# So the checks are split by *where* a name is rather than by whether it appears:
+# `srbscan.code_of` blanks comments while preserving line numbers, every text
+# check says which projection it read, and `closure` carries one check whose only
+# job is to report the comment-only mentions and pass, so that the review can see
+# the honest case was seen and dismissed rather than missed.
+#
+# Weights are recorded and unused: nothing here is scored. They are kept so a
+# module could move to a scored stage without a rewrite, which is the same reason
+# the module contract is byte-for-byte stage 2's.
+
+default_timeout_sec = 600
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Advisory. No check in this suite can fail the audit gate; the gate is the six
+prose questions in evaluation.toml, answered by a model that reads both trees.
+These modules answer the sub-questions a string can answer, so that the reviewer
+spends its turns on the ones a string cannot -- whether the request path is
+axum-native or actix-shaped underneath, and whether a helper that looks like a
+reimplementation is one.
+
+Nothing here builds, links or starts the submission. The image has no Rust
+toolchain and no crate registry, which is what makes that a property of the stage
+rather than a promise about these files.
+"""
+
+[[module]]
+id = "closure"
+title = "the retired stack in the tree and in what the tree declares"
+weight = 1.0
+about = """
+The manifest's four dependency tables, the lock file, the feature table, `[patch]`
+and `[replace]`, `.cargo/config.toml`'s source list, crate references by path and
+by `use`, actix's types where they are defined rather than used, the build
+automation, the container files, the unit file, and directory and file names.
+
+Two checks here are close to decisive on their own and say so: the delivery
+registry has no index entry for any retired crate, so a manifest that still
+declares one cannot resolve and a lock file that still pins one cannot be
+satisfied. A finding in either means the submission could not have built, which
+the reviewer can state without opening a `.rs` file.
+
+One check always passes: `test_actix_in_comments_is_reported_and_is_not_a_defect`
+exists to put the honest mentions in front of the review with their line numbers.
+"""
+
+[[module]]
+id = "entrypoint"
+title = "what the published entry points start, and whether there are two servers"
+weight = 1.0
+about = """
+State A has one `fn main` and four published ways to invoke it: the Makefile, two
+Containerfiles and a systemd unit. None of them names a module, so none can be
+checked for naming the right server; what is checkable is that there is one binary
+target rather than two, that no `src/bin/*.rs` quietly adds another, that
+`#[actix_web::main]` is gone, that nothing is conditionally compiled on a feature
+State A does not declare, and that the four entry points still build and exec
+rather than fetch.
+
+The dead-code case is weaker here than in a dynamic language and the checks are
+shaped for that: a second server in a Rust binary has to compile, which means its
+crates have to resolve, which they cannot. A surviving second server on this task
+is therefore almost always a reachable one, so the checks look for the switch.
+"""
+
+[[module]]
+id = "provenance"
+title = "borrowed answers, and code addressed to the grader"
+weight = 1.0
+about = """
+The two gates a behavioural corpus is structurally unable to ask about.
+
+The agent's image carries a working State A binary at /opt/oracle/miniserve so the
+migration can be developed against what the original answers. That is deliberate,
+and it is the most attractive cheat here: a handler that shells out to it, proxies
+to it, or embeds responses recorded from it answers a corpus perfectly. Stage 2
+defeats that structurally -- the oracle is not in the grading image, so such a
+submission fails every case in every module -- but "failed everything" and "did
+not migrate" are different findings, and a submitter is entitled to the second one
+when it is true. This module points at the line.
+
+The other half is grader awareness: a service that reads the User-Agent or a
+harness variable and answers differently is invisible to any corpus, because the
+corpus is the thing it is keying on.
+
+`test_embedded_data_is_reported` fires on correct submissions by design. State A
+embeds the stylesheet, logo, favicon and themes at compile time, so `include_str!`
+is expected; what the reviewer needs is the list of what is embedded and where, so
+four asset includes read as four asset includes and a fifth holding response
+bodies keyed by path reads as something else.
+"""

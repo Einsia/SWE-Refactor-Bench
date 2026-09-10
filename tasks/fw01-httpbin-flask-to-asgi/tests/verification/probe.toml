@@ -1,0 +1,189 @@
+schema = "swerefactor.verification-probe/1"
+task = "fw01-httpbin-flask-to-asgi"
+prompt = "prompt.txt"
+
+# One candidate test is a pytest file run against a target that this script
+# installs and boots.  Both trees are served the same way -- the original on its
+# own Flask stack, the submission on whatever it declares -- so a candidate is a
+# black-box HTTP test and cannot tell which tree it is hitting except by the
+# answers it gets.
+candidate_command = ["bash", "/tests/verification/run-candidate.sh"]
+
+# --------------------------------------------------------------------------- #
+# What a candidate may attack
+# --------------------------------------------------------------------------- #
+# Without this the round is unwinnable and therefore says nothing: any two HTTP
+# servers differ somewhere.  The allow list is httpbin's own public contract, the
+# deny list is what instruction.md told the agent is explicitly not compared.
+# They have to agree: a scope that forbids what the instruction promised would
+# make the task unwinnable, and a scope that permits what the instruction
+# excluded would make it unlosable.
+[scope]
+allow = [
+  "the status code of any documented or undocumented path, including the /status/<codes> forms",
+  "response bodies byte for byte, including JSON indentation, key order and the trailing newline",
+  "semantic headers: Content-Type with its exact charset spelling, Content-Length where the original sets it, Content-Encoding, Location including its relative form, WWW-Authenticate, Proxy-Authenticate, Set-Cookie and its attributes, ETag, Cache-Control, Accept-Ranges, Content-Range, Vary, Link, X-More-Info, and the presence and format of X-Runtime",
+  "CORS behaviour on every response and the full OPTIONS preflight",
+  "request parsing: repeated query and form keys, multipart uploads, JSON bodies, non-UTF-8 bodies returned as a base64 data: URL, and the header dictionary including show_env",
+  "authentication: Basic, hidden Basic, Bearer, and the whole Digest implementation -- MD5/SHA-256/SHA-512, qop=auth and qop=auth-int, stale_after, nonce and opaque handling, and the require-cookie variant",
+  "the seeded byte streams: /bytes/<n>, /stream-bytes/<n> and /range/<n> must produce the same bytes for the same seed as the original",
+  "compression: /gzip, /deflate, /brotli, and bodies that decompress to the same JSON",
+  "range requests on /range/<n>: satisfiable, unsatisfiable, suffix and open-ended forms, 416, duration and chunk_size",
+  "templated pages and images: /, /html, /forms/post, /legacy, /robots.txt, /deny, /xml, /encoding/utf8, /image*",
+  "the OpenAPI surface: /spec.json's Swagger 2.0 document and the Swagger UI page, including that every asset it references is served by the application itself",
+  "that streaming endpoints stream: /stream/<n>, /stream-bytes/<n> and /drip must not declare a Content-Length, and /drip must deliver progressively",
+  "that a single-worker server stays responsive under concurrent /delay/1 requests",
+]
+deny = [
+  "the Server and Date headers",
+  "HTTP reason phrases -- Werkzeug upper-cases some of them and uvicorn does not",
+  "header name casing, and the order of distinct header names",
+  "whether a non-streaming response arrives with Content-Length or chunked transfer encoding",
+  "connection-management headers: Connection, Keep-Alive",
+  "the value of X-Runtime, or any assertion on timing other than the two stated above",
+  "anything requiring the retired stack to be installed, importable or nameable in the submission",
+  "the internal structure of the submission: module layout, class names, function signatures, log output",
+  "behaviour under a request the original also mishandles -- a candidate must pass on the original",
+  "the identity of the tree under test, however it is learned: the harness environment, the paths a candidate is handed, the presence of a file only one of the two trees can have, or anything else that answers 'am I on the original?' without asking the artifact a question. Such a candidate meets every mechanical condition for a break -- it passes on the original, fails on the submission and reproduces exactly -- while establishing nothing about the migration, and it is rejected on sight rather than weighed.",
+]
+
+# A candidate has to reproduce three times.  Some of the surface here is
+# genuinely timing-adjacent -- /drip, /delay, streaming -- and a flake that costs
+# a submission ten points is a bug in the benchmark, not a finding.
+reruns = 3
+require_deterministic = true
+network_allowed = false
+
+[metadata]
+# Install + boot + pytest, for one candidate, on one tree.  The venv is built
+# once per tree and cached, so only the first candidate pays for it.
+candidate_timeout_sec = 900.0
+run_timeout_sec = 300.0
+# The adversary reads code with the same read-only toolbox the stage-1 reviewer
+# gets.  It does not get a shell: `try_test` is how it runs things, and a
+# candidate that has to be executed differently is out of scope by construction.
+allowed_commands = []
+about = """
+Six rounds, each an independent attempt to find one request the original
+answers correctly and the submission does not. A round that finds nothing pays
+the submission 10 points; a round that errors pays nothing and is reported as an
+error rather than as either verdict.
+"""
+
+# --------------------------------------------------------------------------- #
+# The six adversaries
+# --------------------------------------------------------------------------- #
+# Six *rounds*, not necessarily six distinct vendors: what stage 3 measures
+# is how much scrutiny the submission survives, and an independent attempt is an
+# independent attempt whether or not it shares a model with another.  Ids name
+# the round, so two rounds on one model with different briefs stay distinguishable
+# in the report.
+#
+# `focus` is metadata, appended to the round's opening by prompt.txt's own
+# instruction to spend the budget somewhere specific.  Six unguided rounds
+# converge on the same three obvious endpoints; six pointed ones cover the
+# repository.  It is a hint about where to look, never a list of tests to write.
+
+[[adversary]]
+id = "a01-digest-auth-and-streaming"
+model = "gpt-5.6-sol"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the Digest implementation: algorithm variants, qop=auth-int, stale_after, and
+the require-cookie flow.
+
+Then streaming and timing: /drip's progressive delivery, /stream and /stream-
+bytes chunk boundaries, the absence of Content-Length.
+"""
+
+[[adversary]]
+id = "a02-range-and-request-parsing"
+model = "gpt-5.6-terra"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+/range/<n>: suffix and open-ended ranges, unsatisfiable ranges, 416, duration
+and chunk_size interaction, and the seeded byte content.
+
+Then request parsing edges: repeated keys, empty values, multipart with odd
+filenames and content types, non-UTF-8 bodies, and oversized headers.
+"""
+
+[[adversary]]
+id = "a03-redirects-and-status-codes"
+model = "gpt-5.6-luna"
+driver = "openai"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "max"
+[adversary.metadata]
+focus = """
+the redirect family: /redirect, /relative-redirect, /absolute-redirect,
+/redirect-to with multiple url parameters and a status_code, and whether
+relative Locations stayed relative.
+
+Then /status/<codes>: weighted choice syntax, ranges, malformed input, and the
+special cases -- 304 with an empty body, 401 and 407 challenges, 402, 406,
+418.
+"""
+
+[[adversary]]
+id = "a04-openapi-and-cors-headers"
+model = "claude-sonnet-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+the OpenAPI surface: /spec.json's contents against the original's, and whether
+every asset the Swagger UI page references is actually served by the
+application.
+
+Then CORS and the OPTIONS preflight, cookie endpoints and their Set-Cookie
+attributes, /response-headers with repeated and conflicting parameters, /cache
+and its conditional forms.
+"""
+
+[[adversary]]
+id = "a05-encoding-and-undocumented"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "medium"
+[adversary.metadata]
+focus = """
+encodings and compression: /gzip, /deflate, /brotli, /encoding/utf8, percent-
+encoded and unicode paths, and characters that survive one URL parser but not
+another.
+
+Then what the documentation does not mention: undocumented paths, 404 and 405
+bodies, HEAD and OPTIONS on documented routes, trailing slashes, and methods
+the original happens to accept.
+"""
+
+[[adversary]]
+id = "a06-concurrency-and-open"
+model = "claude-opus-5"
+driver = "anthropic"
+budget_sec = 3600.0
+[adversary.driver_options]
+reasoning_effort = "high"
+[adversary.metadata]
+focus = """
+concurrency and statefulness: many simultaneous /delay/1 requests against a
+single worker, interleaved streaming responses, and whether state leaks
+between requests.
+
+Then, with whatever budget remains, nothing in particular -- read the original
+and follow what looks weakest. The other five rounds were told where to look,
+so this tail is where anything they were not told about has to be found.
+"""

@@ -1,0 +1,556 @@
+{
+ "schema": 1,
+ "note": "Deterministic serve root. Materialise with srb-sample-tree; every mtime is pinned so listing timestamps, Last-Modified and ETag are all reproducible.",
+ "entries": [
+  {
+   "path": "test.txt",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "test.html",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "test.mkv",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "test \" ' & < >.csv",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "new\nline",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "😀.data",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "⎙.mp4",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "#[]{}()@!$&'`+,;= %20.test",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": ":?#[]{}<>()@!$&'`|*+,;= %20.test",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "foo\\bar.test",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": ".hidden_file1",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": ".hidden_file2",
+   "content": "Test Hello Yes"
+  },
+  {
+   "path": "dira",
+   "kind": "dir"
+  },
+  {
+   "path": "dira/test.txt",
+   "content": "This is dira/test.txt"
+  },
+  {
+   "path": "dira/test.html",
+   "content": "This is dira/test.html"
+  },
+  {
+   "path": "dira/test.mkv",
+   "content": "This is dira/test.mkv"
+  },
+  {
+   "path": "dira/test \" ' & < >.csv",
+   "content": "This is dira/test \" ' & < >.csv"
+  },
+  {
+   "path": "dira/new\nline",
+   "content": "This is dira/new\nline"
+  },
+  {
+   "path": "dira/😀.data",
+   "content": "This is dira/😀.data"
+  },
+  {
+   "path": "dira/⎙.mp4",
+   "content": "This is dira/⎙.mp4"
+  },
+  {
+   "path": "dira/#[]{}()@!$&'`+,;= %20.test",
+   "content": "This is dira/#[]{}()@!$&'`+,;= %20.test"
+  },
+  {
+   "path": "dira/:?#[]{}<>()@!$&'`|*+,;= %20.test",
+   "content": "This is dira/:?#[]{}<>()@!$&'`|*+,;= %20.test"
+  },
+  {
+   "path": "dira/foo\\bar.test",
+   "content": "This is dira/foo\\bar.test"
+  },
+  {
+   "path": "dira/.hidden_file1",
+   "content": "This is dira/.hidden_file1"
+  },
+  {
+   "path": "dira/.hidden_file2",
+   "content": "This is dira/.hidden_file2"
+  },
+  {
+   "path": "dirb",
+   "kind": "dir"
+  },
+  {
+   "path": "dirb/test.txt",
+   "content": "This is dirb/test.txt"
+  },
+  {
+   "path": "dirb/test.html",
+   "content": "This is dirb/test.html"
+  },
+  {
+   "path": "dirb/test.mkv",
+   "content": "This is dirb/test.mkv"
+  },
+  {
+   "path": "dirb/test \" ' & < >.csv",
+   "content": "This is dirb/test \" ' & < >.csv"
+  },
+  {
+   "path": "dirb/new\nline",
+   "content": "This is dirb/new\nline"
+  },
+  {
+   "path": "dirb/😀.data",
+   "content": "This is dirb/😀.data"
+  },
+  {
+   "path": "dirb/⎙.mp4",
+   "content": "This is dirb/⎙.mp4"
+  },
+  {
+   "path": "dirb/#[]{}()@!$&'`+,;= %20.test",
+   "content": "This is dirb/#[]{}()@!$&'`+,;= %20.test"
+  },
+  {
+   "path": "dirb/:?#[]{}<>()@!$&'`|*+,;= %20.test",
+   "content": "This is dirb/:?#[]{}<>()@!$&'`|*+,;= %20.test"
+  },
+  {
+   "path": "dirb/foo\\bar.test",
+   "content": "This is dirb/foo\\bar.test"
+  },
+  {
+   "path": "dirb/.hidden_file1",
+   "content": "This is dirb/.hidden_file1"
+  },
+  {
+   "path": "dirb/.hidden_file2",
+   "content": "This is dirb/.hidden_file2"
+  },
+  {
+   "path": "dirc",
+   "kind": "dir"
+  },
+  {
+   "path": "dirc/test.txt",
+   "content": "This is dirc/test.txt"
+  },
+  {
+   "path": "dirc/test.html",
+   "content": "This is dirc/test.html"
+  },
+  {
+   "path": "dirc/test.mkv",
+   "content": "This is dirc/test.mkv"
+  },
+  {
+   "path": "dirc/test \" ' & < >.csv",
+   "content": "This is dirc/test \" ' & < >.csv"
+  },
+  {
+   "path": "dirc/new\nline",
+   "content": "This is dirc/new\nline"
+  },
+  {
+   "path": "dirc/😀.data",
+   "content": "This is dirc/😀.data"
+  },
+  {
+   "path": "dirc/⎙.mp4",
+   "content": "This is dirc/⎙.mp4"
+  },
+  {
+   "path": "dirc/#[]{}()@!$&'`+,;= %20.test",
+   "content": "This is dirc/#[]{}()@!$&'`+,;= %20.test"
+  },
+  {
+   "path": "dirc/:?#[]{}<>()@!$&'`|*+,;= %20.test",
+   "content": "This is dirc/:?#[]{}<>()@!$&'`|*+,;= %20.test"
+  },
+  {
+   "path": "dirc/foo\\bar.test",
+   "content": "This is dirc/foo\\bar.test"
+  },
+  {
+   "path": "dirc/.hidden_file1",
+   "content": "This is dirc/.hidden_file1"
+  },
+  {
+   "path": "dirc/.hidden_file2",
+   "content": "This is dirc/.hidden_file2"
+  },
+  {
+   "path": ".hidden_dir1",
+   "kind": "dir"
+  },
+  {
+   "path": ".hidden_dir1/test.txt",
+   "content": "This is .hidden_dir1/test.txt"
+  },
+  {
+   "path": ".hidden_dir1/test.html",
+   "content": "This is .hidden_dir1/test.html"
+  },
+  {
+   "path": ".hidden_dir1/test.mkv",
+   "content": "This is .hidden_dir1/test.mkv"
+  },
+  {
+   "path": ".hidden_dir1/test \" ' & < >.csv",
+   "content": "This is .hidden_dir1/test \" ' & < >.csv"
+  },
+  {
+   "path": ".hidden_dir1/new\nline",
+   "content": "This is .hidden_dir1/new\nline"
+  },
+  {
+   "path": ".hidden_dir1/😀.data",
+   "content": "This is .hidden_dir1/😀.data"
+  },
+  {
+   "path": ".hidden_dir1/⎙.mp4",
+   "content": "This is .hidden_dir1/⎙.mp4"
+  },
+  {
+   "path": ".hidden_dir1/#[]{}()@!$&'`+,;= %20.test",
+   "content": "This is .hidden_dir1/#[]{}()@!$&'`+,;= %20.test"
+  },
+  {
+   "path": ".hidden_dir1/:?#[]{}<>()@!$&'`|*+,;= %20.test",
+   "content": "This is .hidden_dir1/:?#[]{}<>()@!$&'`|*+,;= %20.test"
+  },
+  {
+   "path": ".hidden_dir1/foo\\bar.test",
+   "content": "This is .hidden_dir1/foo\\bar.test"
+  },
+  {
+   "path": ".hidden_dir1/.hidden_file1",
+   "content": "This is .hidden_dir1/.hidden_file1"
+  },
+  {
+   "path": ".hidden_dir1/.hidden_file2",
+   "content": "This is .hidden_dir1/.hidden_file2"
+  },
+  {
+   "path": ".hidden_dir2",
+   "kind": "dir"
+  },
+  {
+   "path": ".hidden_dir2/test.txt",
+   "content": "This is .hidden_dir2/test.txt"
+  },
+  {
+   "path": ".hidden_dir2/test.html",
+   "content": "This is .hidden_dir2/test.html"
+  },
+  {
+   "path": ".hidden_dir2/test.mkv",
+   "content": "This is .hidden_dir2/test.mkv"
+  },
+  {
+   "path": ".hidden_dir2/test \" ' & < >.csv",
+   "content": "This is .hidden_dir2/test \" ' & < >.csv"
+  },
+  {
+   "path": ".hidden_dir2/new\nline",
+   "content": "This is .hidden_dir2/new\nline"
+  },
+  {
+   "path": ".hidden_dir2/😀.data",
+   "content": "This is .hidden_dir2/😀.data"
+  },
+  {
+   "path": ".hidden_dir2/⎙.mp4",
+   "content": "This is .hidden_dir2/⎙.mp4"
+  },
+  {
+   "path": ".hidden_dir2/#[]{}()@!$&'`+,;= %20.test",
+   "content": "This is .hidden_dir2/#[]{}()@!$&'`+,;= %20.test"
+  },
+  {
+   "path": ".hidden_dir2/:?#[]{}<>()@!$&'`|*+,;= %20.test",
+   "content": "This is .hidden_dir2/:?#[]{}<>()@!$&'`|*+,;= %20.test"
+  },
+  {
+   "path": ".hidden_dir2/foo\\bar.test",
+   "content": "This is .hidden_dir2/foo\\bar.test"
+  },
+  {
+   "path": ".hidden_dir2/.hidden_file1",
+   "content": "This is .hidden_dir2/.hidden_file1"
+  },
+  {
+   "path": ".hidden_dir2/.hidden_file2",
+   "content": "This is .hidden_dir2/.hidden_file2"
+  },
+  {
+   "path": "very/deeply/nested/test.rs",
+   "content": "File in a deeply nested directory."
+  },
+  {
+   "path": "media",
+   "kind": "dir"
+  },
+  {
+   "path": "media/pic.png",
+   "content": "PNG\r\n\u001a\npppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
+  },
+  {
+   "path": "media/doc.pdf",
+   "content": "%PDF-1.4\ndddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  {
+   "path": "media/data.json",
+   "content": "{\"a\": 1, \"b\": [2, 3]}\n"
+  },
+  {
+   "path": "media/page.htm",
+   "content": "<!doctype html><title>htm</title>\n"
+  },
+  {
+   "path": "media/style.css",
+   "content": "body { color: #123456; }\n"
+  },
+  {
+   "path": "media/app.js",
+   "content": "console.log('hi');\n"
+  },
+  {
+   "path": "media/notes.md",
+   "content": "# Notes\n\nSome *markdown* body.\n"
+  },
+  {
+   "path": "media/archive.zip",
+   "content": "PK\u0003\u0004zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+   "path": "media/clip.webm",
+   "content": "\u001aEß£wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+  },
+  {
+   "path": "media/plain.unknownext",
+   "content": "no idea what this is\n"
+  },
+  {
+   "path": "media/noext",
+   "content": "a file with no extension at all\n"
+  },
+  {
+   "path": "media/UPPER.TXT",
+   "content": "uppercase extension\n"
+  },
+  {
+   "path": "big.bin",
+   "repeat": {
+    "unit": "0123456789abcdef",
+    "count": 4096
+   }
+  },
+  {
+   "path": "medium.txt",
+   "repeat": {
+    "unit": "line of text padding\n",
+    "count": 200
+   }
+  },
+  {
+   "path": "withindex",
+   "kind": "dir"
+  },
+  {
+   "path": "withindex/index.html",
+   "content": "<!doctype html><title>dir index</title><p>served instead of a listing\n"
+  },
+  {
+   "path": "withindex/other.txt",
+   "content": "sibling of an index file\n"
+  },
+  {
+   "path": "pretty",
+   "kind": "dir"
+  },
+  {
+   "path": "pretty/about.html",
+   "content": "<!doctype html><title>about</title><p>pretty url target\n"
+  },
+  {
+   "path": "pretty/nested.html",
+   "content": "<!doctype html><title>nested</title>\n"
+  },
+  {
+   "path": "README.md",
+   "content": "# Fixture readme\n\nParagraph with `code`, a [link](https://example.invalid/) and a list:\n\n- one\n- two\n\n```rust\nfn main() {}\n```\n"
+  },
+  {
+   "path": "readmedir",
+   "kind": "dir"
+  },
+  {
+   "path": "readmedir/README.md",
+   "content": "## Nested readme\n\nInner **bold** text.\n"
+  },
+  {
+   "path": "readmedir/plain.txt",
+   "content": "next to a readme\n"
+  },
+  {
+   "path": "emptydir",
+   "kind": "dir"
+  },
+  {
+   "path": "onechild",
+   "kind": "dir"
+  },
+  {
+   "path": "onechild/only.txt",
+   "content": "the only entry\n"
+  },
+  {
+   "path": "links",
+   "kind": "dir"
+  },
+  {
+   "path": "links/to-file",
+   "kind": "symlink",
+   "target": "../test.txt"
+  },
+  {
+   "path": "links/to-dir",
+   "kind": "symlink",
+   "target": "../dira"
+  },
+  {
+   "path": "links/dangling",
+   "kind": "symlink",
+   "target": "../nope-does-not-exist"
+  },
+  {
+   "path": "uploads",
+   "kind": "dir"
+  },
+  {
+   "path": "uploads/existing.txt",
+   "content": "already here\n"
+  },
+  {
+   "path": "uploads/sub",
+   "kind": "dir"
+  },
+  {
+   "path": "uploads/sub/deep.txt",
+   "content": "deep in uploads\n"
+  },
+  {
+   "path": "sorting",
+   "kind": "dir"
+  },
+  {
+   "path": "sorting/file2.txt",
+   "content": "two\n"
+  },
+  {
+   "path": "sorting/file10.txt",
+   "content": "ten\n"
+  },
+  {
+   "path": "sorting/file1.txt",
+   "content": "one\n"
+  },
+  {
+   "path": "sorting/File3.txt",
+   "content": "three-upper\n"
+  },
+  {
+   "path": "sorting/a.txt",
+   "content": "a\n"
+  },
+  {
+   "path": "sorting/B.txt",
+   "content": "b-upper\n"
+  },
+  {
+   "path": "sorting/z.txt",
+   "content": "z\n"
+  },
+  {
+   "path": "sorting/10-first.txt",
+   "content": "numeric prefix\n"
+  },
+  {
+   "path": "sorting/2-first.txt",
+   "content": "numeric prefix 2\n"
+  },
+  {
+   "path": "sorting/zdir",
+   "kind": "dir"
+  },
+  {
+   "path": "sorting/zdir/inner.txt",
+   "content": "inner\n"
+  },
+  {
+   "path": "sorting/adir",
+   "kind": "dir"
+  },
+  {
+   "path": "sorting/adir/inner.txt",
+   "content": "inner\n"
+  },
+  {
+   "path": "sorting/Mdir",
+   "kind": "dir"
+  },
+  {
+   "path": "sorting/Mdir/inner.txt",
+   "content": "inner\n"
+  },
+  {
+   "path": "sorting/small.bin",
+   "repeat": {
+    "unit": "s",
+    "count": 10
+   }
+  },
+  {
+   "path": "sorting/mid.bin",
+   "repeat": {
+    "unit": "m",
+    "count": 5000
+   }
+  },
+  {
+   "path": "sorting/large.bin",
+   "repeat": {
+    "unit": "l",
+    "count": 200000
+   }
+  }
+ ]
+}

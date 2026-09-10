@@ -1,0 +1,1421 @@
+{
+ "gson": {
+  "exact": {
+   "com/google/gson/ExclusionStrategy.class": {
+    "major": 51,
+    "sha256": "57cf6a0496fabff3e71198cd82147c5f0ed92b313ebb37f0f518bcfb5f1eb1e0",
+    "size": 291
+   },
+   "com/google/gson/FieldAttributes.class": {
+    "major": 51,
+    "sha256": "e2d67414ea6621cc421d03413f1b789077a4ab33a2b77b0b44a93ffe759247a1",
+    "size": 1964
+   },
+   "com/google/gson/FieldNamingPolicy$1.class": {
+    "major": 51,
+    "sha256": "1a53431f3838838ddeef6a8dca7990342fe90fa56d091b5715d109d28653a287",
+    "size": 711
+   },
+   "com/google/gson/FieldNamingPolicy$2.class": {
+    "major": 51,
+    "sha256": "9c1a586271c64802687c958ea7383a742b589340cf0d65bc185cdd6f488582d2",
+    "size": 837
+   },
+   "com/google/gson/FieldNamingPolicy$3.class": {
+    "major": 51,
+    "sha256": "4e56eaf3bedb1f465b53e6739e4c4f480d441d5bfe6f133fa7de1d9ff133c02b",
+    "size": 914
+   },
+   "com/google/gson/FieldNamingPolicy$4.class": {
+    "major": 51,
+    "sha256": "d9fba6fd8045bd78db8dc2ca4cfd6f186775985a77eeaa625ba3bf729c78e72c",
+    "size": 993
+   },
+   "com/google/gson/FieldNamingPolicy$5.class": {
+    "major": 51,
+    "sha256": "e6fa5106fc85432fd1ce0ab334699e855d4c00b19b1a62e0a39d38cff5172afc",
+    "size": 993
+   },
+   "com/google/gson/FieldNamingPolicy$6.class": {
+    "major": 51,
+    "sha256": "4e4e706dc04566f9d6027f78c703fddfb2346cd01a5a71c1471fded8f58235e8",
+    "size": 993
+   },
+   "com/google/gson/FieldNamingPolicy$7.class": {
+    "major": 51,
+    "sha256": "d69334587ebe5b4776f311455b126dbf4e1d45d29d163674d0d443d7fc8ffafe",
+    "size": 993
+   },
+   "com/google/gson/FieldNamingPolicy.class": {
+    "major": 51,
+    "sha256": "c4e6ea3f2c2944e11a0b3fb76f41c4796c4a6d0cb6a26264e46bc2e8620e2d6b",
+    "size": 3351
+   },
+   "com/google/gson/FieldNamingStrategy.class": {
+    "major": 51,
+    "sha256": "ee66c1582b3b0e4dcf8e43f4bcf4b74df8279b995ffad03c9a3d415a912506ce",
+    "size": 207
+   },
+   "com/google/gson/Gson$1.class": {
+    "major": 51,
+    "sha256": "55da2a2b01b7be34b74e257297cd9e9db3b88a6cbcd51819b884bbcb13716f20",
+    "size": 2003
+   },
+   "com/google/gson/Gson$2.class": {
+    "major": 51,
+    "sha256": "82bdc66bd62a5ea4e3e7b88c546f1222b90dce72b82c9d5bfc7cee01c89f8edd",
+    "size": 2077
+   },
+   "com/google/gson/Gson$3.class": {
+    "major": 51,
+    "sha256": "462eff60a80c0a507ac6bf18c7560f3b67875cec7a96651346dd2d83d5aea6a9",
+    "size": 1928
+   },
+   "com/google/gson/Gson$4.class": {
+    "major": 51,
+    "sha256": "fc86efbd65a67f74096eded971e2d02741c232e0a60f4d57c437c799f3f1c523",
+    "size": 1746
+   },
+   "com/google/gson/Gson$5.class": {
+    "major": 51,
+    "sha256": "b28ec59787a8468a43ae6684437ddf9030c9acbf09ca807e788e6ecbbf958991",
+    "size": 2584
+   },
+   "com/google/gson/Gson$FutureTypeAdapter.class": {
+    "major": 51,
+    "sha256": "b15fda95e771f15ec2dbccb35d0dd5469f91ff69d407d0cdbd93c837917abbb5",
+    "size": 2301
+   },
+   "com/google/gson/Gson.class": {
+    "major": 51,
+    "sha256": "c4cd1d9d89abc79ef3138cc412a6b7b95938a97a34526dbc8fff090b45398ef6",
+    "size": 25046
+   },
+   "com/google/gson/GsonBuilder.class": {
+    "major": 51,
+    "sha256": "3c6001e1207d4ec680761ac371f8265d2c92d825493ad7af2a135a1404c0ab3b",
+    "size": 12064
+   },
+   "com/google/gson/InstanceCreator.class": {
+    "major": 51,
+    "sha256": "1b23db55ffc0ddf6e215a6a4d254736eafd2b112aa6f8e30b0564ce4cda509b6",
+    "size": 302
+   },
+   "com/google/gson/JsonArray.class": {
+    "major": 51,
+    "sha256": "d6ee57c9e99f490a98ba6badb992b4419ef56c335e7cc6fdca7c8edbaff17305",
+    "size": 5862
+   },
+   "com/google/gson/JsonDeserializationContext.class": {
+    "major": 51,
+    "sha256": "adc60281d530ef41ee65713111c0d1e333d178d99c8cb465d9fd28ab27fb22d9",
+    "size": 413
+   },
+   "com/google/gson/JsonDeserializer.class": {
+    "major": 51,
+    "sha256": "929670ee6f03dc02bdb03c927f8f7f12517b43408b14d772415837ca9e33c1f0",
+    "size": 510
+   },
+   "com/google/gson/JsonElement.class": {
+    "major": 51,
+    "sha256": "d30dfaa92f3bb8875072dc9b896245805db7119fa9fc83898cd5cf24e7693667",
+    "size": 3894
+   },
+   "com/google/gson/JsonIOException.class": {
+    "major": 51,
+    "sha256": "60f1213eb7be1fc7abb47d1f51b781a525d427d8c923d408a93f5536cf95eaa5",
+    "size": 731
+   },
+   "com/google/gson/JsonNull.class": {
+    "major": 51,
+    "sha256": "540df60df16d56c7bf631b8c1e2733b69f0879093c8eea3434961988d873b6c5",
+    "size": 925
+   },
+   "com/google/gson/JsonObject.class": {
+    "major": 51,
+    "sha256": "a77d92f8bb99ece494854c58ba1d73ee1a8f681635044d203688a18895b7eb99",
+    "size": 4825
+   },
+   "com/google/gson/JsonParseException.class": {
+    "major": 51,
+    "sha256": "d07b310e3476c0eb32b0b4ed72f58d1aae20228e10f30b26a96b8cec56df24ab",
+    "size": 732
+   },
+   "com/google/gson/JsonParser.class": {
+    "major": 51,
+    "sha256": "0c68b3e6ac6ffd00c7e2266cd5b0bc84c510fa6b321edccd4f63db35dcbce70a",
+    "size": 3134
+   },
+   "com/google/gson/JsonPrimitive.class": {
+    "major": 51,
+    "sha256": "4a9f73b6ebbcfb52d0fb84dc2370a6c76068fe92ccafe57c849f2f4744f882df",
+    "size": 5419
+   },
+   "com/google/gson/JsonSerializationContext.class": {
+    "major": 51,
+    "sha256": "74773cfcb9508705ad2219b1a65d04c8f5913b28f000028a053b9550cec5188e",
+    "size": 301
+   },
+   "com/google/gson/JsonSerializer.class": {
+    "major": 51,
+    "sha256": "92aea80464d23aa961a0828eee4ef7952fcc155a893b56039d7f7020dbe9806d",
+    "size": 437
+   },
+   "com/google/gson/JsonStreamParser.class": {
+    "major": 51,
+    "sha256": "3c0e888cc58cb192ec54fb532ebc4273a528dac83fd4025d8720869846fd37b1",
+    "size": 2500
+   },
+   "com/google/gson/JsonSyntaxException.class": {
+    "major": 51,
+    "sha256": "2109348580b5e4b298d3f8c808080b76f77019998f3e46bc9b48813bef435051",
+    "size": 743
+   },
+   "com/google/gson/LongSerializationPolicy$1.class": {
+    "major": 51,
+    "sha256": "d04b043dd3e594de7aca45e7fee8be4a1a64c03aaace976c551c4188fe20c17e",
+    "size": 856
+   },
+   "com/google/gson/LongSerializationPolicy$2.class": {
+    "major": 51,
+    "sha256": "1efddd5900f327309d0ef026ab1f9bebff70290f32d78681d8fc816bd8784ae2",
+    "size": 978
+   },
+   "com/google/gson/LongSerializationPolicy.class": {
+    "major": 51,
+    "sha256": "9e8739fc9f15f3bf5f16ede96599a3d334a92a62b40f090c59cfbbffef44c5bf",
+    "size": 1566
+   },
+   "com/google/gson/ReflectionAccessFilter$1.class": {
+    "major": 51,
+    "sha256": "c0bf259a30056ddb013651768dd5eb77790033d5ac95323ddf23a1d37d1f8303",
+    "size": 1129
+   },
+   "com/google/gson/ReflectionAccessFilter$2.class": {
+    "major": 51,
+    "sha256": "03e803deaeb5eaf308ced3dceb1a773d9c13bb16ddaf602d3fb02251cc2885cb",
+    "size": 1120
+   },
+   "com/google/gson/ReflectionAccessFilter$3.class": {
+    "major": 51,
+    "sha256": "9ae9edaa54dc964f29047b480918df9934c970b81fc9fd1ae211379a5de2d2d8",
+    "size": 1123
+   },
+   "com/google/gson/ReflectionAccessFilter$4.class": {
+    "major": 51,
+    "sha256": "179554bc622851fd734c008d7ddbb6bf70f8c90f5892f6eeea28126b7b0193b6",
+    "size": 1127
+   },
+   "com/google/gson/ReflectionAccessFilter$FilterResult.class": {
+    "major": 51,
+    "sha256": "46d35456a88712144387f056b79c1a3b37b4b245d9abbacd435c35931e488e64",
+    "size": 1411
+   },
+   "com/google/gson/ReflectionAccessFilter.class": {
+    "major": 51,
+    "sha256": "150d996ce5fe9a45586685f2141c6553ddf8bad583e3575ef4de0dc41aaa0945",
+    "size": 1015
+   },
+   "com/google/gson/ToNumberPolicy$1.class": {
+    "major": 51,
+    "sha256": "503235174e9662968738ca1c927ad89dda80acb60b27cc8060d73c178f0385b9",
+    "size": 967
+   },
+   "com/google/gson/ToNumberPolicy$2.class": {
+    "major": 51,
+    "sha256": "574f4ffafb71887c7236529ded3c387eadac1b22573d390624bf97bef57e5647",
+    "size": 911
+   },
+   "com/google/gson/ToNumberPolicy$3.class": {
+    "major": 51,
+    "sha256": "d5189bbe6df03b7ca9e3c9bef83f85502ef3529b28e6ca66f90c857a8b13b458",
+    "size": 2000
+   },
+   "com/google/gson/ToNumberPolicy$4.class": {
+    "major": 51,
+    "sha256": "e1567a7a64d4534cf24e14c80abbd81e5acc181f87080214384737cbfba2bbe4",
+    "size": 1577
+   },
+   "com/google/gson/ToNumberPolicy.class": {
+    "major": 51,
+    "sha256": "629b523cd5a4aec18c10040d122ba2e842d80597c46c9e6df966cd9b77a7304a",
+    "size": 1705
+   },
+   "com/google/gson/ToNumberStrategy.class": {
+    "major": 51,
+    "sha256": "cd84a31bd5e3c2fbaab44a564bf11bdb53ffc0dcb05f58147ef5958357579486",
+    "size": 256
+   },
+   "com/google/gson/TypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "96bb1e55d22d78fc29814612ab9244f55977a8e51fc4be437ea9decc079ffd47",
+    "size": 1665
+   },
+   "com/google/gson/TypeAdapter.class": {
+    "major": 51,
+    "sha256": "d8c3123c9256de0b10cbed59b650bb352958b9708deaad846bff3a62c6deb3c1",
+    "size": 3487
+   },
+   "com/google/gson/TypeAdapterFactory.class": {
+    "major": 51,
+    "sha256": "4de255372e3d65600767383d4b9c7e0186cf2ba5f9e92810e490799fe1fcb5c1",
+    "size": 384
+   },
+   "com/google/gson/annotations/Expose.class": {
+    "major": 51,
+    "sha256": "d00e2ce739b6e4a96f066983b8596250fadf86e4af9d9477b832608bb06eb099",
+    "size": 523
+   },
+   "com/google/gson/annotations/JsonAdapter.class": {
+    "major": 51,
+    "sha256": "f9a377b7fb6d1217a7499d88241bfcba7ce784479c58675db71d81e075d2f44c",
+    "size": 548
+   },
+   "com/google/gson/annotations/SerializedName.class": {
+    "major": 51,
+    "sha256": "da12cb6607f65cf47770fe353c188902733756e0916331afe948a7a0ce2e6d36",
+    "size": 566
+   },
+   "com/google/gson/annotations/Since.class": {
+    "major": 51,
+    "sha256": "b89418ea8e976997b3ebf971bf184f9c3ea2723a19a61bc006033682e39f0082",
+    "size": 456
+   },
+   "com/google/gson/annotations/Until.class": {
+    "major": 51,
+    "sha256": "82bb695e64e3dba60796ea54d4d405c5f323bcaa45e4f49e8563c74df2fa5ac9",
+    "size": 456
+   },
+   "com/google/gson/internal/$Gson$Preconditions.class": {
+    "major": 51,
+    "sha256": "ef286abb365caf9c2a06525342b3b37c4fc98e3786a4f8d0bc26bd9d777a7d12",
+    "size": 976
+   },
+   "com/google/gson/internal/$Gson$Types$GenericArrayTypeImpl.class": {
+    "major": 51,
+    "sha256": "36f4028a125e2f424c70fc97d552cf0ed5ff0671aa60ba7428db12c31d41b1ef",
+    "size": 1636
+   },
+   "com/google/gson/internal/$Gson$Types$ParameterizedTypeImpl.class": {
+    "major": 51,
+    "sha256": "ad37e545900d0ee123a56903ddc0ab307d4e44491585b9146489127881974213",
+    "size": 3274
+   },
+   "com/google/gson/internal/$Gson$Types$WildcardTypeImpl.class": {
+    "major": 51,
+    "sha256": "c975307e5765e3a3fcc41ae4a4ba496d9722056604376f5fbc40104d33d28b2f",
+    "size": 2372
+   },
+   "com/google/gson/internal/$Gson$Types.class": {
+    "major": 51,
+    "sha256": "61c2e12301863978fabb9c04b4b0686947393ae560bc3ccb9af4d2adf140bab4",
+    "size": 11927
+   },
+   "com/google/gson/internal/ConstructorConstructor$1.class": {
+    "major": 51,
+    "sha256": "81964fa2a052e6bc0608171e6fc0035d8d93c5b2940e36610a569c5b7f603fb2",
+    "size": 1276
+   },
+   "com/google/gson/internal/ConstructorConstructor$10.class": {
+    "major": 51,
+    "sha256": "1757f67e16a566a185147c2916430497e93e09e46f3fc14e144eb50633481876",
+    "size": 875
+   },
+   "com/google/gson/internal/ConstructorConstructor$11.class": {
+    "major": 51,
+    "sha256": "9bc8797c9807061a701c2569adb0c169230c4534f97e58e2be4d8a2727fb3703",
+    "size": 881
+   },
+   "com/google/gson/internal/ConstructorConstructor$12.class": {
+    "major": 51,
+    "sha256": "daf2e660b8377cc3bb4cfdd316db39ea60228c6a633355d60d3dd72dd84563aa",
+    "size": 878
+   },
+   "com/google/gson/internal/ConstructorConstructor$13.class": {
+    "major": 51,
+    "sha256": "3864ad2d1a20b9b6f9719d85f8c950d61f576706abfe7fe473da6b6367af4090",
+    "size": 877
+   },
+   "com/google/gson/internal/ConstructorConstructor$14.class": {
+    "major": 51,
+    "sha256": "d9779dbb832d90af6a38f911edc1ab9749db2a1d02c85cfe53a9607b09b2fd25",
+    "size": 900
+   },
+   "com/google/gson/internal/ConstructorConstructor$15.class": {
+    "major": 51,
+    "sha256": "343dbbf535a94cfa288ff98715da8fb3301b2898120029acd84198c0cc801c74",
+    "size": 896
+   },
+   "com/google/gson/internal/ConstructorConstructor$16.class": {
+    "major": 51,
+    "sha256": "c9b0bd9d1d59ddd708f2cc726ed0d7309e07caafd9e14256a4e690d4cf206cb9",
+    "size": 875
+   },
+   "com/google/gson/internal/ConstructorConstructor$17.class": {
+    "major": 51,
+    "sha256": "0dc82b71ec65a106477f0a63c41a89207bf422d4c0db404ea08386717821de44",
+    "size": 881
+   },
+   "com/google/gson/internal/ConstructorConstructor$18.class": {
+    "major": 51,
+    "sha256": "022e2e164e6010aae815b8a4c12b1ade0ea0e471f4ab470b9df7fe178cc6003f",
+    "size": 896
+   },
+   "com/google/gson/internal/ConstructorConstructor$19.class": {
+    "major": 51,
+    "sha256": "6d6e41c45178b19cec9f573cacbef8c0b2414cc9c551e224b4294f2acca14bde",
+    "size": 1895
+   },
+   "com/google/gson/internal/ConstructorConstructor$2.class": {
+    "major": 51,
+    "sha256": "bb56ff9c3fe5595e527856f5b930542bf9d78c527f4fe0b14ce823ad0a3a00b3",
+    "size": 1279
+   },
+   "com/google/gson/internal/ConstructorConstructor$20.class": {
+    "major": 51,
+    "sha256": "ec3e8f21e53693b09a65fd51255640761c7bfa924e11405e22d379137f2e2d8e",
+    "size": 1123
+   },
+   "com/google/gson/internal/ConstructorConstructor$3.class": {
+    "major": 51,
+    "sha256": "7912e10a03bf7d9c64a7ccff6e2737b27e0a737fdd40fc9aa2901f6cbf0c4b30",
+    "size": 1124
+   },
+   "com/google/gson/internal/ConstructorConstructor$4.class": {
+    "major": 51,
+    "sha256": "ad191c8375cc20dadc4f9139a6009158655a89e21092525870c3b94e06d96f0a",
+    "size": 1115
+   },
+   "com/google/gson/internal/ConstructorConstructor$5.class": {
+    "major": 51,
+    "sha256": "e7cdc736d93d4f8f1cd3ea303baa7fd14d76b0cf87cbb17d0cbb9bf1d47e285a",
+    "size": 1694
+   },
+   "com/google/gson/internal/ConstructorConstructor$6.class": {
+    "major": 51,
+    "sha256": "18dae128058326ca21aa527319c7f043e3a94c6a928bbdb5b6e48e8e015cac83",
+    "size": 1671
+   },
+   "com/google/gson/internal/ConstructorConstructor$7.class": {
+    "major": 51,
+    "sha256": "e216b646a183481d12d40c3803e538e395b0160a5ed62102078347f97a91726c",
+    "size": 1125
+   },
+   "com/google/gson/internal/ConstructorConstructor$8.class": {
+    "major": 51,
+    "sha256": "9fb8e7f190280c0e8a6403261ab80e60fd83003b08261208101a557735525713",
+    "size": 1134
+   },
+   "com/google/gson/internal/ConstructorConstructor$9.class": {
+    "major": 51,
+    "sha256": "c9bfa1955b5d4021997d57caae0767c9840ee820acee8f3e0355a2ca649a1055",
+    "size": 2350
+   },
+   "com/google/gson/internal/ConstructorConstructor.class": {
+    "major": 51,
+    "sha256": "3a5b5a2d6a712e54cb105f4b93467e0d73c6ec79ea8db02708c1643f44d6bbbf",
+    "size": 9467
+   },
+   "com/google/gson/internal/Excluder$1.class": {
+    "major": 51,
+    "sha256": "f332a310e798494ae645d85b396fc8592cb8089388fd343adba08a6d24be2730",
+    "size": 2346
+   },
+   "com/google/gson/internal/Excluder.class": {
+    "major": 51,
+    "sha256": "150b15fd77ec086463686272f8edb744cab05e508a06708f13be26a5f42142fc",
+    "size": 7221
+   },
+   "com/google/gson/internal/GsonBuildConfig.class": {
+    "major": 51,
+    "sha256": "f00d240dad631c8abe038cf09164e68dc8331748adeb4cde3f0a819d20cc6e6f",
+    "size": 395
+   },
+   "com/google/gson/internal/JavaVersion.class": {
+    "major": 51,
+    "sha256": "c4453612d8af7d4ac4f07086759be64e03ad14fdab6f5c163ebc04b920675493",
+    "size": 1990
+   },
+   "com/google/gson/internal/JsonReaderInternalAccess.class": {
+    "major": 51,
+    "sha256": "a541679e4507a4af2606c79dfcf34429c0a56689f2394eb5e3121d7f682daba7",
+    "size": 484
+   },
+   "com/google/gson/internal/LazilyParsedNumber.class": {
+    "major": 51,
+    "sha256": "48304f69b3c2884e782915b41cfb63e6708638318f37fd6564643cd5bf789b81",
+    "size": 2222
+   },
+   "com/google/gson/internal/LinkedTreeMap$1.class": {
+    "major": 51,
+    "sha256": "84892a8c43e51ae93a53c473a349e33eeee6ee0ff8704b32768b7eb5179eb947",
+    "size": 906
+   },
+   "com/google/gson/internal/LinkedTreeMap$EntrySet$1.class": {
+    "major": 51,
+    "sha256": "92bb7712c114e2e26cf77a96c232850f3d7d88162552ef9749766b6c59b0cfdf",
+    "size": 1511
+   },
+   "com/google/gson/internal/LinkedTreeMap$EntrySet.class": {
+    "major": 51,
+    "sha256": "a2aac4eda7ffdfc93dcf43b3be1b3a472cd04aface1e93ead4a9b5461907f4b4",
+    "size": 2055
+   },
+   "com/google/gson/internal/LinkedTreeMap$KeySet$1.class": {
+    "major": 51,
+    "sha256": "fec467736fb1fc871d14b6c3d4f1943c35088939deb95dd1c14b00f9ea497aee",
+    "size": 1312
+   },
+   "com/google/gson/internal/LinkedTreeMap$KeySet.class": {
+    "major": 51,
+    "sha256": "c74dcc591b56d2295d10d9014b0c3c3d0f0f59027582bc238642b81399467c9d",
+    "size": 1678
+   },
+   "com/google/gson/internal/LinkedTreeMap$LinkedTreeMapIterator.class": {
+    "major": 51,
+    "sha256": "44d3182438c44bd3e45c23d92512696aaf949758721504b45ea8977568af304a",
+    "size": 2021
+   },
+   "com/google/gson/internal/LinkedTreeMap$Node.class": {
+    "major": 51,
+    "sha256": "070931126fb9f47a6589a3305e0a88a4976711ef0254ddd08fab79a3e2148232",
+    "size": 3601
+   },
+   "com/google/gson/internal/LinkedTreeMap.class": {
+    "major": 51,
+    "sha256": "47d3002b876738d45a2cd5e4cf3d0495205cd0750e86ef2f260a3e190333be04",
+    "size": 11779
+   },
+   "com/google/gson/internal/NonNullElementWrapperList.class": {
+    "major": 51,
+    "sha256": "c76eed086b099e775127036f3584822f42efe9dd0402572f144d590d8c404d9a",
+    "size": 3540
+   },
+   "com/google/gson/internal/ObjectConstructor.class": {
+    "major": 51,
+    "sha256": "6125f9cf9d6161c9ad1fb4a2c3f75622b56ec9aa9e0a339894c52f2ff468b9f6",
+    "size": 262
+   },
+   "com/google/gson/internal/PreJava9DateFormatProvider.class": {
+    "major": 51,
+    "sha256": "986113bbf535556564d7b9cefe8a8b1d8afac038ea8e6dfcc340d1cd0a125941",
+    "size": 1943
+   },
+   "com/google/gson/internal/Primitives.class": {
+    "major": 51,
+    "sha256": "ba2b8fa52682fc095d886bc40fbd39e8e049ddacf0a9512089a7fa58664790c5",
+    "size": 1584
+   },
+   "com/google/gson/internal/ReflectionAccessFilterHelper$1.class": {
+    "major": 51,
+    "sha256": "4e06df94a7e2f0c4c8d61b5f04b97da1f3620fb51ebf3a4fb6f781a67d774239",
+    "size": 282
+   },
+   "com/google/gson/internal/ReflectionAccessFilterHelper$AccessChecker$1.class": {
+    "major": 51,
+    "sha256": "2ad16a9d4d7eec50456ede758d27a09dcb6fbdac0813ff0f1e96a901c87063c1",
+    "size": 1498
+   },
+   "com/google/gson/internal/ReflectionAccessFilterHelper$AccessChecker$2.class": {
+    "major": 51,
+    "sha256": "4ff0826cf7f02b19abcff8442eb984b7f6d8e3f9def209185366dba0a318d2fe",
+    "size": 955
+   },
+   "com/google/gson/internal/ReflectionAccessFilterHelper$AccessChecker.class": {
+    "major": 51,
+    "sha256": "46dfb5255d87fc056f5cf9b3d3a2759a5301429dcc3e98804682f3228347dfdc",
+    "size": 1639
+   },
+   "com/google/gson/internal/ReflectionAccessFilterHelper.class": {
+    "major": 51,
+    "sha256": "b49cf020426438fd1a328573ca3192b345d787b7565d6c2a087d719ef6b7c22b",
+    "size": 3007
+   },
+   "com/google/gson/internal/Streams$1.class": {
+    "major": 51,
+    "sha256": "351626705dfc079ce63cf939f50488359fb41811b7047a483b1de5bab4512fdb",
+    "size": 219
+   },
+   "com/google/gson/internal/Streams$AppendableWriter$CurrentWrite.class": {
+    "major": 51,
+    "sha256": "a6d6c44e4da16a7f6ebefdb9501d67b9e9b3e8b6185bf137f1038b1e117c65c6",
+    "size": 1478
+   },
+   "com/google/gson/internal/Streams$AppendableWriter.class": {
+    "major": 51,
+    "sha256": "892154c3804cb82aabc9641d7e288891210d1cbc247365e8acffa346a52ea978",
+    "size": 2306
+   },
+   "com/google/gson/internal/Streams.class": {
+    "major": 51,
+    "sha256": "7cee4ae1891d6385c76d83148dca68dc2ba0fa1c33a0d54538fda72ef10b0e9c",
+    "size": 2432
+   },
+   "com/google/gson/internal/UnsafeAllocator$1.class": {
+    "major": 51,
+    "sha256": "67b6cdef4401da92ed77c0e8f7144bc8007685592be1e842357c9b7a7631acac",
+    "size": 1187
+   },
+   "com/google/gson/internal/UnsafeAllocator$2.class": {
+    "major": 51,
+    "sha256": "dcc27a49a308bdc1e0d6b91b3bf61e4a25cfbf034e6117aeff82e0f3e518eceb",
+    "size": 1230
+   },
+   "com/google/gson/internal/UnsafeAllocator$3.class": {
+    "major": 51,
+    "sha256": "31345d1c4190948c9411fb24d285b3bb25555241f9cdcb8fb7168449803cc781",
+    "size": 1109
+   },
+   "com/google/gson/internal/UnsafeAllocator$4.class": {
+    "major": 51,
+    "sha256": "b578e5f3997f21f9da5ac48c95e7f304b06d86f02c5a78a70b9eba354c208d80",
+    "size": 1210
+   },
+   "com/google/gson/internal/UnsafeAllocator.class": {
+    "major": 51,
+    "sha256": "54323092cf989f124ce0aaac77431b9f58c79623f122a259f72f9cf723b08452",
+    "size": 3202
+   },
+   "com/google/gson/internal/bind/ArrayTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "f17302eac1e5235b65065dcfd3fd40565c9cf932552cc4045e9819ae510f0fab",
+    "size": 2039
+   },
+   "com/google/gson/internal/bind/ArrayTypeAdapter.class": {
+    "major": 51,
+    "sha256": "54f4581a6b5f7856314019e7b5f8115282d8353d9bd2bc59c8a223f0a4ff2831",
+    "size": 3440
+   },
+   "com/google/gson/internal/bind/CollectionTypeAdapterFactory$Adapter.class": {
+    "major": 51,
+    "sha256": "130f26bdf77438f23c99debd9cfcab00441c7c7032bfaae98b000e63f2dda35a",
+    "size": 3657
+   },
+   "com/google/gson/internal/bind/CollectionTypeAdapterFactory.class": {
+    "major": 51,
+    "sha256": "d08f7e1bc5053eff39132d6179ff8956bcf3aea1599b87e4827130abe2d57000",
+    "size": 2660
+   },
+   "com/google/gson/internal/bind/DateTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "f0db904b5897d02a08e6d38ac44a17c37a806ab1361641a3912e8ea1e135f829",
+    "size": 1165
+   },
+   "com/google/gson/internal/bind/DateTypeAdapter.class": {
+    "major": 51,
+    "sha256": "ca2d38f74c94485f422a54f488e24553ed1e8e7797ff2df5d7a55133c465ad40",
+    "size": 4165
+   },
+   "com/google/gson/internal/bind/DefaultDateTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "ee7968978572ebed8963a4717068d03c1a2a4ab638434b213e738754a9f19052",
+    "size": 274
+   },
+   "com/google/gson/internal/bind/DefaultDateTypeAdapter$DateType$1.class": {
+    "major": 51,
+    "sha256": "6f340b62b2163d15244306112b22f239fa67523cf140e334ca5ed5f96f604404",
+    "size": 944
+   },
+   "com/google/gson/internal/bind/DefaultDateTypeAdapter$DateType.class": {
+    "major": 51,
+    "sha256": "9418db507a7f0625c2f074a6ec5f04c88c5647f799b6b4298124515ec4ad2bb6",
+    "size": 3043
+   },
+   "com/google/gson/internal/bind/DefaultDateTypeAdapter.class": {
+    "major": 51,
+    "sha256": "30b7f966ad4510d6a7e2a9d9ae02d3fd417330453257af9b7a131db10f7c5553",
+    "size": 7412
+   },
+   "com/google/gson/internal/bind/JsonAdapterAnnotationTypeAdapterFactory.class": {
+    "major": 51,
+    "sha256": "663e76a37cd1401864b752a6e36a3453e1ef4243bc1596600df7aad1bfdda610",
+    "size": 4190
+   },
+   "com/google/gson/internal/bind/JsonTreeReader$1.class": {
+    "major": 51,
+    "sha256": "f8d717a05beb18477006606bc98846037d816cd9a03f795676d3296f9010b75c",
+    "size": 691
+   },
+   "com/google/gson/internal/bind/JsonTreeReader$2.class": {
+    "major": 51,
+    "sha256": "530093ef26440fc99f2aa3970bbe14287de62ffef279de216e093360b030d453",
+    "size": 853
+   },
+   "com/google/gson/internal/bind/JsonTreeReader.class": {
+    "major": 51,
+    "sha256": "d33110633d87ce3d86e5a38fca1a74cb265ed2bd7639f71ea6fa21f03618b28d",
+    "size": 8919
+   },
+   "com/google/gson/internal/bind/JsonTreeWriter$1.class": {
+    "major": 51,
+    "sha256": "e1e81522cc1e40f326e7f00bcdc706c32882787221a4506a68dea05c15207274",
+    "size": 766
+   },
+   "com/google/gson/internal/bind/JsonTreeWriter.class": {
+    "major": 51,
+    "sha256": "1d8deed5ee5fc9b1c0273d1eaf6596906a8824c1cd09e4cefbc1517b4b84fa4e",
+    "size": 5985
+   },
+   "com/google/gson/internal/bind/MapTypeAdapterFactory$Adapter.class": {
+    "major": 51,
+    "sha256": "741ecfb62a898e215762cbc31ba1ba522c816e6632e8ef18f6b1d49c75b4602b",
+    "size": 7495
+   },
+   "com/google/gson/internal/bind/MapTypeAdapterFactory.class": {
+    "major": 51,
+    "sha256": "fca4f4534def808c174e08a8e0d175771ca5e2b29a445c339ac7c2305f1af7ce",
+    "size": 3385
+   },
+   "com/google/gson/internal/bind/NumberTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "860f07431b2444ab52c67f75bb8fb87f70bb3f73a107a7449c67d42db0e10ee7",
+    "size": 1407
+   },
+   "com/google/gson/internal/bind/NumberTypeAdapter$2.class": {
+    "major": 51,
+    "sha256": "23a032f9ff07d255a50e10ff99b4dce48e064c31831788f16eb3aacfc28cbdab",
+    "size": 802
+   },
+   "com/google/gson/internal/bind/NumberTypeAdapter.class": {
+    "major": 51,
+    "sha256": "65bcc7f8a00ab860f9358985cae99f3c8ff91325689f5d15d73742731ea094ab",
+    "size": 3054
+   },
+   "com/google/gson/internal/bind/ObjectTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "612a5f8f38a110d06d43d9aacba29b3b03339766a006eedf5faed6bdb1c67e3f",
+    "size": 1465
+   },
+   "com/google/gson/internal/bind/ObjectTypeAdapter$2.class": {
+    "major": 51,
+    "sha256": "89d83d099786353c63a33480322e97c2c8fb8eaa30b264a3275b970853f49b9e",
+    "size": 956
+   },
+   "com/google/gson/internal/bind/ObjectTypeAdapter.class": {
+    "major": 51,
+    "sha256": "94a3a3b3a5cdeb03efb63f382e36dbce392409b577bcd91a0f95e63934939369",
+    "size": 5241
+   },
+   "com/google/gson/internal/bind/ReflectiveTypeAdapterFactory$1.class": {
+    "major": 51,
+    "sha256": "8b498552856f4ea1d93df0d4316dbeaa11c84c12d18842cd7295b01c56b1315c",
+    "size": 5053
+   },
+   "com/google/gson/internal/bind/ReflectiveTypeAdapterFactory$Adapter.class": {
+    "major": 51,
+    "sha256": "81066c35c2aec3f56554cfb2fcd574c339dea91d0c511df8be8d93b4ebd0478b",
+    "size": 4005
+   },
+   "com/google/gson/internal/bind/ReflectiveTypeAdapterFactory$BoundField.class": {
+    "major": 51,
+    "sha256": "d034c9be929e72a170c99611200e29dec098317f8cb244f7dd6a7df4f9348498",
+    "size": 1308
+   },
+   "com/google/gson/internal/bind/ReflectiveTypeAdapterFactory$FieldReflectionAdapter.class": {
+    "major": 51,
+    "sha256": "4608c655660cff4ce61dd0ac2981fc47edaa0d9dbfc1856ff84630c05c5879cb",
+    "size": 2646
+   },
+   "com/google/gson/internal/bind/ReflectiveTypeAdapterFactory$RecordAdapter.class": {
+    "major": 51,
+    "sha256": "da453679837778be7d133121d3ad0539874d655f87a524f7bd3a471454dbb645",
+    "size": 6999
+   },
+   "com/google/gson/internal/bind/ReflectiveTypeAdapterFactory.class": {
+    "major": 51,
+    "sha256": "f6f74637a02c84f68ba63f3d4acd24c9ca87d2cd5a0329324be7016efa5fcb66",
+    "size": 12361
+   },
+   "com/google/gson/internal/bind/SerializationDelegatingTypeAdapter.class": {
+    "major": 51,
+    "sha256": "bd995e929cd00795f8f018580b27e382b46bf5f9d68649c30073a3535bf0d6d5",
+    "size": 710
+   },
+   "com/google/gson/internal/bind/TreeTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "e774735441bba5e95233e843df48282b7ad286b0ecc9e61c7f8b3645c0ef2923",
+    "size": 253
+   },
+   "com/google/gson/internal/bind/TreeTypeAdapter$GsonContextImpl.class": {
+    "major": 51,
+    "sha256": "d5bdb63184635322bd706e522f5a274647754c6c9f6177856707a797668dff96",
+    "size": 2087
+   },
+   "com/google/gson/internal/bind/TreeTypeAdapter$SingleTypeFactory.class": {
+    "major": 51,
+    "sha256": "a9fc20500233f7c2eed68179cafeabb6a9c6427f00a2afd80287b021d1532ae1",
+    "size": 2653
+   },
+   "com/google/gson/internal/bind/TreeTypeAdapter.class": {
+    "major": 51,
+    "sha256": "b27ab3148de3b48aad38139067da4ce10675ed493d24f2e36f41a2e1235e3b78",
+    "size": 6159
+   },
+   "com/google/gson/internal/bind/TypeAdapterRuntimeTypeWrapper.class": {
+    "major": 51,
+    "sha256": "e9430aa0bdee3861f5c70bdd6a56fb3dcd7273fda01a113ca2f42737fc1c47b6",
+    "size": 3167
+   },
+   "com/google/gson/internal/bind/TypeAdapters$1.class": {
+    "major": 51,
+    "sha256": "935d98d6cb3461388ed31699c8a439997f50e860a9606efd03e016bef99408a9",
+    "size": 1730
+   },
+   "com/google/gson/internal/bind/TypeAdapters$10.class": {
+    "major": 51,
+    "sha256": "86ea938303ad9ab02f0854e988059a0e9d48b1e0cd70c97231c504edee1f7bd2",
+    "size": 2686
+   },
+   "com/google/gson/internal/bind/TypeAdapters$11.class": {
+    "major": 51,
+    "sha256": "04c8ced7b51bd2c14fd8b61b398df49b0806b9be7c2dd6395aeb348020bea517",
+    "size": 2043
+   },
+   "com/google/gson/internal/bind/TypeAdapters$12.class": {
+    "major": 51,
+    "sha256": "b3384a1054071df83556e48ec555b238ceba3dbea069e6f0e2bea44a36f0b000",
+    "size": 1926
+   },
+   "com/google/gson/internal/bind/TypeAdapters$13.class": {
+    "major": 51,
+    "sha256": "32c33d2fe183c4ac8be93d2ef3631c8470deb9dd646a52ac35a0b8dc765163b7",
+    "size": 1856
+   },
+   "com/google/gson/internal/bind/TypeAdapters$14.class": {
+    "major": 51,
+    "sha256": "1d19b2fa7f13a793cfe64f4509fa0a92412f8d29e5ef6b8b2a4cc8eb5a088112",
+    "size": 2312
+   },
+   "com/google/gson/internal/bind/TypeAdapters$15.class": {
+    "major": 51,
+    "sha256": "243ef3c3235f3dd69322e8535bfdc7c0e8290e8c52d7f5d6d0a62a3d9b2c7a06",
+    "size": 1865
+   },
+   "com/google/gson/internal/bind/TypeAdapters$16.class": {
+    "major": 51,
+    "sha256": "3c3748cac58113b3f7a700079bc77e98724d09ba046ea7bb280890e88f294923",
+    "size": 2288
+   },
+   "com/google/gson/internal/bind/TypeAdapters$17.class": {
+    "major": 51,
+    "sha256": "a30e7bf19967b8962be6563e01bf39a29ae5e55100f5ea84e4923ffcb8f2c475",
+    "size": 2288
+   },
+   "com/google/gson/internal/bind/TypeAdapters$18.class": {
+    "major": 51,
+    "sha256": "4a79a9386a2a808d0d5acf36c15ece9d330a6f2876b43d5563b2d3b0e5ad2c6d",
+    "size": 1878
+   },
+   "com/google/gson/internal/bind/TypeAdapters$19.class": {
+    "major": 51,
+    "sha256": "454365f0ad44becbb424aff6d01478eabdcd60053a21c1b081ab22303563a866",
+    "size": 1866
+   },
+   "com/google/gson/internal/bind/TypeAdapters$2.class": {
+    "major": 51,
+    "sha256": "2e8df33acc5f2fb27ff5ba63818ff0e8a0de9dc8e614af693da62687afbdfe93",
+    "size": 3002
+   },
+   "com/google/gson/internal/bind/TypeAdapters$20.class": {
+    "major": 51,
+    "sha256": "10b1dca55d733a05ead172354f0857b6ef9d020ad7621833a6264f28035ee22a",
+    "size": 1861
+   },
+   "com/google/gson/internal/bind/TypeAdapters$21.class": {
+    "major": 51,
+    "sha256": "5f7602b85b22822ce8ec73d1f7aa7a84f60bd43ab8ccc8b21c108b4490140c84",
+    "size": 1930
+   },
+   "com/google/gson/internal/bind/TypeAdapters$22.class": {
+    "major": 51,
+    "sha256": "1dd6c07f62b121b023168f1c942da3de20e46c4302b5c19c9bda744e804a3904",
+    "size": 2124
+   },
+   "com/google/gson/internal/bind/TypeAdapters$23.class": {
+    "major": 51,
+    "sha256": "31692dd8df1125de6e9fb2f19cf520d95b9b41e8a3fe1b39bf3b40f7b523d66c",
+    "size": 1886
+   },
+   "com/google/gson/internal/bind/TypeAdapters$24.class": {
+    "major": 51,
+    "sha256": "3be661c1c9d437e48f99d9122f193635f21fd9df32f53049427e244587c01583",
+    "size": 2332
+   },
+   "com/google/gson/internal/bind/TypeAdapters$25.class": {
+    "major": 51,
+    "sha256": "b389c4202090d8444c005286bc38a7dfdf225f58a5ccc095017bec9e08818531",
+    "size": 2144
+   },
+   "com/google/gson/internal/bind/TypeAdapters$26.class": {
+    "major": 51,
+    "sha256": "ed9c0e04e66b6f9230081ce833aeb5418544f86384a99ad65968e1af4da42ca6",
+    "size": 2930
+   },
+   "com/google/gson/internal/bind/TypeAdapters$27.class": {
+    "major": 51,
+    "sha256": "a66dfa9555b7db59f06e09e4db9ef1d45b65cf207cb5098b7fc7d33ef7a56189",
+    "size": 2400
+   },
+   "com/google/gson/internal/bind/TypeAdapters$28.class": {
+    "major": 51,
+    "sha256": "6f855421ec8ee8f87c5ecc21b6a286341544805a60c7a6dd1e4da1ea9c251ff8",
+    "size": 5914
+   },
+   "com/google/gson/internal/bind/TypeAdapters$29.class": {
+    "major": 51,
+    "sha256": "300a405c9b63695462470f7ca0b097994149062dec941701faa8463ff25c2290",
+    "size": 1592
+   },
+   "com/google/gson/internal/bind/TypeAdapters$3.class": {
+    "major": 51,
+    "sha256": "43f95b75b9248526fa3bdb91faea877892794eece177904d666129d2aacb24e2",
+    "size": 1900
+   },
+   "com/google/gson/internal/bind/TypeAdapters$30.class": {
+    "major": 51,
+    "sha256": "b1f897bf9cb5f35fa0e1fad75078de2eb9981cee8efab0fce47ab48ce2475835",
+    "size": 1435
+   },
+   "com/google/gson/internal/bind/TypeAdapters$31.class": {
+    "major": 51,
+    "sha256": "b3d01277f9ae7a7ec59d12ccb7badfc0894090011c4a0b405f7b9b0c739958a1",
+    "size": 1805
+   },
+   "com/google/gson/internal/bind/TypeAdapters$32.class": {
+    "major": 51,
+    "sha256": "40f1fe67f930edaf439ca7e7690c56387ac3f76538e0bc5b8529c14d774b2ace",
+    "size": 1983
+   },
+   "com/google/gson/internal/bind/TypeAdapters$33.class": {
+    "major": 51,
+    "sha256": "15595a6b3739f5035c26f035d688254d6c7480a4e1ff2e59e092c9ba78faa284",
+    "size": 1994
+   },
+   "com/google/gson/internal/bind/TypeAdapters$34$1.class": {
+    "major": 51,
+    "sha256": "cca0d1fa36f9978f8a5e083c943a8774bd7a1443e06fc8cf2b1f007447de1ec0",
+    "size": 2208
+   },
+   "com/google/gson/internal/bind/TypeAdapters$34.class": {
+    "major": 51,
+    "sha256": "5a753ef3d0e4dc1f964559a44e8ca3259012b734f2693f5692f3bd3a3243800f",
+    "size": 2076
+   },
+   "com/google/gson/internal/bind/TypeAdapters$35.class": {
+    "major": 51,
+    "sha256": "9c8a8afde551c63e6d0e8511f743456073cfc76bfcaad71e1d552eb7b5a10bc6",
+    "size": 942
+   },
+   "com/google/gson/internal/bind/TypeAdapters$4.class": {
+    "major": 51,
+    "sha256": "94f4ee14e142d6f72112d3adb87b35d78e543283effc456fae82002d142979da",
+    "size": 1869
+   },
+   "com/google/gson/internal/bind/TypeAdapters$5.class": {
+    "major": 51,
+    "sha256": "793859e78ccff8325205f3b14e6c58281694f601768ead2758c9ab0a03b43e3c",
+    "size": 2462
+   },
+   "com/google/gson/internal/bind/TypeAdapters$6.class": {
+    "major": 51,
+    "sha256": "cc3e2df84d0a367cecc3c368b4275e44b1889cf654df1d8c22fcf29ee9d716f6",
+    "size": 2471
+   },
+   "com/google/gson/internal/bind/TypeAdapters$7.class": {
+    "major": 51,
+    "sha256": "8cc1b3d916cb0df4de4496ce5561ad86b477284b06572182c0e2b73d830a568e",
+    "size": 2046
+   },
+   "com/google/gson/internal/bind/TypeAdapters$8.class": {
+    "major": 51,
+    "sha256": "e3a739a840bd314e84cafe9c2b9d9c91652b7bb9d54394028b828cdd6f737801",
+    "size": 1829
+   },
+   "com/google/gson/internal/bind/TypeAdapters$9.class": {
+    "major": 51,
+    "sha256": "a568231e9c7b6627b6bdbd1a52f2527be0e1afd03d1bf9bb0026b07a7f6c223f",
+    "size": 1613
+   },
+   "com/google/gson/internal/bind/TypeAdapters$EnumTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "77c0b8babc0bc9dec1c3bb01e392b79525acd61de4410f9d01c812caea4c41d5",
+    "size": 2006
+   },
+   "com/google/gson/internal/bind/TypeAdapters$EnumTypeAdapter.class": {
+    "major": 51,
+    "sha256": "776555ee5e03592a20e5e6a76b9a74f2a9c86255eec8e7fa144eabc7fbb4debd",
+    "size": 4175
+   },
+   "com/google/gson/internal/bind/TypeAdapters.class": {
+    "major": 51,
+    "sha256": "1eb1ad195be3d0afd7a240724ec978ae8642664d6113210f099332fa4c08b7ab",
+    "size": 9849
+   },
+   "com/google/gson/internal/bind/util/ISO8601Utils.class": {
+    "major": 51,
+    "sha256": "8e99f1f6ed6a22777fc1e1306fd48def53de8d09f38687588662f83a409eeacd",
+    "size": 7285
+   },
+   "com/google/gson/internal/reflect/ReflectionHelper$1.class": {
+    "major": 51,
+    "sha256": "99a0149280ee75c30b98aa7e46c2bd6bd4eda3f81a4c080d79437f2146e4f877",
+    "size": 262
+   },
+   "com/google/gson/internal/reflect/ReflectionHelper$RecordHelper.class": {
+    "major": 51,
+    "sha256": "798ad0b106568fe8962e6dc0697218de341aa9d61b9d362b2fc899f8cea4abe5",
+    "size": 1307
+   },
+   "com/google/gson/internal/reflect/ReflectionHelper$RecordNotSupportedHelper.class": {
+    "major": 51,
+    "sha256": "aa5749aeba70626749615e8f7ef9c1261bdc28d0cc15a0371cbc1734614d47d7",
+    "size": 2063
+   },
+   "com/google/gson/internal/reflect/ReflectionHelper$RecordSupportedHelper.class": {
+    "major": 51,
+    "sha256": "3de9e0a166189fa94bddbb96eeb9fe29b897f17882ce117099b2afaa5865d1ed",
+    "size": 3636
+   },
+   "com/google/gson/internal/reflect/ReflectionHelper.class": {
+    "major": 51,
+    "sha256": "7cd569f951eb32e965fd54dd8f1d1a0e410837e99779d0ec7e7083ff161175b3",
+    "size": 6864
+   },
+   "com/google/gson/internal/sql/SqlDateTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "cc306a80f6233785de31c10fbaaabaec4d9ff9ccaaeebb03afcda14b8540719c",
+    "size": 1244
+   },
+   "com/google/gson/internal/sql/SqlDateTypeAdapter.class": {
+    "major": 51,
+    "sha256": "08b390f6c0a35228969177a88c52814d2a1f41e3964b69d317354d92d2215dc1",
+    "size": 3289
+   },
+   "com/google/gson/internal/sql/SqlTimeTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "11047eda3d5a72311226de323e79af19785c41fa54b558a1db88cabdc20fd87d",
+    "size": 1236
+   },
+   "com/google/gson/internal/sql/SqlTimeTypeAdapter.class": {
+    "major": 51,
+    "sha256": "b3a2879f86a9b64cdb88dc307cfeb1cdcb8aac29fddac5abe70eedd17f6a5b73",
+    "size": 3258
+   },
+   "com/google/gson/internal/sql/SqlTimestampTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "3f0e2bdee12f82714b25e97bf6e6005e09480fc7009dfc044989ed7544f9ede0",
+    "size": 1516
+   },
+   "com/google/gson/internal/sql/SqlTimestampTypeAdapter.class": {
+    "major": 51,
+    "sha256": "25b14fa54b43143e0c239a58ab60075d4d4e746e5304d7bc434bf202f649f16f",
+    "size": 2166
+   },
+   "com/google/gson/internal/sql/SqlTypesSupport$1.class": {
+    "major": 51,
+    "sha256": "b7e523d77e410d13e44182957f355218f9b4fba7d01f976a4b1bc0e224c5eb02",
+    "size": 1151
+   },
+   "com/google/gson/internal/sql/SqlTypesSupport$2.class": {
+    "major": 51,
+    "sha256": "6a9ccbba3ccc4cc9a5c5931982c0c1c55b9567f81ae4533441dd74eceecf3d02",
+    "size": 1171
+   },
+   "com/google/gson/internal/sql/SqlTypesSupport.class": {
+    "major": 51,
+    "sha256": "a458721a725f7d5098c8a0879461a65eef9d9fe63ed0c6f652509f28fe9d0e48",
+    "size": 1841
+   },
+   "com/google/gson/reflect/TypeToken.class": {
+    "major": 51,
+    "sha256": "e3a2664f1d93deb2538d6964efb0e51ed7859856a3d0e505be48d2dd8142abec",
+    "size": 9774
+   },
+   "com/google/gson/stream/JsonReader$1.class": {
+    "major": 51,
+    "sha256": "5d767c739a41f3917640268f3c036cbcfd080deabae569732b6e10744d70d2e1",
+    "size": 1369
+   },
+   "com/google/gson/stream/JsonReader.class": {
+    "major": 51,
+    "sha256": "802be8a2681a0e48a540b7134270d45fec2198d98964c6b7be578b5922fc9019",
+    "size": 20216
+   },
+   "com/google/gson/stream/JsonScope.class": {
+    "major": 51,
+    "sha256": "145b746ad7b9452619fbb8f5dca9ced16fa7442860c8908b02323f33c19cb643",
+    "size": 612
+   },
+   "com/google/gson/stream/JsonToken.class": {
+    "major": 51,
+    "sha256": "e71cf07fb386013f3ea4ff68ac9525275042f36b9cf3cc6eaa077da5e888bfc3",
+    "size": 1524
+   },
+   "com/google/gson/stream/JsonWriter.class": {
+    "major": 51,
+    "sha256": "633fb5064d48039f1dbe620aa4b1f327857b32314a5132930b9ec920f6604a7d",
+    "size": 9901
+   },
+   "com/google/gson/stream/MalformedJsonException.class": {
+    "major": 51,
+    "sha256": "2e0678737b5847ab57662e6b317c2ee835e8e21937bc33d00951e01b489e7fdc",
+    "size": 755
+   }
+  },
+  "major_histogram": {
+   "51": 217,
+   "53": 1
+  },
+  "semantic_only": {
+   "META-INF/versions/9/module-info.class": {
+    "major": 53,
+    "sha256": "b9242806ee77447c6658ed38a0ed59c4adf34138a1313ec91415a6ee889888bd",
+    "size": 305
+   },
+   "com/google/gson/annotations/package-info.class": {
+    "major": 51,
+    "sha256": "508af1faaf743c153882af7e1497aeb2387c9f2a08d3682afeac8800ab942de4",
+    "size": 133
+   },
+   "com/google/gson/internal/package-info.class": {
+    "major": 51,
+    "sha256": "92ac1a39686ac7beb43240714470639fba48a23524ee279abde6808cccd85200",
+    "size": 130
+   },
+   "com/google/gson/package-info.class": {
+    "major": 51,
+    "sha256": "456016b754cbd0c1e11062b5b3dd39eff7563ccb1c39ab50ba5c1f9f75ef0632",
+    "size": 121
+   },
+   "com/google/gson/reflect/package-info.class": {
+    "major": 51,
+    "sha256": "2d139c03a7a1daac0ccd5cae03d64d485c485bca8f3dd72d94f3e9b85912eda2",
+    "size": 129
+   },
+   "com/google/gson/stream/package-info.class": {
+    "major": 51,
+    "sha256": "69d1922a5fed48722994456cd78043ad1fdfcb5904cc95c2e49edaec4b28e1a5",
+    "size": 128
+   }
+  }
+ },
+ "gson-extras": {
+  "exact": {
+   "com/google/gson/extras/examples/rawcollections/RawCollectionsExample$1.class": {
+    "major": 51,
+    "sha256": "2657a23f418a0e21ed0eb5b24e837af5878a6c16f7b5494763877f2fb2ba8ef0",
+    "size": 305
+   },
+   "com/google/gson/extras/examples/rawcollections/RawCollectionsExample$Event.class": {
+    "major": 51,
+    "sha256": "623458463524a22e79c43df6a30698a414db57859a9327e33149860d7a12f3c4",
+    "size": 1296
+   },
+   "com/google/gson/extras/examples/rawcollections/RawCollectionsExample.class": {
+    "major": 51,
+    "sha256": "f40c514569a17542a45c776f95c3068f0b96f1bf447a79edf9ec9723cbe663bd",
+    "size": 2573
+   },
+   "com/google/gson/graph/GraphAdapterBuilder$1.class": {
+    "major": 51,
+    "sha256": "9af0f2d01f97fb5542949f8b10297c096df8b91658a9e490366ab7dab588aae9",
+    "size": 1206
+   },
+   "com/google/gson/graph/GraphAdapterBuilder$Element.class": {
+    "major": 51,
+    "sha256": "3b8ea96f3b1fb7c6779956e529e873046641bd5f32f8917e1af40bcf567dc5a1",
+    "size": 3364
+   },
+   "com/google/gson/graph/GraphAdapterBuilder$Factory$1.class": {
+    "major": 51,
+    "sha256": "8c263a584683fd6f20f84b0a2e8d5c89941e468c081d2582d8690a3c81dfd7f5",
+    "size": 5185
+   },
+   "com/google/gson/graph/GraphAdapterBuilder$Factory.class": {
+    "major": 51,
+    "sha256": "f9cbe18ae3d6a8182bf2aa1e5f9815a5b4daf26e2f20d5189fd619d7f616fe98",
+    "size": 4161
+   },
+   "com/google/gson/graph/GraphAdapterBuilder$Graph.class": {
+    "major": 51,
+    "sha256": "f0a06ea2e862bac3740ae36fe82d302bf3ef7bdd3e67fa28ce25aa9f198cccaf",
+    "size": 2532
+   },
+   "com/google/gson/graph/GraphAdapterBuilder.class": {
+    "major": 51,
+    "sha256": "2e3948aca1149cf64d6a47bbdc831e22c0e00c9176f36cdd6edd8c9d44b91702",
+    "size": 3572
+   },
+   "com/google/gson/interceptors/Intercept.class": {
+    "major": 51,
+    "sha256": "9b546c8b7c54693196259f11133d534130b1688a2f23ae9aa6c2c27c863a89b1",
+    "size": 542
+   },
+   "com/google/gson/interceptors/InterceptorFactory$InterceptorAdapter.class": {
+    "major": 51,
+    "sha256": "e1b2a91adb160a6addd0a821709d56b0ec31367018ad2a7d90e3bbd2106e2860",
+    "size": 2389
+   },
+   "com/google/gson/interceptors/InterceptorFactory.class": {
+    "major": 51,
+    "sha256": "bda86cc05266d64721d805541347fa8ea27a4412729aa81509d2779e04e74e49",
+    "size": 1711
+   },
+   "com/google/gson/interceptors/JsonPostDeserializer.class": {
+    "major": 51,
+    "sha256": "d00a8d2502927265ef757c31600c09125f18dd6c7916cb64865fb170f3cdd835",
+    "size": 280
+   },
+   "com/google/gson/typeadapters/PostConstructAdapterFactory$PostConstructAdapter.class": {
+    "major": 51,
+    "sha256": "5b4cf8f05d6125a5efd5e3694511c5b02169a62a05bc0c566b4c89a0c2a03818",
+    "size": 2453
+   },
+   "com/google/gson/typeadapters/PostConstructAdapterFactory.class": {
+    "major": 51,
+    "sha256": "ccfea711ba2880ea3f8c50c93eb1cc06553d5b58389436e43c92dc9ff58b59cb",
+    "size": 2024
+   },
+   "com/google/gson/typeadapters/RuntimeTypeAdapterFactory$1.class": {
+    "major": 51,
+    "sha256": "fb533fe6a29db3bffddb765e370c40ba86d79ab5c1ef08f05025abf0bb1c26a1",
+    "size": 4751
+   },
+   "com/google/gson/typeadapters/RuntimeTypeAdapterFactory.class": {
+    "major": 51,
+    "sha256": "06dfa60b2adc38a09a1236029782047402ad98da66829a43d56267393919cf66",
+    "size": 6554
+   },
+   "com/google/gson/typeadapters/UtcDateTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "f84fea25ce4421978c92e0ff34d7015b7af801f73133b9fc6fabc91a924d507b",
+    "size": 709
+   },
+   "com/google/gson/typeadapters/UtcDateTypeAdapter.class": {
+    "major": 51,
+    "sha256": "64c0329a134876adf22a0231370b2d0db3c6e5bbd2fd285dcf14966399699165",
+    "size": 7239
+   }
+  },
+  "major_histogram": {
+   "51": 19
+  },
+  "semantic_only": {}
+ },
+ "gson-metrics": {
+  "exact": {
+   "com/google/gson/metrics/BagOfPrimitives.class": {
+    "major": 51,
+    "sha256": "ff5f3836a1b1eadfbf845c2c742d6e6d28e879ee217930fd59ed2e68c1fc3cbd",
+    "size": 2402
+   },
+   "com/google/gson/metrics/BagOfPrimitivesDeserializationBenchmark.class": {
+    "major": 51,
+    "sha256": "92cea3070c34f0f60ce0b5a7f6cbb27cec24732465a9f21cb89b38b3700ce95d",
+    "size": 4199
+   },
+   "com/google/gson/metrics/CollectionsDeserializationBenchmark$1.class": {
+    "major": 51,
+    "sha256": "b105100cdc5b4f95e277524ba697ee18274b9a33a0fc201ada23867a0827bec0",
+    "size": 642
+   },
+   "com/google/gson/metrics/CollectionsDeserializationBenchmark.class": {
+    "major": 51,
+    "sha256": "a62673d86e8c02d4ee98356d5c99f22be0772abf7585ba1837c9752c1ff74f79",
+    "size": 5229
+   },
+   "com/google/gson/metrics/NonUploadingCaliperRunner.class": {
+    "major": 51,
+    "sha256": "a8c3ce270cbec571693b40d81446c8daedae4797d5c83c0c4b48ad65cc67975a",
+    "size": 1152
+   },
+   "com/google/gson/metrics/ParseBenchmark$1.class": {
+    "major": 51,
+    "sha256": "3fb9c8cf3b2516bf8b09bb55966bfc65881cedd4d5f2afedf24c884b3a9c0862",
+    "size": 1922
+   },
+   "com/google/gson/metrics/ParseBenchmark$Api$1.class": {
+    "major": 51,
+    "sha256": "3e7bf7ea85fe46349978c5d96d8d7f9ccea11bff6c40ba6f46020a0c98be8758",
+    "size": 962
+   },
+   "com/google/gson/metrics/ParseBenchmark$Api$2.class": {
+    "major": 51,
+    "sha256": "e7b5dae8d2344e7a258778b94873b014b2bdb00a9fc69ec1fc2dac5cb9a4d2c8",
+    "size": 958
+   },
+   "com/google/gson/metrics/ParseBenchmark$Api$3.class": {
+    "major": 51,
+    "sha256": "a89649cfadfffab8d007cbe5de32a258235251f3a2280bb546212d069f641370",
+    "size": 956
+   },
+   "com/google/gson/metrics/ParseBenchmark$Api$4.class": {
+    "major": 51,
+    "sha256": "840cf379b06a01714ebb86a5d86fe987d0b7062abc5854d9b026037e617e443b",
+    "size": 952
+   },
+   "com/google/gson/metrics/ParseBenchmark$Api$5.class": {
+    "major": 51,
+    "sha256": "a1878ef3b5f9041cec743d43517aeec7076a1a7c72e8225ae5abc883e96efa84",
+    "size": 950
+   },
+   "com/google/gson/metrics/ParseBenchmark$Api$6.class": {
+    "major": 51,
+    "sha256": "fdecc95c66bd8e146001210ad28aaf8ddf0f4ef08215c3200279c17041085e03",
+    "size": 952
+   },
+   "com/google/gson/metrics/ParseBenchmark$Api.class": {
+    "major": 51,
+    "sha256": "bf654e98693c63a95c0c403130152bf2e1ab393d249296423b487529ad1e5123",
+    "size": 2252
+   },
+   "com/google/gson/metrics/ParseBenchmark$Content.class": {
+    "major": 51,
+    "sha256": "1cae384115bddd47fb4b921685a86738288f51b83e50dd861805c0d327410afd",
+    "size": 650
+   },
+   "com/google/gson/metrics/ParseBenchmark$Document$1.class": {
+    "major": 51,
+    "sha256": "aa229f2513fd4603a0b3bcde136efddd46f5f15650bb7bce1032e38f16c6a26e",
+    "size": 719
+   },
+   "com/google/gson/metrics/ParseBenchmark$Document$2.class": {
+    "major": 51,
+    "sha256": "4428d7f2b99d9afff7669fc9cbce47dbf146f5087f2af794203930a14b1af827",
+    "size": 743
+   },
+   "com/google/gson/metrics/ParseBenchmark$Document$3.class": {
+    "major": 51,
+    "sha256": "d4563a1da6255e270da7712a98e4732b4c785c34d002cadb0c7fb83e277ecdc7",
+    "size": 698
+   },
+   "com/google/gson/metrics/ParseBenchmark$Document$4.class": {
+    "major": 51,
+    "sha256": "3db64fb556b55e1d32bfb151432d7082d84d1d2bc72670801d6846dc0547023c",
+    "size": 722
+   },
+   "com/google/gson/metrics/ParseBenchmark$Document$5.class": {
+    "major": 51,
+    "sha256": "00e7dcba51e5a49a0371ed0bf18e5ba93420a61bf61a991d3e944e9e73df9ce9",
+    "size": 698
+   },
+   "com/google/gson/metrics/ParseBenchmark$Document$6.class": {
+    "major": 51,
+    "sha256": "3fbf4e6c17da182ee6eda4b7ab8ec551167c2d37ef7819e468145295f1cc1390",
+    "size": 722
+   },
+   "com/google/gson/metrics/ParseBenchmark$Document.class": {
+    "major": 51,
+    "sha256": "bdc2ccbdb5a1c26bf3d8e747c4b619edc4f7083f95a51436456f5438f9261b88",
+    "size": 2702
+   },
+   "com/google/gson/metrics/ParseBenchmark$Feed.class": {
+    "major": 51,
+    "sha256": "ffc6bd72749ccf3795f73601ea0bc17d2fafe21ee2ea494c5e2ec089c3d3c4cf",
+    "size": 1990
+   },
+   "com/google/gson/metrics/ParseBenchmark$GsonBindParser.class": {
+    "major": 51,
+    "sha256": "0cd647c049e7e1c461d07b53fd10f1880f0e2fe77624b1515c36a946637ce032",
+    "size": 1699
+   },
+   "com/google/gson/metrics/ParseBenchmark$GsonDomParser.class": {
+    "major": 51,
+    "sha256": "064ee8d89ba15ecb26de6052a4dc1de3ea671bb782daf61e5a7ffb8d72f5828b",
+    "size": 1238
+   },
+   "com/google/gson/metrics/ParseBenchmark$GsonSkipParser.class": {
+    "major": 51,
+    "sha256": "605152e24bb61fd33b7992c3679520bc35b5e8001d6ef5e8e5275d7f65da6ced",
+    "size": 1327
+   },
+   "com/google/gson/metrics/ParseBenchmark$GsonStreamParser.class": {
+    "major": 51,
+    "sha256": "4e38fbe9c1cba429e24f76ed4c88270d4a09c125d1652c2f620a8faafe690f24",
+    "size": 2455
+   },
+   "com/google/gson/metrics/ParseBenchmark$Item.class": {
+    "major": 51,
+    "sha256": "9a435888de95a081ec22a1f48d05d583aa44a904887751e4a5665fcabe1e78b6",
+    "size": 1930
+   },
+   "com/google/gson/metrics/ParseBenchmark$JacksonBindParser.class": {
+    "major": 51,
+    "sha256": "a174a6faf042f35f1c89d94e81df9ad64e1b684b062253695792da17ddf1ef95",
+    "size": 2712
+   },
+   "com/google/gson/metrics/ParseBenchmark$JacksonStreamParser.class": {
+    "major": 51,
+    "sha256": "a3af9097201a13cb169d8ffc472ce009182c258eacfc41070eb145589d2697c7",
+    "size": 2866
+   },
+   "com/google/gson/metrics/ParseBenchmark$Link.class": {
+    "major": 51,
+    "sha256": "764be9c1f76603b15d1c2f2d052c62f35e6e522ceef73af3d83f7ae9d5dfed6a",
+    "size": 638
+   },
+   "com/google/gson/metrics/ParseBenchmark$Parser.class": {
+    "major": 51,
+    "sha256": "84b3978a817b5307f413bcbd96cd7d8bd04d790eadf5edf3ff4d98d8ea5b5609",
+    "size": 417
+   },
+   "com/google/gson/metrics/ParseBenchmark$ReaderUser.class": {
+    "major": 51,
+    "sha256": "e4bbc87d67f1f275bdb5f62edbbd27473136d963374b42fdc51e80f8e8898d65",
+    "size": 658
+   },
+   "com/google/gson/metrics/ParseBenchmark$Tweet.class": {
+    "major": 51,
+    "sha256": "ed79ea0a066b768593efceabee4d072712763367bef04d22593165f5f0a94685",
+    "size": 1356
+   },
+   "com/google/gson/metrics/ParseBenchmark$User.class": {
+    "major": 51,
+    "sha256": "d6374c2840a4aae1c62b92a87b123f1fcfa016180e4536d0bc1d91dcc6584d9e",
+    "size": 1965
+   },
+   "com/google/gson/metrics/ParseBenchmark.class": {
+    "major": 51,
+    "sha256": "4d988dd31211de09c407fa53681ce06cead9414e35de9a4f7b4f82e44ba093ae",
+    "size": 4734
+   },
+   "com/google/gson/metrics/SerializationBenchmark.class": {
+    "major": 51,
+    "sha256": "ede43cbf4ba37382962c9f149f3e39019b0e3a7b16e50ad9a6615a6af5a1a600",
+    "size": 1583
+   }
+  },
+  "major_histogram": {
+   "51": 36
+  },
+  "semantic_only": {}
+ },
+ "gson-proto": {
+  "exact": {
+   "com/google/gson/protobuf/ProtoTypeAdapter$1.class": {
+    "major": 51,
+    "sha256": "ea5663b8e8b98d45af8cad6091f12bc157b67a81ae5e6b312d2fe83f9f66c79c",
+    "size": 246
+   },
+   "com/google/gson/protobuf/ProtoTypeAdapter$Builder.class": {
+    "major": 51,
+    "sha256": "9ee74ab28befa60609c551032ffb10a0d59f673fc2db8d515ac50b7b9b61aa71",
+    "size": 4067
+   },
+   "com/google/gson/protobuf/ProtoTypeAdapter$EnumSerialization.class": {
+    "major": 51,
+    "sha256": "09c69342739a0cc635256145019f2e4c63ad0db22902f47e3c92b1eddbb7ea65",
+    "size": 1335
+   },
+   "com/google/gson/protobuf/ProtoTypeAdapter.class": {
+    "major": 51,
+    "sha256": "f71ebb74352108f9f78c89caffe5ed367babdbae8bdc8000b89d8694c2404121",
+    "size": 14975
+   }
+  },
+  "major_histogram": {
+   "51": 4
+  },
+  "semantic_only": {}
+ }
+}

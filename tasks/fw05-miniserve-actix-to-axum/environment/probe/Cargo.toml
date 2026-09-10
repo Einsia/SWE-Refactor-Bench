@@ -1,0 +1,31 @@
+# A build-time probe. It compiles real code against every part of the target
+# stack this migration needs, so a crate that is present in the registry but
+# unusable -- wrong feature set, missing optional dependency -- fails at image
+# build time instead of surprising the agent in an offline container.
+[package]
+name = "srb-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum = { version = "0.7", features = ["multipart", "http2", "macros", "tokio"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+axum-server = { version = "0.7", features = ["tls-rustls-no-provider"] }
+tower = { version = "0.5", features = ["util", "timeout"] }
+tower-http = { version = "0.6", features = [
+    "fs", "auth", "validate-request", "trace", "set-header", "normalize-path",
+    "compression-br", "compression-gzip", "compression-zstd", "compression-deflate",
+] }
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "server-graceful"] }
+http = "1"
+http-body-util = "0.1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+headers = "0.4"
+mime = "0.3"
+mime_guess = "2"
+multer = "3"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pemfile = "2"

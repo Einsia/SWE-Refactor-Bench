@@ -1,0 +1,33 @@
+{
+ "artifactId": "gson",
+ "description": "Gson JSON library",
+ "developers": [
+  {
+   "name": null,
+   "organization": "Google"
+  }
+ ],
+ "groupId": "com.google.code.gson",
+ "inceptionYear": null,
+ "licenses": [
+  {
+   "name": "Apache-2.0",
+   "url": "https://www.apache.org/licenses/LICENSE-2.0.txt"
+  }
+ ],
+ "name": "Gson",
+ "packaging": "jar",
+ "required_sibling_files": [
+  "gson-2.10.1.pom",
+  "gson-2.10.1.jar",
+  "gson-2.10.1-sources.jar"
+ ],
+ "runtime_dependencies": [],
+ "scm": {
+  "connection": "scm:git:https://github.com/google/gson.git",
+  "developerConnection": "scm:git:git@github.com:google/gson.git",
+  "url": "https://github.com/google/gson/"
+ },
+ "url": "https://github.com/google/gson",
+ "version": "2.10.1"
+}

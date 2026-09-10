@@ -1,0 +1,234 @@
+TASK {{task}} -- find what the port got wrong.
+
+SQLite 3.31.1 is a C library and a command-line shell, about 230,000 lines of
+amalgamated C, whose entire dependence on an operating system sits behind one
+interface: sqlite3_vfs, plus the mutex, memory and time hooks around it. The
+original builds for POSIX and gets that interface from src/os_unix.c -- open,
+pread, fcntl locks, mmap, fsync, /dev/urandom, gettimeofday.
+
+The submission is supposed to be the same library and the same shell built for
+wasm32-wasi, with SQLITE_OS_OTHER=1, os_unix.c and os_win.c gone, and a VFS
+written against WASI's own primitives registered under the name `wasi` as the
+default. It runs under wasmtime with three preopened directories and nothing else:
+no fcntl, no mmap, no fork, no threads, no /dev/urandom, no getcwd.
+
+That is a rewrite of the layer every byte of every database file passes through.
+It has already been established that the port is real and that a differential
+against native 3.31.1 gets the right answers on the language surface, the file
+format, the journal and WAL paths, the extensions and the CLI. Your job is the
+part a fixed set of cases cannot do: find the input, the sequence or the file that
+nobody thought to write down.
+
+THE TWO TREES
+
+  {{original}}     SQLite 3.31.1 as released, POSIX
+  {{submission}}   the submission, which claims to be the same library on WASI
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete source trees and both are read-only to you. Read
+the original as much as you like: src/os_unix.c is the specification of what the
+new VFS is supposed to do, and reading it against the submission's replacement is
+the most productive hour available to you here.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner builds
+that tree -- the original with the published configure/make/gcc argv, the
+submission with its own build-wasi.sh, both from a scrubbed copy so no checked-in
+artefact can stand in for a build -- and runs your file against what came out. You
+are told the outcome on each tree separately. The build happens once per tree and
+is reused, so only your first candidate waits for it.
+
+Your file may import `srbsqlite`, `pytest` and the standard library, and nothing
+else. It addresses the built shell, never a source file:
+
+    import srbsqlite as sq
+
+    def test_page_size_512_is_byte_exact():
+        box = sq.sandbox()
+        box.sql("pragma page_size=512; create table t(a); insert into t values(1);")
+        assert sq.sha256(box.read("/data/db.sqlite")) == "..."   # read it, don't guess
+
+What `srbsqlite` gives you:
+
+    sandbox(files=None) -> Sandbox
+        a fresh directory the run sees as /data and /tmp -- the same two preopens
+        the task fixes. `Session` is the same function under a name that reads
+        better when the point is a sequence of commands against one database.
+
+    Sandbox.sql(script, db="/data/db.sqlite") -> Output
+    Sandbox.run(args, stdin=..., timeout=..., canon=True) -> Output
+        one invocation of the shell under test. Output carries .status, .stdout,
+        .stderr (bytes), .out/.err (text), .ok and .timed_out. A timeout returns
+        rather than raising, so "it hung" is something you can assert.
+
+    Sandbox.spawn(args, stdin=...) -> handle with .wait()
+        the same, without waiting. Two processes on one database at once: a second
+        writer arriving mid-transaction, a reader during a checkpoint, or a
+        transaction held open while you copy the database and its journal out from
+        under it -- which is how you manufacture a hot journal.
+
+    Sandbox.native(db, script) -> Output
+        a fixed native SQLite 3.31.1, the same binary on both sides of the
+        comparison. Use it in both directions: write a file with it and open that
+        file with the build under test, or hand it a file the build under test
+        wrote and ask whether it is a database at all. A divergence here is a
+        divergence in the bytes, not in how something was printed.
+
+    Sandbox.write / .read / .exists / .host / .listing
+        plant and inspect files by guest path. .listing() is every path in the
+        sandbox, which answers "did it clean up after itself".
+
+    sq.sql(...) / sq.run(...) / sq.cli(...)   the one-shot forms, fresh sandbox each
+    sq.sha256(...) / sq.hexdump(...)         for saying what differed, not that it did
+
+Write guest paths -- /data/x.db, /tmp/y -- in arguments and in SQL. They mean the
+same file on both sides; the helper maps them to whatever each build can reach and
+maps them back out of the output.
+
+TWO THINGS THE HELPER ALREADY FOLDS AWAY
+
+argv[0] as it appears in `Usage:` and error prefixes, and decimal digits past the
+17th significant figure. The second is not a bug in either build: SQLite renders
+some reals through `long double`, which is an 80-bit type on x86-64 and a 128-bit
+one on wasm32, so the two disagree only in digits a double never carried. Both are
+in the deny list below. `canon=False` shows you the raw bytes if you want to see
+them; a candidate that asserts on what they hide is still thrown out.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first is where most attempts die: a test that fails on both trees has found a
+bug in your test, or a behaviour SQLite 3.31.1 never had. Run every idea -- one
+call tells you which of the four outcomes you got.
+
+Do not guess at what 3.31.1 does. Run it. `try_test` reports the original's result
+on every attempt, and `Sandbox.native` gives you 3.31.1 inside a test, so the
+cheapest way to learn what the reference does with some horrible input is to write
+the assertion you expect, run it, and read which way it went.
+
+Then it has to assert on something that was promised. The scope below is the
+product's contract; a divergence outside it is thrown out on review no matter how
+real it is, and you will have spent the budget for nothing.
+
+ONE CLASS OF CANDIDATE IS REJECTED ON SIGHT
+
+A test that discovers which tree it is running on and then decides what to do. The
+two builds differ by construction -- one is an ELF executable, the other a wasm
+module under a runtime -- and every document here says so, so a test that keys on
+that fact passes on one tree, fails on the other, does it three times running, and
+establishes nothing whatsoever about the migration.
+
+The environment is scrubbed of anything naming a role or a tree, but that is a
+speed bump and not a wall, and it is not the mechanism: with enough determination
+you could work out which side you are on from a path, a timing, a trap message or
+the shape of an error. Doing so is not a break. Ask the product a question about
+SQLite instead.
+
+WHERE PORTS OF THIS KIND ACTUALLY FAIL
+
+Not on `select 1`. Every submission that reaches this stage handles the language
+surface, because that is the first thing anyone runs. What gets left out:
+
+  * xRead's short-read contract. A read past end of file must zero-fill the rest
+    of the buffer and return SQLITE_IOERR_SHORT_READ, not SQLITE_IOERR and not
+    silence. os_unix.c does this in five lines and the pager depends on it: it is
+    how a database whose last page is partially written gets recovered rather than
+    rejected. A port that returns the wrong code, or forgets the zero-fill, passes
+    every ordinary query and fails on a truncated file.
+
+  * The WAL shared-memory region. WAL needs xShmMap, xShmLock, xShmBarrier and
+    xShmUnmap, and WASI has no mmap and no shared memory, so the only thing a
+    single process can do is allocate it. Then: do two connections opened in one
+    process see the same region; do the eight lock slots enforce shared versus
+    exclusive; does the -shm file appear and disappear when it should; do all four
+    checkpoint modes -- PASSIVE, FULL, RESTART, TRUNCATE -- do what their names
+    say to the -wal file's size.
+
+  * Locking as one process can observe it. Two connections in one shell, BEGIN
+    IMMEDIATE against BEGIN IMMEDIATE, a read snapshot held across another
+    connection's write, `PRAGMA locking_mode=EXCLUSIVE`, and the busy handler. Two
+    separate wasmtime processes cannot be made to see each other's locks and that
+    is not in scope; one process can, and it is.
+
+  * Journal files, byte for byte. The five rollback modes plus WAL, and the
+    journal header, which encodes the sector size and the page count. xSectorSize
+    and xDeviceCharacteristics feed straight into what gets written and when: a
+    port that returns 512 where the original returns something else, or claims an
+    IOCAP the platform does not have, produces a journal of a different size and
+    shape for the same transaction.
+
+  * Recovery of a file the other side wrote. Manufacture a hot journal -- hold a
+    transaction open with `spawn`, copy the database and its -journal out, kill it
+    -- and then open the copy. The original rolls it back and gets specific
+    contents. So must the port, and so must the reverse: a hot journal the port
+    left behind has to be recoverable by 3.31.1.
+
+  * xFullPathname with nothing to resolve against. WASI has no getcwd, so a
+    relative filename has to be turned into a path some other way, and that path
+    is visible: `PRAGMA database_list` prints it, the -journal and -wal names are
+    derived from it, and error messages quote it. A port that returns the input
+    unchanged, or an empty string, disagrees with the original on all three.
+
+  * xRandomness and xCurrentTime, which are easy to stub and observable anyway.
+    `randomblob(16)` twice in one run, or in two runs, must not repeat.
+    `date('now')` must be this decade. A VFS that fills the buffer with zeros
+    makes temp filenames collide and makes `random()` a constant.
+
+  * Temp files and spill. `CREATE TEMP TABLE`, `PRAGMA temp_store`, VACUUM (which
+    needs a whole second database), a sort larger than the cache, `.import` of
+    something big. The VFS has to be able to make a file in /tmp, use it, and
+    remove it. Whether anything is left behind afterwards is in scope; what it was
+    called is not.
+
+  * zlib, and therefore .archive, sqlar and zipfile. The library is cross-built
+    for wasm32 and linked in; a port whose deflate produces something native
+    cannot inflate breaks every one of these while every SELECT still works.
+    `Sandbox.native` reading an archive the port wrote is the whole test.
+
+  * The rest of the extension surface. FTS3/4/5 with unicode61, snippet(),
+    matchinfo() and the auxiliary tables; RTREE, whose coordinates are float32;
+    JSON1's error messages; dbstat's page accounting; the session extension's
+    changeset blobs, which are a portable format and have to stay one;
+    serialize/deserialize; dbpage writes.
+
+  * The file format at its edges. Page sizes 512 and 65536, both text encodings,
+    auto_vacuum and incremental_vacuum, WITHOUT ROWID, overflow chains, freelist
+    reuse after a delete. The bytes are the contract; `sha256` of the file after a
+    fixed sequence is the assertion.
+
+  * Pathological input. Deep expression nesting, a recursive CTE that must hit its
+    limit rather than the stack, a 100k-column query, a deliberately corrupted
+    page that `PRAGMA audit_check` is supposed to report rather than crash on.
+    A crash where the original returns an error is the finding. How long it took
+    is not, and neither is a limit the original hits too.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. No
+clock, no unseeded randomness, no dependence on the order two things happen in
+unless that order is what you are testing. A flaky candidate is discarded even
+when the divergence it found was real. Both trees are built once and reused, so do
+not depend on state outside your own sandbox -- each `sandbox()` is fresh, and the
+scratch directory is emptied between the two halves of your comparison.
+
+HOW TO SPEND THE BUDGET
+
+Read first. Open src/os_unix.c and the submission's replacement side by side and
+work through one method at a time: what does the original guarantee, what did the
+port write instead, and what input makes the difference show. Run the test the
+moment a method's hypothesis is written down: a wrong attempt costs one call
+and tells you more than another hour of reading, and the interesting defects
+here are not in the SQL -- they are in the fifteen VFS methods, and half of
+them have a contract that is only written down in the C. There is no turn
+limit; the wall clock is the only budget.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

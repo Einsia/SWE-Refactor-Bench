@@ -1,0 +1,253 @@
+# =============================================================================
+# SWERefactorBench -- language rewrite
+#
+#   State A : gopkg.in/yaml.v3 v3.0.1, 7,609 non-blank non-comment lines of Go
+#             across twelve graded files -- a scanner and parser descended from
+#             libyaml, a resolver, a node builder and a byte-exact emitter --
+#             plus sorter.go, the thirteenth library source, ungraded because only
+#             typed Marshal reaches it; six _test.go beside them; the NDJSON probe
+#             adapter under probe/ and cmd/yaml-probe/, four more sources and a
+#             test of its own, which is not upstream's and is the worked reference
+#             for the protocol; go.mod/go.sum; and a Zig stub that builds and
+#             answers nothing.  Twenty-four .go files in all, and stage 1 asks for
+#             every one of them to be gone.
+#   State B : the same library in Zig 0.14.1 with no external packages, reachable
+#             through the NDJSON probe protocol at zig-out/bin/yaml-probe, built
+#             by `zig build` offline.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as
+# an artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# Nothing the agent built is carried over: every stage that needs an executable
+# builds one from the submitted source with the published argv.  That is what
+# makes "zig build produced no probe" a fact about the repository rather than a
+# claim about a directory somebody left behind.
+#
+# Grading is the benchmark's three-stage ladder, declared in tests/evaluation.toml
+# and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission, eight gates, all of them required.  Failing one is a zero and
+#      nothing after it runs.
+#   2. twenty-two behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to find one probe request the two
+#      implementations answer differently.  60 points, 10 for every adversary
+#      that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has no
+# toolchain at all, because a review that can build grades a build log instead of
+# an implementation, and the question here -- were 7,609 lines of Go reimplemented
+# or transliterated -- is not one a build log answers.  Stage 2 has Zig and no Go,
+# so a repository that still needs the Go toolchain is unbuildable there by
+# construction; what survives of Go in that image is one static reference binary,
+# frozen before any submission existed.  Stage 3 is the only image holding both
+# toolchains, because "State A answers this request differently" is a claim that
+# has to be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop build and install debris only.  They exist so the verifier
+# cannot be handed a prebuilt yaml-probe and be fooled into measuring something
+# the submitted *source* no longer produces -- which for this task is the whole
+# ball game, since a tree that kept its Go could otherwise ship a working probe
+# built from it.  Solutions must therefore live in tracked source files, never
+# inside these paths, a rule instruction.md states outright.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "zig-out",
+    ".zig-cache",
+    "zig-cache",
+    "*.o",
+    "*.a",
+    "*.so",
+    "*.so.*",
+    "*.dylib",
+    "*.obj",
+    "*.lib",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    "install",
+    "prefix",
+]
+
+[task]
+name = "swerefactor/lang05-goyaml-go-to-zig"
+description = "Reimplement gopkg.in/yaml.v3 v3.0.1 -- scanner, parser, resolver, node builder and emitter -- in Zig with no external packages, preserving the yaml.Node tree, byte-identical emitter output, error messages with line numbers, and comment attachment."
+authors = []
+keywords = [
+  "swe-refactor",
+  "language-migration",
+  "go",
+  "zig",
+  "yaml",
+  "go-yaml",
+  "parser",
+  "emitter",
+]
+
+[metadata]
+category = "language-rewrite"
+difficulty = "frontier"
+# SPDX syntax: the conjunction is "AND", uppercase.  Apache-2.0 covers the
+# project; the eight files ported from libyaml -- apic.go, emitterc.go, parserc.go,
+# readerc.go, scannerc.go, writerc.go, yamlh.go, yamlprivateh.go -- stay MIT, as
+# repo/LICENSE says in as many words and their own headers repeat.
+license = "Apache-2.0 AND MIT"
+upstream = "https://github.com/go-yaml/yaml"
+upstream_version = "v3.0.1"
+source_repository = "https://github.com/go-yaml/yaml"
+source_version = "v3.0.1"
+# The sha256 of the source archive State A was built from, rather than a commit
+# hash: the archive is a release tarball with no git objects in it, so a commit
+# id here would be copied from somewhere else and could not be checked against
+# what ships.  This digest can be, and environment/verify_environment.py does.
+upstream_sha256 = "cf05411540d3e6ef8f1fd88434b34f94cedaceb540329031d80e23b74540c4e5"
+state_a = "go-yaml v3.0.1 in Go (7,609 logic lines across 12 graded files, plus 6 _test.go files and go.mod/go.sum), built by the Go toolchain"
+state_b = "the same library in Zig 0.14.1, standard library only, exposed through the NDJSON probe at zig-out/bin/yaml-probe, built offline by `zig build`"
+scale = "33 files, ~7.6k logic lines of Go across 12 translation units, plus the probe package the graded protocol is served through, plus go-yaml's own test suite harvested into graded probe cases"
+tags = [
+  "whole-repository",
+  "language-rewrite",
+  "gc-to-manual-memory",
+  "differential-testing",
+  "byte-exact-emitter",
+  "offline",
+  "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# Tens of hours of work: 11,285 lines of Go across thirteen non-test files, of
+# which twelve are graded and carry 7,609 non-blank non-comment lines (sorter.go
+# is the thirteenth, excluded as unreachable from the graded surface -- see
+# source-contract.json).
+#
+# A hand-written YAML 1.1/1.2 scanner and parser descended from libyaml, a
+# resolver with a spelling table the spec does not fully describe, an emitter
+# whose line breaking and indentation are byte-graded, and comment attachment
+# that upstream implements by threading head/line/foot comments through the
+# token stream.  Zig adds an allocator discipline Go's GC made invisible.
+#
+# The State A sources stay in the image as the oracle, and the Go toolchain with
+# them, so the time goes on reimplementation rather than on reverse-engineering
+# behaviour.  no-network means the Zig package cache is never reachable, so
+# "standard library only" is enforced by the environment rather than audited
+# afterwards.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 72000.0
+network_mode = "no-network"
+user = "agent"
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 3600.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+# Zig writes its cache into the source tree by default, which would put build
+# artefacts inside the collected artifact; both are redirected to /tmp.
+#
+# These two paths are also an ENV in environment/Dockerfile, which pre-creates
+# them 0777 and proves `zig version` works with them set.  A value here overrides
+# that ENV at run time, so the two spellings have to match or the agent builds
+# into a directory nothing prepared -- which they did not, for four sessions:
+# /tmp/zig-global-cache here against /tmp/zig-cache-global there.  It happened to
+# work, because /tmp is 1777 and Zig makes its own cache directory, and that is
+# why nothing noticed.  tests/check-task.py --only cross-image now compares them.
+ZIG_GLOBAL_CACHE_DIR = "/tmp/zig-cache-global"
+ZIG_LOCAL_CACHE_DIR = "/tmp/zig-cache-local"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes
+# the build context of the verifier image and Harbor does not upload it to the
+# agent container.  That is what keeps the suite invisible.
+#
+# A stage-2 pass builds the submission, then runs the behavioural cases through
+# its probe: over 8,000 frozen differential cases in 17 families, 2,000 generated
+# fresh at grading time and answered by the Go reference live in-container, 72
+# whole-document cases graded by digest (twelve real-world files across six
+# operations), and 13 malformed-transport cases.  Alongside those, 12 structural
+# checks on the build and the probe's own behaviour, and 4 provenance checks on
+# the delivered artefact.  State A-equivalent submissions grade in a few minutes;
+# the ceiling is set for a Zig submission with cold codegen.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota
+# to be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+user = "root"
+environment_mode = "separate"
+
+[verifier.environment]
+network_mode = "no-network"
+# The behavioural image builds the Go reference, generates the cases and freezes
+# every expectation plus the 72 document digests, so its build is slower than the
+# agent environment's.  It also keeps the reference *binary* after deleting the
+# Go toolchain, because the fresh pass answers never-before-seen requests with it
+# at grading time.
+build_timeout_sec = 7200.0
+cpus = 4
+memory_mb = 16384
+storage_mb = 30720
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+ZIG_GLOBAL_CACHE_DIR = "/tmp/zig-cache-global"
+ZIG_LOCAL_CACHE_DIR = "/tmp/zig-cache-local"
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+LANG = "C.UTF-8"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no GOFLAGS or GOPROXY here.  An earlier revision set both,
+# which described the wrong image: the Go toolchain exists only while the stage-2
+# image is being built, and the graded stage deletes it and asserts its absence by
+# name.  A Go environment variable in the verifier's *runtime* env named a
+# toolchain that is provably not there.
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a
+# smoke test that the suite can be passed at all.  The suite's own gate answers
+# that: stage 3 is asked only of a submission that scored stage 2 in full, so a
+# tree that reaches it has already passed every recorded check.  What six models
+# add is the other half -- an hour each spent hunting for a behaviour nobody
+# thought to record.

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Run the frozen State A binary (miniserve 0.27.1 on actix-web 4).
+#
+# This is the behavioural ground truth for the migration. Every flag is passed
+# straight through, so the usual way to use it is to run the same argument list
+# against the oracle and against your own build and diff the responses:
+#
+#   miniserve-oracle /opt/oracle-root --port 8899 &
+#   ./target/release/miniserve /opt/oracle-root --port 8900 &
+#   diff <(curl -sD- http://127.0.0.1:8899/) <(curl -sD- http://127.0.0.1:8900/)
+#
+# Two things to know:
+#
+#   * The oracle exists only in this image. The verifier has no copy, so a
+#     submission that delegates to it will pass here and score zero there.
+#   * `Date` headers and the humanised "last modified" column in listings move
+#     with wall-clock time and are not part of the contract. Everything else in
+#     a response is, including the absolute timestamp column, `Last-Modified`
+#     and `ETag` -- the serve root has pinned mtimes precisely so those are
+#     stable and therefore gradeable.
+set -euo pipefail
+exec /opt/oracle/miniserve "$@"

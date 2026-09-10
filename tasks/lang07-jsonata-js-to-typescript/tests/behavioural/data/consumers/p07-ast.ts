@@ -1,0 +1,13 @@
+import jsonata = require('jsonata');
+const node: jsonata.ExprNode = jsonata('a.b[0]').ast();
+void node.type;
+void node.value;
+void node.position;
+void node.steps;
+void node.arguments;
+void node.expressions;
+void node.stages;
+void node.lhs;
+void node.rhs;
+void node.name;
+void node.procedure;

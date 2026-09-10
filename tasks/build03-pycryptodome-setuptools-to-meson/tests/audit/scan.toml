@@ -1,0 +1,132 @@
+# The mechanical half of stage 1.
+#
+# Three modules, run before the reviewer gets its turn, whose output is rendered
+# into the prompt at {{findings}}.  None of them scores: `swerefactor.scan` sets
+# `required = false` on every check it emits, and `scoring.grade_audit` gates
+# on the required checks, which are the six prose gates in prompt.txt and only
+# those.
+#
+# Why they exist at all, if they cannot fail the submission: the reviewer has a
+# turn budget, and 583 sha256 comparisons is not what to spend it on.  The scan
+# hashes the frozen tree, walks for stale build output and greps for harness
+# awareness, and hands over a list of file:line citations.  The review's job is
+# then the part that needs judgement -- reading the build description and deciding
+# whether it is a Meson build or a wrapper around the one that was retired.
+#
+# What a scored rule-based check gets wrong here is that it measures a spelling.
+# Requiring `check_c_compiler_flag` as a literal string fails a submission that
+# wrote `check_compiler_flag`, the language-agnostic spelling of the same command,
+# correct in every way.  Requiring a particular internal variable name in a
+# generated cache file fails a submission that got the same result by other means:
+# the name is an implementation detail of one way of writing the build, not a
+# property of the build.  Both mistakes have the same shape -- an assertion about
+# how code is written, with points attached -- and both cost a correct migration.
+#
+# So the same observations are advisory here, they carry citations, and a reviewer
+# with both trees mounted decides what they mean.  The `weight` field below is
+# recorded in the result and unused by scoring; it is there because the schema has
+# it and because it says which module a reviewer should read first.
+
+schema = "swerefactor.scan-suite/1"
+task = "build03-pycryptodome-setuptools-to-meson"
+
+default_timeout_sec = 900
+lib_dir = "lib"
+
+[metadata]
+runtime = "python3.11"
+about = """
+Read-only.  The image has no compiler, no Meson, no ninja and no PEP 517 front
+end, and the Dockerfile fails its own build if one appears on PATH -- so a scan
+module cannot configure or build the submission even by accident.  The four
+packages in requirements-scan.txt are pytest and its three dependencies.
+
+663 checks, of which 583 are one sha256 each over the frozen source tree.  The
+other 80 are existence questions about retired build files, advisory citations
+about where the eleven compiler probes ended up, and the grader-awareness search.
+"""
+
+[[module]]
+id = "provenance"
+weight = 1.0
+about = """
+What the old build left behind.  `setup.py`, `setup.cfg`, `MANIFEST.in` and the
+700-line `compiler_opt.py` probe engine are named in the contract as removed;
+`build/`, `dist/` and `*.egg-info/` are its output.  Existence questions, settled
+here.
+
+Two searches go further than a filename.  `compiler_opt.py` is recognised by two
+or more of its own function names appearing in any `.py` in the tree, because the
+one move this module exists to catch is carrying the Python probe engine forward
+under a new name and calling it from `meson.build`.  And a `.pth` file anywhere in
+the payload is reported, because it runs at interpreter start-up and is the
+shortest route from "the build does not produce X" to "X is importable anyway".
+
+The setuptools/distutils token search is a citation list, not a verdict.  A
+comment explaining what `setup.py` used to do will appear in it.  Open the lines.
+"""
+
+[[module]]
+id = "sources"
+weight = 1.0
+about = """
+The 583 files the contract freezes: everything under `src/`, `lib/` and `Doc/`,
+plus six root documents.  One sha256 each, taken against the reference tree
+mounted at /opt/original -- not against a manifest shipped in this image, which
+would be a second copy of State A free to drift from the tarball.
+
+This is the largest module because it guards the largest hole.  The task is to
+rewrite 47 compiler invocations' worth of build description, and the fastest way
+to simplify a build description is to change what it builds: drop
+`-DPYCRYPTO_LITTLE_ENDIAN` and edit `endianess.h`, include `<wmmintrin.h>`
+unconditionally so the AESNI probe stops mattering, edit
+`lib/Crypto/Util/_raw_api.py` to stop asking for a symbol the new build does not
+export.  Each is a one-line diff that makes the build pass and inverts the
+exercise.
+
+Four checks cover what a per-file hash cannot see: a file added under a frozen
+root, a frozen file replaced by a symlink, a frozen directory that vanished
+entirely, and generated output dropped into the source tree.
+
+One exemption, and it is the shape of the tool rather than a loophole.  Meson has
+no `subdir()` without a `meson.build` in the subdirectory and it does not glob, so
+a build that installs `lib/Crypto/Cipher/*.py` must have a
+`lib/Crypto/Cipher/meson.build` naming them -- the reference port has 20, one per
+package directory.  `meson.build`, `meson.options` and `meson_options.txt` may
+therefore appear under a frozen root; a `.c`, `.h`, `.py` or `.pyi` may not.  A
+rule without that exemption would fail every correct submission while passing one
+that crammed all 288 source names into the root file.  What is reported instead is
+an added build file over 64 KiB, which is large enough to be generated output
+wearing a build file's name.
+"""
+
+[[module]]
+id = "buildsystem"
+weight = 1.0
+about = """
+What the delivered build system is, as far as reading can tell.  Three groups.
+
+Delivered state: a `pyproject.toml` with a `[build-system]` table and a declared
+backend, a build description at the root, no `build.ninja` or `compile_commands.
+json` or `.o` in the tree.  Settled here.
+
+The shape of the probing: where each of the eleven macros the old probes decided
+is named, whether the build calls any Meson compiler-interrogation API at all, and
+whether `-maes` / `-mpclmul` / `-mssse3` appear anywhere.  Every check in this
+group is advisory and says so in its own message.  A submission that spells
+`HAVE_UINT128` differently and gets it right will show up as a miss here; a
+submission that hardcodes all eleven answers looks identical to a correct one on
+this machine, which is exactly why this stage does not judge it.  Stage 2 cripples
+the compiler and measures whether 41 libraries become 39.
+
+Grader awareness: the group whose findings are near-certain.  A build file that
+reads `SRB_TARGET_NAME` or branches on `/opt/original` is not building a package,
+and the `no_grader_awareness` gate says to fail on it.  The `.py`/`.pyi`/`.pth`
+search is separate and wider, because a `sitecustomize.py` in the payload is run
+by the interpreter that imports the package, not by the build.
+
+Every parametrize list in this module is a constant.  If one were derived from the
+delivered tree, an empty submission would collect zero checks and the reviewer
+would see an empty report rather than an alarming one -- `lib/collect-check.sh`
+phase 3 fails the image build if that ever changes.
+"""

@@ -1,0 +1,99 @@
+%YAML 1.1
+%TAG ! tag:example.com,2024:
+%TAG !! tag:yaml.org,2002:
+%TAG !e! tag:example.com,2024:ext/
+--- !root
+# Directives above apply to this document only.  The primary handle has been
+# redefined, so `!thing` below is tag:example.com,2024:thing, not !thing.
+primary_handle: !thing value
+secondary_handle: !!str value
+named_handle: !e!widget value
+verbatim_overrides_handles: !<!thing> value
+verbatim_absolute: !<tag:yaml.org,2002:str> value
+
+# Explicit keys, including ones whose key is a collection.
+? explicit scalar key
+: value
+? - a
+  - b
+: a sequence was the key
+? key: inner
+  other: inner2
+: a mapping was the key
+? |
+  a literal
+  as a key
+: literal key
+?
+: an empty explicit key
+? explicit key with no value
+? another
+: has one
+
+# An empty explicit key inside a flow mapping.
+flow_explicit: {? a: 1, ? : 2, ?: 3}
+
+# Sets and ordered maps, which are mappings and sequences underneath.
+a_set: !!set
+  ? alpha
+  ? beta
+  ? gamma
+an_omap: !!omap
+  - first: 1
+  - second: 2
+  - third: 3
+
+# Anchors on every kind of node, aliased later.
+anchors:
+  scalar: &a_scalar 42
+  seq: &a_seq [1, 2, 3]
+  map: &a_map {x: 1}
+  empty: &a_empty
+  tagged: &a_tagged !!str 99
+  block: &a_block |
+    text
+aliases:
+  - *a_scalar
+  - *a_seq
+  - *a_map
+  - *a_empty
+  - *a_tagged
+  - *a_block
+# An anchor reused later in the same document redefines it for subsequent
+# aliases but not for earlier ones.
+redefined: &a_scalar 43
+after_redefinition: *a_scalar
+
+# An anchor on a key, and an alias as a key.
+&key_anchor a_key: value
+*a_scalar : aliased key
+
+# Zero-length and one-character names.
+&x 1: *x
+
+# Deeply mixed flow and block.
+mixed:
+  - {a: [1, {b: [2, {c: 3}]}]}
+  - [[[[[deep]]]]]
+  - {}
+  - []
+  - [{}, [], {a: []}, {b: {}}]
+
+# Documents with unusual boundaries.
+--- !!str
+a bare tagged scalar document
+--- >-
+  a folded document
+---
+- a sequence document
+--- {flow: mapping document}
+--- [flow, sequence, document]
+---
+# A document that is only a comment, so its content is a null node.
+--- ~
+...
+---
+# `...` above ended the previous document; this one starts fresh with no
+# directives, so `!thing` here is a local tag again.
+local_tag_again: !thing value
+...

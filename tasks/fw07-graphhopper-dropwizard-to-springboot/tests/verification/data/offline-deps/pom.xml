@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SWERefactorBench fw07 — the State B side of the offline Maven closure.
+
+  WHAT THIS FILE IS.  The containers have no network.  State A's own closure is
+  warmed by building State A, which is exact by construction: every artifact and
+  every plugin the reactor touches is fetched because the reactor touched it.
+  State B's closure has no such tree to build from — it does not exist yet — so
+  it is declared here and warmed with `dependency:go-offline` plus one throwaway
+  compile, at image-build time, the one moment there is a network.
+
+  WHY IT IS A POM AND NOT A LIST OF COORDINATES.  A hand-kept coordinate list is
+  a transitive closure computed by a person, and it goes stale the first time a
+  version moves: the symptom is an agent, mid-trial, unable to resolve something
+  nobody thought to write down.  Maven already computes closures.  Declaring the
+  ~20 direct dependencies of the target stack and letting the resolver reach the
+  other ~900 artifacts is both shorter and correct.
+
+  WHAT IS IN AND WHAT IS DELIBERATELY OUT.  In: Spring Boot 3.5.16's web,
+  actuator, validation and test starters, all three embedded containers Spring
+  Boot supports, Micrometer, the Jackson modules GraphHopper's payloads need, and
+  argparse4j — which State A uses for its CLI and which is not a web framework,
+  so it stays available.  Out: WebFlux and Jersey.  Jersey is the framework being
+  retired; WebFlux is a different programming model from the one the task names,
+  and stocking an unnamed alternative is how a task acquires two right answers.
+
+  The same file is an input to the environment image and to both build-capable
+  stage images, and `swerefactor validate` compares the copies byte-for-byte.  A
+  stage resolving from a different closure than the agent had is a stage that
+  fails honest submissions for reasons they cannot see.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>local.swerefactor</groupId>
+  <artifactId>fw07-offline-closure</artifactId>
+  <version>1</version>
+  <packaging>jar</packaging>
+  <name>fw07 offline closure warmer</name>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>17</maven.compiler.release>
+    <spring.boot.version>3.5.16</spring.boot.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring.boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Spring MVC on an embedded servlet container: the target stack. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!-- The admin surface State A serves on its second connector. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- State A validates its configuration with Bean Validation and maps the
+         violations to 422 responses; both halves need this on the classpath. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <!-- Configuration binding for the YAML surface. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-configuration-processor</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <!-- The container is a free choice: Tomcat is Spring Boot's default, Jetty
+         and Undertow are its two supported alternatives, and nothing in the
+         graded contract turns on which one runs.  All three are stocked so the
+         choice stays free offline. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-tomcat</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jetty</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-undertow</artifactId>
+    </dependency>
+    <!-- Tests: 23 of State A's web test files stand the whole application up
+         through DropwizardAppExtension and talk to it over HTTP, and their
+         replacements need the same ability. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- GPX is served as XML and map matching consumes it. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-xml</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jdk8</artifactId>
+    </dependency>
+    <!-- Metrics, for whatever the admin surface is rebuilt on. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+    <!-- State A's CLI argument parser.  Not a web framework, so not retired. -->
+    <dependency>
+      <groupId>net.sourceforge.argparse4j</groupId>
+      <artifactId>argparse4j</artifactId>
+      <version>0.9.0</version>
+    </dependency>
+    <!-- Logging: State A configures logback through its YAML. -->
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>jcl-over-slf4j</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Declared so `dependency:go-offline` fetches the plugin and its own
+           dependencies too.  A missing PLUGIN offline is the failure that reads
+           as "the agent broke the build" when it was the image that was short. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring.boot.version}</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.1</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>3.7.1</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.6.1</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>

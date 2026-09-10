@@ -1,0 +1,20 @@
+{
+ "isa_disabled": [],
+ "isa_enabled": [
+  "AESNI",
+  "CLMUL"
+ ],
+ "probe_results": {
+  "128-bit integer": true,
+  "AESNI intrinsics": true,
+  "CLMUL intrinsics": true,
+  "SSE2(intrin.h)": false,
+  "SSE2(x86intrin.h)": true,
+  "clang": false,
+  "cpuid.h header": true,
+  "gcc": true,
+  "intrin.h header": false,
+  "posix_memalign": true,
+  "stdint.h header": true
+ }
+}

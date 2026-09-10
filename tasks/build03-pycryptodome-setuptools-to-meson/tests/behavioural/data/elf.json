@@ -1,0 +1,1155 @@
+{
+ "Crypto/Cipher/_ARC4.abi3.so": {
+  "defined_symbols": [
+   "ARC4_stream_destroy",
+   "ARC4_stream_encrypt",
+   "ARC4_stream_init"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 3,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_Salsa20.abi3.so": {
+  "defined_symbols": [
+   "Salsa20_8_core",
+   "Salsa20_stream_destroy",
+   "Salsa20_stream_encrypt",
+   "Salsa20_stream_init"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 4,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_chacha20.abi3.so": {
+  "defined_symbols": [
+   "chacha20_destroy",
+   "chacha20_encrypt",
+   "chacha20_init",
+   "chacha20_seek",
+   "hchacha20"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 5,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_pkcs1_decode.abi3.so": {
+  "defined_symbols": [
+   "oaep_decode",
+   "pkcs1_decode"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "malloc",
+   "memcpy",
+   "memset"
+  ]
+ },
+ "Crypto/Cipher/_raw_aes.abi3.so": {
+  "defined_symbols": [
+   "AES_start_operation",
+   "AES_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_raw_aesni.abi3.so": {
+  "defined_symbols": [
+   "AESNI_start_operation",
+   "AESNI_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "posix_memalign"
+  ]
+ },
+ "Crypto/Cipher/_raw_arc2.abi3.so": {
+  "defined_symbols": [
+   "ARC2_start_operation",
+   "ARC2_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Cipher/_raw_blowfish.abi3.so": {
+  "defined_symbols": [
+   "Blowfish_start_operation",
+   "Blowfish_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_raw_cast.abi3.so": {
+  "defined_symbols": [
+   "CAST_start_operation",
+   "CAST_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Cipher/_raw_cbc.abi3.so": {
+  "defined_symbols": [
+   "CBC_decrypt",
+   "CBC_encrypt",
+   "CBC_start_operation",
+   "CBC_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 4,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Cipher/_raw_cfb.abi3.so": {
+  "defined_symbols": [
+   "CFB_decrypt",
+   "CFB_encrypt",
+   "CFB_start_operation",
+   "CFB_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 4,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "memmove"
+  ]
+ },
+ "Crypto/Cipher/_raw_ctr.abi3.so": {
+  "defined_symbols": [
+   "CTR_decrypt",
+   "CTR_encrypt",
+   "CTR_start_operation",
+   "CTR_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 4,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "posix_memalign"
+  ]
+ },
+ "Crypto/Cipher/_raw_des.abi3.so": {
+  "defined_symbols": [
+   "DES_start_operation",
+   "DES_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_raw_des3.abi3.so": {
+  "defined_symbols": [
+   "DES3_start_operation",
+   "DES3_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_raw_ecb.abi3.so": {
+  "defined_symbols": [
+   "ECB_decrypt",
+   "ECB_encrypt",
+   "ECB_start_operation",
+   "ECB_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 4,
+  "needed": [],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__"
+  ]
+ },
+ "Crypto/Cipher/_raw_eksblowfish.abi3.so": {
+  "defined_symbols": [
+   "EKSBlowfish_start_operation",
+   "EKSBlowfish_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_raw_ocb.abi3.so": {
+  "defined_symbols": [
+   "OCB_decrypt",
+   "OCB_digest",
+   "OCB_encrypt",
+   "OCB_start_operation",
+   "OCB_stop_operation",
+   "OCB_transcrypt",
+   "OCB_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 7,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Cipher/_raw_ofb.abi3.so": {
+  "defined_symbols": [
+   "OFB_decrypt",
+   "OFB_encrypt",
+   "OFB_start_operation",
+   "OFB_stop_operation"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 4,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_BLAKE2b.abi3.so": {
+  "defined_symbols": [
+   "blake2b_copy",
+   "blake2b_destroy",
+   "blake2b_digest",
+   "blake2b_init",
+   "blake2b_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 5,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_BLAKE2s.abi3.so": {
+  "defined_symbols": [
+   "blake2s_copy",
+   "blake2s_destroy",
+   "blake2s_digest",
+   "blake2s_init",
+   "blake2s_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 5,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_MD2.abi3.so": {
+  "defined_symbols": [
+   "md2_copy",
+   "md2_destroy",
+   "md2_digest",
+   "md2_init",
+   "md2_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 5,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_MD4.abi3.so": {
+  "defined_symbols": [
+   "md4_copy",
+   "md4_destroy",
+   "md4_digest",
+   "md4_init",
+   "md4_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 5,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_MD5.abi3.so": {
+  "defined_symbols": [
+   "MD5_copy",
+   "MD5_destroy",
+   "MD5_digest",
+   "MD5_init",
+   "MD5_pbkdf2_hmac_assist",
+   "MD5_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 6,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_RIPEMD160.abi3.so": {
+  "defined_symbols": [
+   "ripemd160_copy",
+   "ripemd160_destroy",
+   "ripemd160_digest",
+   "ripemd160_init",
+   "ripemd160_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 5,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_SHA1.abi3.so": {
+  "defined_symbols": [
+   "SHA1_copy",
+   "SHA1_destroy",
+   "SHA1_digest",
+   "SHA1_init",
+   "SHA1_pbkdf2_hmac_assist",
+   "SHA1_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 6,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Hash/_SHA224.abi3.so": {
+  "defined_symbols": [
+   "SHA224_copy",
+   "SHA224_destroy",
+   "SHA224_digest",
+   "SHA224_init",
+   "SHA224_pbkdf2_hmac_assist",
+   "SHA224_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 6,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "memset"
+  ]
+ },
+ "Crypto/Hash/_SHA256.abi3.so": {
+  "defined_symbols": [
+   "SHA256_copy",
+   "SHA256_destroy",
+   "SHA256_digest",
+   "SHA256_init",
+   "SHA256_pbkdf2_hmac_assist",
+   "SHA256_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 6,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "memset"
+  ]
+ },
+ "Crypto/Hash/_SHA384.abi3.so": {
+  "defined_symbols": [
+   "SHA384_copy",
+   "SHA384_destroy",
+   "SHA384_digest",
+   "SHA384_init",
+   "SHA384_pbkdf2_hmac_assist",
+   "SHA384_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 6,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "memset"
+  ]
+ },
+ "Crypto/Hash/_SHA512.abi3.so": {
+  "defined_symbols": [
+   "SHA512_copy",
+   "SHA512_destroy",
+   "SHA512_digest",
+   "SHA512_init",
+   "SHA512_pbkdf2_hmac_assist",
+   "SHA512_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 6,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "memset"
+  ]
+ },
+ "Crypto/Hash/_ghash_clmul.abi3.so": {
+  "defined_symbols": [
+   "ghash_clmul",
+   "ghash_destroy_clmul",
+   "ghash_expand_clmul"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 3,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "free",
+   "posix_memalign"
+  ]
+ },
+ "Crypto/Hash/_ghash_portable.abi3.so": {
+  "defined_symbols": [
+   "ghash_destroy_portable",
+   "ghash_expand_portable",
+   "ghash_portable"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 3,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/Hash/_keccak.abi3.so": {
+  "defined_symbols": [
+   "keccak_absorb",
+   "keccak_copy",
+   "keccak_destroy",
+   "keccak_digest",
+   "keccak_init",
+   "keccak_reset",
+   "keccak_squeeze"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 7,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy",
+   "memset"
+  ]
+ },
+ "Crypto/Hash/_poly1305.abi3.so": {
+  "defined_symbols": [
+   "poly1305_destroy",
+   "poly1305_digest",
+   "poly1305_init",
+   "poly1305_update"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 4,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/Math/_modexp.abi3.so": {
+  "defined_symbols": [
+   "addmul128",
+   "expand_seed",
+   "free_scattered",
+   "gather",
+   "get_next_digit_lr",
+   "get_next_digit_rl",
+   "init_bit_window_lr",
+   "init_bit_window_rl",
+   "mont_add",
+   "mont_bytes",
+   "mont_context_free",
+   "mont_context_init",
+   "mont_copy",
+   "mont_from_bytes",
+   "mont_inv_prime",
+   "mont_is_equal",
+   "mont_is_one",
+   "mont_is_zero",
+   "mont_mult",
+   "mont_number",
+   "mont_printf",
+   "mont_random_number",
+   "mont_set",
+   "mont_sub",
+   "mont_to_bytes",
+   "monty_multiply",
+   "monty_pow",
+   "scatter",
+   "siphash",
+   "square",
+   "sub_mod"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 31,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcmp",
+   "memcpy",
+   "memset",
+   "posix_memalign",
+   "printf",
+   "putchar"
+  ]
+ },
+ "Crypto/Protocol/_scrypt.abi3.so": {
+  "defined_symbols": [
+   "scryptROMix"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 1,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcpy"
+  ]
+ },
+ "Crypto/PublicKey/_ec_ws.abi3.so": {
+  "defined_symbols": [
+   "addmul128",
+   "ec_free_context",
+   "ec_ws_add",
+   "ec_ws_clone",
+   "ec_ws_cmp",
+   "ec_ws_copy",
+   "ec_ws_double",
+   "ec_ws_free_point",
+   "ec_ws_get_xy",
+   "ec_ws_neg",
+   "ec_ws_new_context",
+   "ec_ws_new_point",
+   "ec_ws_scalar",
+   "expand_seed",
+   "free_scattered",
+   "gather",
+   "get_next_digit_lr",
+   "get_next_digit_rl",
+   "init_bit_window_lr",
+   "init_bit_window_rl",
+   "mont_add",
+   "mont_bytes",
+   "mont_context_free",
+   "mont_context_init",
+   "mont_copy",
+   "mont_from_bytes",
+   "mont_inv_prime",
+   "mont_is_equal",
+   "mont_is_one",
+   "mont_is_zero",
+   "mont_mult",
+   "mont_number",
+   "mont_printf",
+   "mont_random_number",
+   "mont_set",
+   "mont_sub",
+   "mont_to_bytes",
+   "p256_n_tables",
+   "p256_points_per_table",
+   "p256_tables",
+   "p256_window_size",
+   "p384_n_tables",
+   "p384_points_per_table",
+   "p384_tables",
+   "p384_window_size",
+   "p521_n_tables",
+   "p521_points_per_table",
+   "p521_tables",
+   "p521_window_size",
+   "scatter",
+   "siphash",
+   "square",
+   "sub_mod"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 53,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcmp",
+   "memcpy",
+   "memset",
+   "posix_memalign",
+   "printf",
+   "putchar"
+  ]
+ },
+ "Crypto/PublicKey/_ed25519.abi3.so": {
+  "defined_symbols": [
+   "ed25519_add",
+   "ed25519_clone",
+   "ed25519_cmp",
+   "ed25519_double",
+   "ed25519_free_point",
+   "ed25519_get_xy",
+   "ed25519_neg",
+   "ed25519_new_point",
+   "ed25519_scalar",
+   "sub_mod"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 10,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free"
+  ]
+ },
+ "Crypto/PublicKey/_ed448.abi3.so": {
+  "defined_symbols": [
+   "addmul128",
+   "ed448_add",
+   "ed448_clone",
+   "ed448_cmp",
+   "ed448_copy",
+   "ed448_double",
+   "ed448_free_context",
+   "ed448_free_point",
+   "ed448_get_xy",
+   "ed448_neg",
+   "ed448_new_context",
+   "ed448_new_point",
+   "ed448_scalar",
+   "expand_seed",
+   "free_scattered",
+   "gather",
+   "get_next_digit_lr",
+   "get_next_digit_rl",
+   "init_bit_window_lr",
+   "init_bit_window_rl",
+   "mont_add",
+   "mont_bytes",
+   "mont_context_free",
+   "mont_context_init",
+   "mont_copy",
+   "mont_from_bytes",
+   "mont_inv_prime",
+   "mont_is_equal",
+   "mont_is_one",
+   "mont_is_zero",
+   "mont_mult",
+   "mont_number",
+   "mont_printf",
+   "mont_random_number",
+   "mont_set",
+   "mont_sub",
+   "mont_to_bytes",
+   "scatter",
+   "siphash",
+   "square",
+   "sub_mod"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 41,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__",
+   "calloc",
+   "free",
+   "memcmp",
+   "memcpy",
+   "memset",
+   "posix_memalign",
+   "printf",
+   "putchar"
+  ]
+ },
+ "Crypto/PublicKey/_x25519.abi3.so": {
+  "defined_symbols": [
+   "ladder",
+   "sub_mod"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [
+   "libc.so.6"
+  ],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__assert_fail",
+   "__cxa_finalize",
+   "__gmon_start__"
+  ]
+ },
+ "Crypto/Util/_cpuid_c.abi3.so": {
+  "defined_symbols": [
+   "have_aes_ni",
+   "have_clmul"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__"
+  ]
+ },
+ "Crypto/Util/_strxor.abi3.so": {
+  "defined_symbols": [
+   "strxor",
+   "strxor_c"
+  ],
+  "elf_type": "DYN",
+  "has_pyinit": false,
+  "links_libpython": false,
+  "n_defined": 2,
+  "needed": [],
+  "soname": null,
+  "undefined_symbols": [
+   "_ITM_deregisterTMCloneTable",
+   "_ITM_registerTMCloneTable",
+   "__cxa_finalize",
+   "__gmon_start__"
+  ]
+ }
+}

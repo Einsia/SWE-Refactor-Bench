@@ -1,0 +1,263 @@
+TASK {{task}} -- find what the migration got wrong.
+
+zlib is the reference implementation of DEFLATE: the compressor and decompressor
+behind gzip, PNG, git, ssh and most of the wire formats in use. The original is
+about 13,200 lines of hand-written C89 built with CMake, and it exports 88 symbols
+-- the deflate and inflate streaming API, the one-shot helpers, two checksums, a
+stdio-shaped file layer over gzip (32 of the 88 on its own), and a separate
+callback decompressor called inflateBack. The submission is supposed to be the same
+library reimplemented in Java: a modular jar installed as
+share/java/zlib-1.3.1.jar, exporting org.zlib, with the C gone.
+
+Same library means the same bytes. Not "compresses to something that decompresses
+back" -- the same compressed stream, bit for bit, for a given level, strategy,
+windowBits, memLevel and flush schedule. It has already been checked that the
+migration is real and that 4,062 recorded cases over the API, the compressed
+output, the error surface and the two test drivers get the right answers. Your job
+is the part those cases cannot do: find an input, an API sequence or a command
+line that nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the original library, C
+  {{submission}}   the submission, which claims to be the same library in Java
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack the built artifacts, not the source. Read the C as much as you like -- it is
+the specification of what the answer should be, and reading it is the most
+productive thing you can do here. deflate.c's lazy matching, trees.c's block
+splitting and inflate.c's state machine are where the answers live.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. For each tree, the runner
+configures, builds and installs that tree with the published CMake argv, builds a
+probe against what it installed, and runs your file. You are told the outcome on
+each tree separately. The build happens once per tree and is reused, so only your
+first candidate waits for it.
+
+Your file may import `srbzlib` and the standard library, and nothing else:
+
+    import srbzlib
+
+    def test_level_9_is_stable():
+        blob = srbzlib.payload(b"the quick brown fox " * 200)
+        rec = srbzlib.op("deflate", blob, 9)
+        assert rec.ok, rec
+        assert rec.field("rc") == "Z_STREAM_END", rec.text()
+
+THE PROBE
+
+`srbzlib.probe()` and `srbzlib.op()` drive a differential probe: a small program
+that reads cases on stdin and writes one record per case. It is the same
+instrument the recorded cases use, so you are exercising the graded execution path
+rather than a lookalike you wrote. On one tree the probe is a C program compiled
+against the installed library; on the other it is a JVM launch against the
+installed jar. You never see which -- you see records.
+
+    payload(data) -> int        register bytes as a corpus blob, get its index
+    op(name, *args) -> Record   run one case
+    probe([[id, op, *args]])    run a batch, get {id: Record}
+
+A `Record` has `.ok`, `.text()`, `.payload` (bytes), `.fields()` and
+`.field(name)`. Every op answers in `key=value` lines; ops that produce bytes emit
+them as hex on such a line. `.ok` is False with `.status` starting `crash:` when
+the probe died on that case -- which is a finding you can assert on, not an error
+in your test.
+
+Payload indices are handed out from 0 in registration order, identically on both
+trees. Register them at the top of your test, not inside a branch: a payload
+registered under an `if` that fires on only one tree shifts every later index.
+
+THE OPS AND THEIR ARGUMENTS
+
+Arguments are positional and every one has a default, so a trailing argument may
+be omitted. `blob` and `dict` are payload indices; -1 means "no dictionary".
+
+  deflate       blob level strategy wbits memlevel in_chunk out_chunk
+                flush_mode flush_interval dict
+                -- the central op. Records the compressed bytes and the end
+                   state. in_chunk/out_chunk are 0 for "one call".
+  inflate       blob dwbits iwbits in_chunk out_chunk level
+                -- compresses the blob here, then inflates it. dwbits is the
+                   compressor's windowBits, iwbits the decompressor's.
+  bound         blob level wbits memlevel
+                -- deflateBound and compressBound, and whether the real stream
+                   fits inside them.
+  oneshot       blob level slack trail
+                -- compress/compress2/uncompress/uncompress2. level -2 means
+                   plain compress(). slack shrinks the destination; trail
+                   appends bytes past the end of the stream.
+  checksum      blob split seed
+                -- crc32, adler32, their _z forms and both combines. split is
+                   the incremental chunk size, 0 for one shot.
+  statechange   blob what level a b
+                -- what is one of: pending params prime tune getdict copy reset.
+                   Compresses half, does the thing, compresses the rest, records
+                   everything.
+  gzheader      blob variant level
+                -- deflateSetHeader/inflateGetHeader. variant is a bitmask:
+                   1 text, 2 name, 4 comment, 8 extra field, 16 header CRC,
+                   32 zero MTIME and OS 255.
+  inflatestate  blob what wbits a
+                -- what is one of: mark codesused validate undermine syncpoint
+                   getdict copy reset reset2 prime sync.
+  syncrecover   blob damage wbits chunk arg
+                -- damage is one of: flip zero truncate prefix behead. Full
+                   flushes, then damage, then inflateSync and continue.
+  error         blob kind offset wbits
+                -- kind is one of: flipbyte flipbit truncate append zero swap
+                   header checksum empty. Records the return code, the msg
+                   string, and how much input was consumed before it noticed.
+  inflateback   blob in_chunk wbits
+  gzfile        blob what level a b
+                -- what is one of: roundtrip printf putc gets getc seek fread.
+                   The only op that touches the filesystem.
+  abi           what
+                -- what is one of: constants runtime badargs defensive. The
+                   numeric constants, zlibVersion/zError/zlibCompileFlags, and
+                   what every entry point does when handed a stream it never
+                   initialized.
+  alloc         blob fail_after level wbits memlevel inflate_side
+                -- caller-supplied zalloc/zfree. Records that the hooks were
+                   used, that opaque came back unchanged, and that nothing
+                   leaked -- not how many times, which cannot match across the
+                   language boundary.
+
+THE TWO DRIVERS
+
+    example()                  -> Output
+    minigzip(*args, stdin=...) -> Output
+
+The upstream test programs, from the build directory. `Output` has
+`.returncode`, `.stdout`, `.stderr` (bytes), `.ok` and `.timed_out`; a timeout
+returns rather than raising, so "it hung" is assertable. minigzip gets a fresh
+working directory each call, and `Output.files` holds what it left there.
+
+    installed(relpath)  -> Path      a path under the install prefix
+    install_tree()      -> [str]     every installed path, sorted
+    build_output()      -> [str]     top-level names in the build directory
+
+Do not read the tree under test from inside a test, and do not reach anything
+except through the install prefix and these helpers. What is graded is what the
+submission ships.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first is where most attempts die: a test that fails on both trees has found a
+bug in your test, or a behaviour zlib 1.3.1 never had. Run every idea -- you have
+budget for many, and one call tells you which of the four outcomes you got.
+
+Do not guess at what the C does. Run it. `try_test` gives you the original's
+result on every attempt, so the cheapest way to learn 1.3.1's behaviour on some
+horrible input is to write the assertion you expect, run it, and read which way it
+went. A candidate built on a guess about the C usually fails on both trees.
+
+Then it has to assert on something that was promised. The scope below is zlib's
+public contract; a divergence outside it is thrown out on review no matter how
+real it is, and you will have spent the budget for nothing. Performance as a
+number, heap footprint, allocation counts, the shape of a stack trace, the wording
+of a message the C never produced because C has no such failure: all genuinely
+different between these two, all excluded, none worth a candidate.
+
+One in particular. These two trees are a C library and a JVM library. That
+difference is visible in a hundred places and none of them is a finding: a
+candidate that detects which tree it is on -- from a path, from the install
+inventory, from a timing, from an exception class -- passes on one and fails on the
+other while establishing nothing about the migration, and it is rejected on sight.
+Ask whether the two trees ANSWER differently.
+
+WHERE REWRITES OF THIS KIND ACTUALLY FAIL
+
+Not on the round trip. Every submission compresses and decompresses correctly at
+level 6, because it is the first thing anyone runs. What gets left out:
+
+  * The exact bytes away from the defaults. deflate's output is a function of its
+    heuristics: the lazy match that defers a decision, the hash chain walked in a
+    particular order, good_length and max_lazy per level, and the level 1-3 path
+    which is a different function from 4-9. A rewrite that reimplemented the
+    algorithm from RFC 1951 rather than transcribing the C's decisions gets a valid
+    stream that is not the same stream. Sweep levels and strategies against input
+    that sits on those boundaries.
+
+  * Where a block ends. trees.c decides when to close a block and whether to send
+    it stored, static or dynamic, from the symbol counts it has accumulated. The
+    thresholds are specific and undocumented. Long input whose statistics change
+    partway through is where a rewrite's different bookkeeping shows up.
+
+  * The buffer boundary. Every entry point must survive avail_out reaching zero at
+    any point, including inside a gzip header, inside a checksum, and between the
+    last literal and the end-of-block code -- then continue where it left off. A
+    rewrite that assumes its output buffer is big enough passes every test that
+    gives it one.
+
+  * The state calls nobody exercises. deflateParams mid-stream, deflateCopy and
+    then continuing both copies, deflatePrime with a partial byte, deflatePending,
+    inflateMark's packed return value and its sign convention, inflateSync's
+    search for a flush marker, inflateCodesUsed. All exported, all used by real
+    callers -- git and rsync both change parameters mid-stream -- and all invisible
+    to a round-trip test.
+
+  * The gz* layer. It is a second implementation of the buffering, 32 of the 88
+    symbols, and it has its own error reporting. Transparent read of a file that
+    is not gzip, concatenated members, gzungetc across a buffer boundary, gzseek
+    backwards, gzgets on a line longer than the buffer, gzoffset versus gztell.
+
+  * Error detection at the exact offset. When a stream is damaged, the C reports a
+    specific code AND has consumed a specific amount of input. A rewrite that
+    buffers differently notices one byte later. That is a divergence a caller
+    branching on total_in can see.
+
+  * The header as a wire format. The gzip header has fixed offsets, optional
+    fields, and a caller-visible struct with name/comment length limits. A rewrite
+    that treats it as opaque bytes passes until someone reads a member's name.
+
+  * inflateBack. A separate decompressor sharing only the tables. Easy to leave
+    unimplemented while every ordinary inflate case passes.
+
+  * The constants. A Z_* value is inlined into every caller at its use site, by
+    javac exactly as by cc. A renumbered constant is a silent break that no
+    round-trip test can see, and `abi constants` is how you read them back.
+
+  * Pathological input, on a JVM. Data that makes the reference allocate its
+    largest window; one byte repeated for megabytes; a match chain long enough to
+    reach the C's own insert and lazy limits; an int where the C had a uLong. The
+    C survives all of it. A crash, an unhandled exception or a hang is the finding;
+    how long it took is not.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence
+on the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. Both trees are built once and reused, so a test that
+leaves a file behind can change the answer a later candidate gets -- the gzfile op
+and minigzip both get a fresh directory, and your corpus is yours alone, but
+anything you write yourself is your responsibility.
+
+HOW TO SPEND THE BUDGET
+
+Read first, but read with a question in mind. deflate.c's longest_match and
+deflate_slow are right there, and they are the definition of the answer -- but
+run each candidate the moment it is written: a wrong attempt costs one call
+and tells you more than another hour of reading. There is no turn limit; the
+wall clock is the only budget.
+
+Work in this order: pick a mechanism, read how the C implements it, find the case
+where its behaviour is incidental rather than specified -- a threshold compared
+with <= rather than <, a buffer flushed at a particular point, a counter that
+saturates, a tie broken by which candidate the hash chain reached first -- and
+write the assertion that pins it. That is the kind of thing a reimplementation
+does not reproduce by accident.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

@@ -1,0 +1,211 @@
+You are reviewing a whole-repository build-system migration. Two trees are on
+disk:
+
+  {{original}}
+      State A, read-only. libsodium 1.0.20 as upstream ships it: a C library
+      built by GNU Autotools -- configure.ac, seven Makefile.am files, an m4
+      directory of feature probes, libtool doing the linking.
+
+  {{workspace}}
+      The submission. The same library, supposedly built by CMake instead.
+
+The task set for the author of the submission was: replace the Autotools build
+system with a CMake one, so that Autotools is gone from the repository and the
+build produces the same libsodium.so.26, the same libsodium.a, the same install
+tree and the same compile-time configuration it produced before. The C sources
+were not to be touched at all -- the build system is the whole subject.
+
+Your job is not to measure whether the build produces the right bytes. Sixteen
+modules do that after you: they configure the submission eleven times, compile 80 of
+libsodium's own test programs against what it installed, diff the symbol table,
+diff the install tree, and read the ISA flags off every one of 119 translation
+units. What they cannot ask is the question you are here for: is this a migration
+at all?
+
+A submission can produce a byte-identical install tree while having done something
+other than what was asked -- kept the Autotools build and driven it from a
+CMakeLists.txt, copied State A's config.h conclusions in as hardcoded macros
+instead of probing for them, applied the ISA flags from a table rather than from a
+partition the build understands, or edited a source file to make a build problem
+go away. Those are what you are looking for, and they are why this review is a
+model reading a build system rather than a list of patterns: every one of them
+survives a grep for "autoconf".
+
+--------------------------------------------------------------------------------
+WHAT A MECHANICAL SCAN ALREADY NOTICED
+--------------------------------------------------------------------------------
+
+Before you were started, a read-only scan walked both trees. It hashed all 352
+immutable sources against State A, looked for the Autotools files by name and for
+the Autoconf generation banner by content, and looked for delivered build state and
+for build files that read the harness's environment. Its findings:
+
+{{findings}}
+
+These are leads, not verdicts. Nothing in that list can fail a gate by itself and
+nothing in it is scored -- you decide, and you have both trees open, which the scan
+did not have in any useful sense.
+
+Two exceptions in the direction of certainty, and they are worth being exact about.
+A reported sha256 mismatch on an immutable source is a fact: open the file, confirm
+it differs from State A's, and fail `sources_untouched`. No reason for the edit
+makes it not an edit. Likewise a build file that names `SRB_TARGET_NAME` -- there is
+no correct build that reads it.
+
+Everything else in the list needs you, because the same string means different
+things in different files:
+
+  * `configure` in `cmake/FindSodium.cmake` might be a comment explaining what the
+    project used to do, or a `configure_file()` call, or a target that shells out to
+    a script. Three different findings, one string.
+
+  * a `cmake/` directory full of `.cmake` modules is what a good port looks like. It
+    is also where a transcription of m4 macros would go. The scan cannot tell
+    those apart and neither can its file list; reading them can.
+
+  * "no CMake file calls any check_* function" might mean nothing is probed, or it
+    might mean the submission wrote its own probing helper -- which is better code
+    than forty inline probes. Stage 2 settles whether the probing works by rejecting
+    `-fstack-protector` at the compiler; what you are judging is whether the
+    detection is detection.
+
+And the reverse: a clean scan is not a pass. Every substitution that matters here
+survives a string match, which is the whole reason this stage is a model and not a
+pattern list.
+
+--------------------------------------------------------------------------------
+THE GATES
+--------------------------------------------------------------------------------
+
+{{gates}}
+
+--------------------------------------------------------------------------------
+HOW TO WORK
+--------------------------------------------------------------------------------
+
+You have the tools listed at the end. Start by orienting yourself: what did State
+A's build consist of, and what does the submission's? `tree` on both, `wc -l` on
+the build files, and reading the top-level CMakeLists.txt end to end, will tell
+you in twenty minutes whether you are reading a port, a wrapper, or a
+transcription.
+
+Then, for each gate, go and find out. Read the CMake code the way the CMake
+language actually evaluates: a variable set in one file and used in another, a
+function defined in cmake/ and called from the root, a target property applied in
+a loop. A gate is not answered by a grep count -- it is answered by following
+what the build would do.
+
+Three habits matter more than anything else here:
+
+  Follow the target, not the file names. "What compiles this file, with what
+  flags?" is a question about target properties and generator expressions, not
+  about which directory the file is in. A repository can have a beautiful
+  CMakeLists.txt and still hand the real work to a script.
+
+  Read the whole path from question to compile line. libsodium's build asks the
+  compiler about forty things and each answer has to arrive somewhere -- in a
+  config header, in a `target_compile_definitions`, in a per-source property. A
+  check whose result is computed and then never used is the specific failure mode
+  this task invites, and it looks exactly like a working probe until you follow
+  where the variable goes.
+
+  Compare against the original. You have State A's build system. When something
+  in the submission looks like it was copied, open the corresponding Makefile.am
+  or m4 macro and compare. When a macro list looks too complete, check it against
+  what State A's configure would actually have concluded on this machine. This is
+  the advantage you have over any static check, and it is why both trees are
+  mounted.
+
+--------------------------------------------------------------------------------
+WHAT IS AND IS NOT A FINDING
+--------------------------------------------------------------------------------
+
+This task's subject makes some things look wrong that are not. Be careful with
+all of these:
+
+  Resemblance to State A's structure is not a finding. The library has seven
+  logical groups of sources and a specific set of ISA-elevated files; a CMake
+  build that mirrors that organisation is mirroring the *library*, not copying the
+  build system. Expressing the same partition through `add_library` targets and
+  `set_source_files_properties` is what a correct port looks like.
+
+  `configure_file` is not a finding. Generating a config header, a .pc file or a
+  version header from a template is ordinary CMake and is how the migration is
+  supposed to work. What matters is where the values in it come from.
+
+  A hardcoded value is not automatically a finding. Some things genuinely are
+  constants: the version number, the soname, the library's own name, the list of
+  public headers. The question is whether something the compiler was supposed to
+  be asked about was answered from memory instead.
+
+  Running a program during the build is not automatically shelling out. CMake
+  legitimately runs the compiler, `ar`, `objcopy`, and small scripts that generate
+  source. What is not legitimate is running something that decides the build --
+  a script that computes the flags, a make invocation that does the compiling, a
+  configure script under any name.
+
+  Absence of a string proves nothing, in either direction. Do not report "the word
+  autoconf does not appear" as evidence of anything, and do not treat a mention of
+  Autotools in the README, the ChangeLog or a migration note as evidence that the
+  old build system is still there. Prose is prose.
+
+  Extra CMake features are not findings. A submission that adds a
+  `SODIUM_ENABLE_LTO` option, an install component, or a `CMakePresets.json` has
+  gone beyond the task rather than around it.
+
+--------------------------------------------------------------------------------
+EVIDENCE
+--------------------------------------------------------------------------------
+
+Every `fail` you return must cite specific evidence: a path, a line number, and a
+quotation of what is there. Your citations are re-opened and checked. A `fail`
+whose quotation is not at the line you named, or whose quotation does not support
+the claim you made, is discarded -- it is counted as a `pass` rather than a
+finding, so a wrong citation costs the review nothing and gains it nothing.
+
+For this task in particular, a finding usually needs two citations rather than
+one: the place where something is decided and the place where it is used, or the
+place where a value is computed and the place where the constant appears instead.
+"This check exists but its result goes nowhere" is only a finding if you can name
+both ends.
+
+Every gate gets one of two answers, `pass` or `fail`. There is no third answer:
+a gate you looked at and could not settle is a `pass`, and so is a `fail` whose
+citations do not hold up when they are re-checked. `fail` is the verdict that
+has to be earned. Three independent reviews vote on each gate and a `fail`
+carries only as a majority, so one wrong `fail` does not decide anything by
+itself -- but do not spend one you cannot cite, because a failed required gate
+is a zero for the whole task and nothing after this stage runs.
+
+Weigh that in the other direction too. You are not looking for reasons to fail a
+submission. A genuine, complete, honest CMake port that is organised differently
+from how you would have organised it passes every gate here.
+
+--------------------------------------------------------------------------------
+OUTPUT
+--------------------------------------------------------------------------------
+
+When you have finished, emit one JSON object and nothing else:
+
+{
+  "gates": [
+    {
+      "id": "<the gate id, exactly as given above>",
+      "verdict": "pass" | "fail",
+      "summary": "<one sentence: what you concluded>",
+      "evidence": [
+        {"path": "<repo-relative path>", "line": <int>,
+         "quote": "<the text at that line>",
+         "note": "<why this supports the verdict>"}
+      ]
+    }
+  ],
+  "notes": "<anything the next reader should know; optional>"
+}
+
+One entry per gate, every gate, in the order given. `pass` needs no evidence but
+benefits from it -- say what you followed. `fail` requires it.
+
+{{roots}}
+
+{{commands}}

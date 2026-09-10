@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Build-time self-check: does the scan collect, and did it collect enough?
+#
+# Run from the stage 1 Dockerfile, against the empty /opt/workspace mount point.
+# Collection is enough to execute every import in every module and every
+# `parametrize` list, which is where a scan breaks: a typo in a constant, a missing
+# `srbscan` helper, a module that shadows a fixture name.
+#
+# It matters that this fails the *build* rather than the review.  A scan that raises
+# on import produces no findings, and in the rendered prompt no findings looks
+# exactly like a clean tree: the reviewer is told nothing and cannot tell that it was
+# told nothing.  The floor below is the second half of the same argument -- a scan
+# that collects one check per module has also gone quiet, and quietly.
+#
+# The floor is a count of collected checks, not of files or modules.  Most of this
+# suite's checks are parametrized over lists derived from the contract at import
+# time -- the retained paths, the forbidden extensions, the known Rust parsers -- so
+# a contract that failed to load takes the count down with it even though every
+# module still imports and every function still exists.
+set -euo pipefail
+
+MIN="${1:-60}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The image's `python`; `python3` so the same script runs by hand on a machine that
+# only has the versioned name.
+PY="$(command -v python || command -v python3)"
+
+cd "$HERE"
+out=$(SRB_REPO="${SRB_REPO:-/opt/workspace}" \
+      SRB_ORIGINAL="${SRB_ORIGINAL:-/opt/original}" \
+      SRB_CONTRACT="${SRB_CONTRACT:-$HERE/data/source-contract.json}" \
+      PYTHONPATH="$HERE/lib:${PYTHONPATH:-}" \
+      "$PY" -m pytest -c pytest.ini -p srbscan --collect-only -q modules 2>&1) || {
+    echo "$out"
+    echo "collect-check: the scan does not collect" >&2
+    exit 1
+}
+
+echo "$out"
+total=$(printf '%s\n' "$out" | sed -n 's/.*: \([0-9]\{1,\}\)$/\1/p' \
+        | awk '{s += $1} END {print s + 0}')
+
+if [ "$total" -lt "$MIN" ]; then
+    echo "collect-check: the scan collected $total checks, expected at least $MIN" >&2
+    exit 1
+fi
+echo "collect-check: ok, $total checks collected"

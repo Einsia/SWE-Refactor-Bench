@@ -1,0 +1,363 @@
+TASK {{task}} -- find what the migration got wrong.
+
+pycryptodome is a Python cryptography library that is mostly C: 47 translation
+units compiled into 41 loadable objects that export 277 symbols between them --
+217 distinct names, 29 of which are arithmetic helpers statically linked into
+several objects at once -- and 192 Python modules with 96 type stubs beside them
+across 20 packages. The C is not
+compiled into CPython extension modules. It is compiled into plain shared
+libraries that `Crypto/Util/_raw_api.py` opens with `ctypes.CDLL` and reads symbols
+out of by name -- not one of the 41 objects defines a `PyInit_` function.
+
+The original is built by setuptools: a 461-line `setup.py` with a custom
+`build_ext` subclass, and a `compiler_opt.py` that compiles thirteen probe programs
+to discover what the compiler and the platform can do, then decides per translation
+unit which instruction sets to enable and which macros to define. The submission is
+supposed to be the same library built by Meson instead, producing the same 41
+objects at the same paths with the same symbols, the same probe-driven decisions,
+the same Python payload, the same wheel metadata, and no setuptools anywhere.
+
+No source was allowed to change -- every `.c`, `.h`, `.py` and `.pyi` is
+checksummed against the original. So this is not a search for a bug in the library.
+It is a search for something the build system stopped delivering.
+
+It has already been checked that the migration is real rather than a wrapper around
+setup.py, and several thousand recorded checks over four compiler configurations,
+the artifact set, the symbol tables, the ISA partition, the installed payload, the
+wheel metadata and the library's own 39,245-test suite have already been run. Your
+job is the part those cannot do: find something nobody thought to record.
+
+THE TWO TREES
+
+  {{original}}     the library as it is built today, by setuptools
+  {{submission}}   the submission, which claims to be the same library built by Meson
+
+Your tools address these by name: {{roots}}. The submission is the root called
+`workspace`. Both are complete repositories and both are read-only to you: you
+attack what the builds produce, not the source. Read the original's build system as
+much as you like -- `setup.py` and `compiler_opt.py` are the specification of what
+the answer should be, and reading them is the most productive thing you can do
+here.
+
+Commands you may run directly: {{commands}}
+
+HOW A CANDIDATE IS RUN
+
+Write a pytest file and hand it to `try_test`. It is run against each tree
+separately and you are told the outcome on each.
+
+Unlike the other build tasks, both trees are PEP 517 packages, so there is no
+dialect to translate: ONE command builds either one.
+
+    python -m build --wheel --no-isolation
+
+`pyproject.toml` names the backend and the front end dispatches to it --
+`setuptools.build_meta` on the original, meson-python on the submission. You never
+spell that out and you never choose it.
+
+What you do get to choose is the COMPILER. The four configurations are gcc wrappers
+that reject a flag, which is the same request expressed identically to both trees,
+and what each build system does with a compiler that says no is the sharpest thing
+you can ask here -- because the original's answer comes from probing and the
+submission's has to come from probing too:
+
+    default     a working compiler: the wheel as shipped
+    no-aesni    a compiler that rejects -maes
+    no-clmul    a compiler that rejects -mpclmul and -mssse3
+    no-isa      a compiler that rejects all three
+
+All four build on the original, and this is what each produces there -- measured, so
+you do not have to spend a candidate finding it out:
+
+    default     41 objects, 277 symbols, 339 installed files
+    no-aesni    40 objects, 275 symbols, 338 files  -- Crypto.Cipher._raw_aesni gone
+    no-clmul    40 objects, 274 symbols, 338 files  -- Crypto.Hash._ghash_clmul gone
+    no-isa      39 objects, 272 symbols, 337 files  -- both gone
+
+That table is the instrument. The original's artifact set is a FUNCTION of what the
+compiler accepts, because setup.py asks the compiler and believes the answer. A
+submission whose artifact set does not move with the compiler has stopped asking.
+
+    import srbcrypto
+
+    def test_aesni_unit_disappears_without_maes():
+        a = srbcrypto.tree("default")
+        b = srbcrypto.tree("no-aesni")
+        assert "Crypto.Cipher._raw_aesni" in a.extensions()
+        assert "Crypto.Cipher._raw_aesni" not in b.extensions()
+
+A configuration is 47 translation units plus an install, and it is cached across
+every candidate and every round, so the first to ask pays and the rest are free.
+Ask for what you need; do not ask for all four out of thoroughness.
+
+Two configurations you may look for and will not find. There is no `repeat`:
+"the same sources built twice" is a question rather than a configuration, and
+`t.build_again()` answers it. There is no `sdist`: `meson dist` hard-requires a Git
+or Mercurial checkout and this snapshot has neither, so no Meson submission can
+produce one however correct it is, and the task said so.
+
+WHAT `srbcrypto` GIVES YOU
+
+All of it addresses the WHEEL and the INSTALL, never the repository. Return shapes
+are stated because getting one wrong costs you a candidate: a test that compares
+bytes to str does not raise, it quietly fails on both trees and is discarded as
+"does not pass on the original".
+
+    tree(name) -> Tree
+        build + install, cached. Raises BuildFailed if the tree will not build in
+        that configuration -- which is not a finding, see below.
+
+    t.wheel, t.prefix, t.log         -> Path       the wheel, the install root
+    t.wheel_entries()   -> list[str]               every member, sorted
+    t.wheel_read(member)-> bytes                   one member, by exact name
+    t.wheel_tag()       -> (interpreter, abi, platform)   READ THE ABI FIELD ONLY;
+                                                  see the note below, this is the
+                                                  cheapest way to waste a round
+    t.dist_info()       -> str                    the .dist-info directory's name
+    t.record()          -> dict[str, (hash, size|None)]   RECORD, as installers see
+                                                  it. hash is the string RECORD
+                                                  spells, "sha256=<b64>"
+    t.metadata()        -> dict[str, list[str]]    METADATA, field -> values in file
+                                                  order. A list because Classifier
+                                                  repeats
+    t.wheel_file()      -> dict[str, list[str]]    WHEEL. `Tag` is the repeated one
+    t.metadata_body()   -> bytes                   the long description, after the
+                                                  header block
+
+    t.installed()       -> list[str]               every installed path,
+                                                  prefix-relative, sorted, files
+                                                  only, no __pycache__
+    t.read(relpath)     -> bytes                   one installed file
+    t.extensions()      -> dict[str, Path]         installed compiled objects,
+                                                  DOTTED MODULE NAME -> file. So
+                                                  "Crypto.Cipher._raw_aes", not a
+                                                  filename -- keyed by the name
+                                                  with meaning to an importer, so
+                                                  neither tree's file-naming
+                                                  convention is the reference
+
+    t.python(source, *args, stdin=) -> Output
+        Run a snippet against this install. This is the stage's main instrument --
+        the analogue of compiling a C program against an installed library:
+            out = t.python("from Crypto.Cipher import AES; print(AES.block_size)")
+            assert out.ok and out.text().strip() == "16"
+        Returned, not raised, on a non-zero exit, because "runs against the
+        original and crashes against this" is exactly a finding. Put `out` in the
+        assertion message: its str carries the child's stderr.
+
+    t.selftest(*only, fast=False) -> SelfTestRun
+        The library's own suite, against this install. `only` filters by id prefix
+        joined to `Crypto.SelfTest.`, so "Cipher" is every cipher test. No argument
+        runs all of it: 42,784 instances over 39,245 distinct ids, about eighty
+        seconds.
+            r.all_passed  -> bool          r.failed   -> tuple[str, ...]
+            r.outcomes    -> dict[str,str] id -> worst outcome any instance gave
+            r.counts      -> dict[str,int] how many ids per pass/fail/error/skip
+            r.collected   -> int           instances loaded (> id count)
+            r.crashed     -> bool          the runner did not finish, which is
+                                           usually an unimportable install
+            r.note(id)    -> str           the traceback for a failing id
+            r.backend     -> str           "gmp" | "custom" | "native": which
+                                           integer implementation actually won
+            r.filter_matched_nothing -> bool     read the next paragraph
+            r.available_prefixes     -> tuple[str, ...]
+
+        CHECK YOUR PREFIX. An id names the module the test's class was DEFINED in,
+        which for most hashes and ciphers is a shared `common` helper rather than the
+        per-algorithm module. There is a `Crypto/SelfTest/Hash/test_SHA256.py`, and
+        `only="Hash.test_SHA256"` matches NO id, because those cases are built by
+        `Crypto.SelfTest.Hash.common`. A filter that matches nothing makes
+        `all_passed` False on both trees, so your candidate is discarded as broken
+        rather than counted -- it is reported instead: `r.filter_matched_nothing` is
+        True, `str(r)` says so, and `r.available_prefixes` lists what exists. The
+        prefixes with the most ids, measured: "Hash.test_keccak",
+        "Protocol.test_KDF", "Hash.test_SHAKE", "PublicKey.test_ECC_NIST",
+        "Cipher.test_EAX", "PublicKey.test_import_ECC", "Math.test_Numbers".
+
+        `fast=True` collects 8,699 instances over 5,160 ids instead of 42,784 over
+        39,245, by dropping slow tests -- which is almost entirely the known-answer
+        vectors, the part that would notice a wrong compiler flag. Use it for a smoke
+        check, not for a comparison you intend to rely on.
+
+    t.build_again() -> Tree
+        Build this configuration again from a FRESH copy, and return a Tree whose
+        `wheel` is the second one, so you can compare them:
+            a, b = t, t.build_again()
+            assert a.wheel_entries() == b.wheel_entries()
+        Not cached -- asking twice builds twice, which is the point.
+
+    wheel_members(path) -> list[str]        the same two, standalone, for a wheel
+    wheel_read(path, m) -> bytes            you produced yourself
+    nm_defined(path)    -> set[str]         symbols the object EXPORTS
+    nm_undefined(path)  -> set[str]         symbols it IMPORTS. This is where
+                                            compile flags become visible from
+                                            outside: _FORTIFY_SOURCE turns memcpy
+                                            into __memcpy_chk, -fstack-protector
+                                            introduces __stack_chk_fail
+    objdump_isa(path)   -> set[str]         which instruction families are really
+                                            in there, e.g. {"aesni", "sse2"}
+    elf_dynamic(path)   -> dict[str, list[str]]   tag -> values, readelf's own
+                                            names: "NEEDED", "SONAME", "RPATH",
+                                            "RUNPATH", "FLAGS", "FLAGS_1"
+    elf_needed(path)    -> set[str]         DT_NEEDED, as a set
+
+Output.stdout and Output.stderr are bytes in every one of these. A cryptographic
+answer is a byte string and decoding at the boundary would hide a real difference;
+`out.text()` decodes stdout when you want a str, and `out.ok` is the
+returncode-zero-and-not-timed-out predicate.
+
+Do not read the tree under test from inside a test. What is graded is what the
+build ships. `srbcrypto` does not export a path to the repository for that reason.
+
+WHAT A USEFUL CANDIDATE LOOKS LIKE
+
+It has to pass on the original and fail on the submission. Both halves matter, and
+the first half is a sharper constraint than it looks, because the original is NOT
+held to the instruction the submission was given. Anything you assert that only the
+submission was asked for fails on the original and is worth nothing however true it
+is -- those are stage 2's subject and stage 2 has already measured them.
+
+So the productive shape is always the same: something a *consumer* of this library
+gets from the original and does not get from the submission. An object that loads.
+A symbol ctypes can resolve. A known-answer vector that verifies. A module that
+imports. A baseline object without an AES-NI instruction in it. GMP arithmetic
+instead of the fallback.
+
+Do not guess at what the original does -- build it and look. `try_test` gives you
+the original's result on every attempt, so the cheapest way to learn what State A
+ships is to write the assertion you expect and read which way it went.
+
+Three things about State A will cost you a candidate if you assume otherwise:
+
+  * The wheel tag's interpreter component. State A tags `cp35-abi3-linux_x86_64`,
+    because setup.py declares the limited API with a floor of 3.5. A correct
+    meson-python submission tags `cp312-abi3-linux_x86_64`, because meson-python
+    names the interpreter that built it. Both are valid abi3 wheels, both install
+    on this image, and the task told the agent in as many words that the ABI
+    component is required and the interpreter component is not. `abi3` is in scope.
+    `cp35` is not, and neither is the wheel's filename, which carries it. This is
+    the single cheapest false break in the task; it is in the deny list and it is
+    rejected on sight.
+
+  * What the build leaves in the source tree. setuptools writes a `build/` full of
+    objects and a `pycryptodome.egg-info/`; meson-python builds in a temporary
+    directory and leaves neither. Every form of that assertion passes on the
+    original and fails on a correct submission. There is deliberately no helper
+    for it.
+
+  * `-msse2` is in the x86-64 baseline ABI. Most of these objects report SSE2 with
+    no flag involved, so `objdump_isa` returning "sse2" is not evidence of
+    anything. The families that mean something here are `aesni` and `clmul`, and
+    State A's measured answers are exactly two objects above the baseline:
+
+        Crypto.Cipher._raw_aesni    {"aesni", "sse2"}
+        Crypto.Hash._ghash_clmul    {"clmul", "ssse3", "sse2"}
+
+    Everything else, including `Crypto.Hash._ghash_portable`, is {"sse2"} alone.
+    `ssse3` appears on the CLMUL object because `-mssse3` rides along with
+    `-mpclmul` in State A's flag pair, not as a family of its own.
+
+A note on build failures. If the submission does not build in some configuration,
+`tree()` raises and your candidate fails on the submission -- but a submission that
+does not build is stage 2's verdict, not a finding here, and the adjudicator knows
+the difference. Do not spend the round hunting for a configuration that breaks the
+build; spend it on a configuration that builds and ships something wrong.
+
+WHERE MIGRATIONS OF THIS KIND ACTUALLY FAIL
+
+Not on "does it produce a wheel". Everyone gets that. What gets left behind:
+
+  * Symbol visibility. This is the one to check first. The 41 objects are ctypes
+    targets: `_raw_api.py` opens them with `ctypes.CDLL` and does a getattr for
+    each function it needs, so a symbol that is not in the dynamic table is a
+    library that loads and then raises on first use. Meson's `py.extension_module()`
+    applies `-fvisibility=hidden` by default and setuptools does not. A port that
+    used the obvious Meson idiom and did nothing else produces 41 files that are
+    all there, all the right size, and export nothing. Read `_raw_api.py` and its
+    call sites for the definitive list of what has to be reachable.
+
+  * Extension modules instead of shared libraries. The same idiom pulls in a
+    Python extension's linkage -- a `PyInit_` expectation, sometimes libpython in
+    DT_NEEDED. Nothing in the wheel's shape reveals it. `ctypes.CDLL` on the
+    installed file does.
+
+  * The probes that were replaced by their answers. `compiler_opt.py` compiles
+    thirteen programs to find out what this compiler and this platform support,
+    and the results decide both the macro set and the per-unit ISA flags. Meson has
+    `cc.has_argument()` and `cc.compiles()` for exactly this. A port that ran the
+    probes once on its own machine and wrote the conclusions into a build file
+    produces a build that is correct there and wrong everywhere else -- and the
+    three crippled configurations are how you see it, because the artifact set the
+    original produces CHANGES when a flag stops being available and a memorised
+    one does not.
+
+  * The per-unit ISA partition. State A elevates exactly two units: `-maes` on the
+    one behind `_raw_aesni`, `-mpclmul -mssse3` on the one behind `_ghash_clmul`.
+    Every other unit gets none of them. Both directions are defects: an unguarded
+    AES-NI instruction in a baseline object is a SIGILL on hardware without it --
+    and because pycryptodome dispatches by loading one object or another, it is a
+    crash rather than a slow path -- while an elevated unit that lost its flags is
+    a silent fallback to generic code.
+
+  * The macros. Ten are defined globally and two per-module, and they change which
+    code compiles: an aligned-allocation path, a 128-bit integer path, an endianness
+    decision. A macro that stopped being defined is invisible in the wheel and
+    visible in what the object imports -- `posix_memalign` against a plain
+    `malloc`, a `__*_chk` symbol appearing or not.
+
+  * The Python payload, one file at a time. 192 `.py`, 96 `.pyi`, `py.typed`.
+    setuptools globbed them; Meson does not glob, so they are enumerated lists in
+    the submission's build files and a single omission is invisible until someone
+    imports that module. The stubs are the likeliest casualty -- nothing at run
+    time notices a missing `.pyi` -- and so is a package that lost its
+    `__init__.py`.
+
+  * The integer backend. `Crypto.Math.Numbers.Integer` resolves to `_IntegerGMP`,
+    `_IntegerCustom` or `_IntegerNative` depending on what loaded. State A gets
+    GMP. A fallback is not just slower, it is a different implementation of the
+    arithmetic every public-key operation runs on. Note that `_IntegerGMP` imports
+    successfully even where libgmp is absent, because it falls back internally --
+    ask the install which class actually won, which is what `r.backend` does.
+
+  * The wheel as an installer sees it. RECORD naming every member with a digest and
+    size that match the bytes; the METADATA fields the task requires with the
+    values it requires. Before you spend a round here, read the deny list: the
+    interpreter tag, `top_level.txt`, `.dist-info/LICENSE.rst`, `.dist-info/
+    AUTHORS.rst` and `Platform:` are all out of scope, and they are where an
+    unwary round spends its hour.
+
+  * The edges of the object files themselves. An RPATH or RUNPATH pointing into the
+    machine that built the wheel works in the container that made it and nowhere
+    else. A `NEEDED` entry that appeared or disappeared changes what the wheel
+    requires of the system it lands on.
+
+REPRODUCIBILITY
+
+An upheld candidate is re-run and has to give the same answer every time. Write
+deterministic tests: no clock, no randomness without a fixed seed, no dependence on
+the order two things happen in. A flaky candidate is discarded even when the
+divergence it found is real. Configurations are built once and shared, so a test
+that mutates an install prefix changes the answer a later candidate gets -- work in
+your own scratch directory.
+
+HOW TO SPEND THE BUDGET
+
+Read `setup.py` and `lib/Crypto/Util/_raw_api.py` first, then `compiler_opt.py`.
+Between them they state every probe, every macro, the whole ISA partition, and the
+exact list of symbols that have to be resolvable at run time -- they are the
+definition of what the submission was supposed to reproduce. Read them with a
+question in mind, and run each candidate the moment it is written: a wrong
+attempt costs one call and tells you more than another hour of reading. There
+is no turn limit; the wall clock is the only budget.
+
+Work in this order: pick something the original's build guarantees, find where that
+guarantee becomes visible in what gets shipped, and write the assertion that pins
+it. Then check the assertion against the original before you believe it.
+
+When you are done, report what you found. If you found nothing, say so plainly: a
+round that reports nothing is a real result about this submission, and inventing a
+marginal candidate to avoid an empty report makes the measurement worse. If you
+found something, the candidate itself is the report.
+
+Your budget, the scope you are held to and the part of the
+surface assigned to this round follow.

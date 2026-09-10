@@ -1,0 +1,48 @@
+# Variant: datareader.file names a file that does not exist.
+#
+# Startup must fail.  Not because failing is desirable, but because the alternative
+# is worse: a service that starts with no graph answers every routing request with
+# an error that looks like a routing problem, and an operator who mistyped a path
+# spends their afternoon looking at the wrong thing.
+#
+# This is the one variant where the expected outcome is a launch failure on both
+# sides, which is why the module treats a launch error as an observation rather
+# than as its own failure.  It is also the variant that catches a submission which
+# made startup lazy — deferring the graph load until the first request is a
+# reasonable-looking design decision that converts a fatal misconfiguration into a
+# runtime one.
+#
+# A fresh graph directory, so that a leftover cache from another variant cannot
+# make the service start successfully and hide the point.
+
+graphhopper:
+  datareader.file: @REPO_ROOT@/core/files/no-such-extract.osm.pbf
+  graph.location: @GRAPH_DIR@
+  profiles:
+    - name: car
+      custom_model_files: [car.json]
+  profiles_ch:
+    - profile: car
+  graph.encoded_values: car_access, car_average_speed, roundabout, road_class, road_environment, road_access, max_speed, road_class_link, lanes, country
+  prepare.min_network_size: 200
+  prepare.subnetworks.threads: 1
+  import.osm.ignored_highways: ""
+  graph.dataaccess.default_type: RAM_STORE
+
+server:
+  application_connectors:
+    - type: http
+      port: @APP_PORT@
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+  admin_connectors:
+    - type: http
+      port: @ADMIN_PORT@
+      bind_host: 0.0.0.0
+
+logging:
+  appenders:
+    - type: console
+      time_zone: UTC
+      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

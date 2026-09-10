@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Materialise the deterministic serve root that every measurement runs against.
+
+Both images carry this script and the same spec, so the golden capture, the
+agent's local experiments and the verifier all serve byte-identical trees.
+
+Determinism matters more than it looks. miniserve's directory listing prints
+each entry's mtime twice -- once as `%Y-%m-%d %H:%M:%S %:z` and once humanised
+("2 years ago") -- and actix-files derives its ETag and Last-Modified from mtime
+too. With mtimes left to chance, none of that is gradeable; with mtimes pinned
+and TZ=UTC, all of it becomes a hard contract that a port has to reproduce
+exactly. The humanised span is the one field that still drifts with wall-clock
+time, and the normaliser drops it.
+
+The file names come from miniserve's own upstream test data, which is already
+verification: embedded quotes, ampersands and angle brackets (HTML escaping),
+literal newlines and backslashes (header and path safety), emoji and non-ASCII
+(UTF-8 percent-encoding), and `%20` inside a name (double-decoding bugs). A port
+that decodes or escapes one layer too many or too few fails on these and on
+nothing else.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+# 2021-06-15T12:34:56Z. Chosen to be far enough in the past that the humanised
+# column is stable at a coarse granularity, and to have no sub-second component
+# so mtime survives every filesystem the image might run on.
+FIXED_MTIME = 1623760496
+
+
+def build(spec: dict, root: Path, *, clean: bool = True) -> None:
+    if clean and root.exists():
+        shutil.rmtree(root)
+    root.mkdir(parents=True, exist_ok=True)
+
+    made: list[Path] = []
+
+    for entry in spec["entries"]:
+        target = root / entry["path"]
+        kind = entry.get("kind", "file")
+        if kind == "dir":
+            target.mkdir(parents=True, exist_ok=True)
+            made.append(target)
+            continue
+        if kind == "symlink":
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_symlink() or target.exists():
+                target.unlink()
+            os.symlink(entry["target"], target)
+            made.append(target)
+            continue
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if "bytes_b64" in entry:
+            import base64
+            target.write_bytes(base64.b64decode(entry["bytes_b64"]))
+        elif "repeat" in entry:
+            unit, count = entry["repeat"]["unit"], entry["repeat"]["count"]
+            target.write_bytes(unit.encode("utf-8") * count)
+        else:
+            target.write_text(entry["content"], encoding="utf-8")
+        made.append(target)
+
+    # Deepest first, so setting a directory's mtime is not undone by writing a
+    # child of it afterwards.
+    for path in sorted({p for p in made} | {root}, key=lambda p: len(p.parts), reverse=True):
+        mtime = FIXED_MTIME
+        os.utime(path, (mtime, mtime), follow_symlinks=False)
+    for path in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        os.utime(path, (FIXED_MTIME, FIXED_MTIME), follow_symlinks=False)
+    os.utime(root, (FIXED_MTIME, FIXED_MTIME))
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--spec", type=Path,
+                    default=Path(os.environ.get("SRB_TREE_SPEC", "/opt/srb/tree-spec.json")))
+    ap.add_argument("--root", type=Path, required=True)
+    ap.add_argument("--keep", action="store_true", help="do not wipe an existing root")
+    ap.add_argument("--quiet", action="store_true")
+    args = ap.parse_args()
+
+    spec = json.loads(args.spec.read_text(encoding="utf-8"))
+    build(spec, args.root, clean=not args.keep)
+
+    if not args.quiet:
+        files = sum(1 for p in args.root.rglob("*") if p.is_file())
+        dirs = sum(1 for p in args.root.rglob("*") if p.is_dir())
+        links = sum(1 for p in args.root.rglob("*") if p.is_symlink())
+        print(f"serve root at {args.root}: {files} files, {dirs} dirs, {links} symlinks, "
+              f"mtime pinned to {FIXED_MTIME}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

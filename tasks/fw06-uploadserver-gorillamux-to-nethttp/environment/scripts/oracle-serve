@@ -1,0 +1,176 @@
+#!/bin/bash
+# =============================================================================
+# oracle-serve -- drive the read-only State A oracle.
+#
+# The oracle is a pinned State A binary (gorilla/mux 1.8.1, built once at image
+# build time from the baseline proxy and then made read-only).  It is launched
+# once per configuration, because this server's observable surface moves with
+# its flags: -enable_auth, -enable_cors, -read_only_tokens, -read_write_tokens,
+# -max_upload_size and -file_naming_strategy each change what the same request
+# returns.
+#
+#   oracle-serve start [--port N] [--] [...any server flag]
+#   oracle-serve stop  [--port N]
+#   oracle-serve run   [--port N] [--] [...]   as start, and print the pid
+#   oracle-serve docroot [--port N]            print this launch's document root
+#   oracle-serve log     [--port N]
+#
+# `start` and `run` are one branch and neither of them waits: both seed a fresh
+# document root, launch the server, block until it answers the readiness probe,
+# and return.  `run` additionally prints the pid.  The earlier wording annotated
+# only `run` with "do not wait", which reads as though `start` blocks -- it does
+# not, and an agent that infers otherwise reads a returned prompt as a server
+# that died.
+#
+# Neither one detaches.  The server is a background child of the shell that
+# invoked this script, so it outlives that shell only if whatever started it
+# does not reap the process group -- a plain `docker exec` does not, and a
+# harness that runs each command in its own group and kills it will.  Launch it
+# under `setsid` if the server has to still be there in a later command.
+#
+# Every launch gets a FRESH document root copied from the frozen fixture tree,
+# so an upload in one configuration cannot leak into the next -- and so a
+# capture can be replayed in any order and still see the same bytes.
+#
+# READINESS.  This server has no /health.  The probe is `OPTIONS /upload`, which
+# returns 204 in every configuration this task uses: handleOptions sets
+# Access-Control-Allow-Methods unconditionally (only the
+# Access-Control-Allow-Origin header is gated on -enable_cors), and the
+# authentication middleware lets OPTIONS through unauthenticated.  A probe on
+# GET /files/... would 401 under -enable_auth and report a healthy server as
+# dead.
+#
+# MTIMES ARE SET EXPLICITLY, NOT INHERITED.  git does not record mtimes, so the
+# fixture files' timestamps are whatever the checkout happened to produce -- a
+# different value in the environment image than in the verifier image.  Since
+# http.ServeContent turns the modtime into a Last-Modified header and answers
+# If-Modified-Since against it, inheriting them would make the golden data
+# unreproducible in exactly the way that is hardest to debug: right on the
+# machine that recorded it, wrong everywhere else.  Every seeded path is stamped
+# to $SRB_FIXTURE_MTIME, so Last-Modified is a gradeable constant instead of a
+# masked field.
+#
+# Exits nonzero if the server does not answer within the timeout, so a
+# misconfigured launch fails loudly instead of producing empty golden data.
+# =============================================================================
+set -euo pipefail
+
+BIN=${SRB_ORACLE_BIN:-/opt/oracle/simple-upload-server}
+FROZEN=${SRB_FIXTURE_ROOT:-/opt/fixtures/docroot}
+RUNROOT=${SRB_ORACLE_RUNROOT:-/tmp/oracle}
+FIXED_MTIME=${SRB_FIXTURE_MTIME:-2026-01-01 00:00:00 UTC}
+
+# The header is the usage text, so it is located rather than hardcoded: the
+# previous fixed range (2,44) silently truncated mid-sentence the moment a line
+# was added above it, which is the failure mode where the agent reading the help
+# is the one who pays.  Print between the two banner lines instead.
+usage() {
+  awk '/^# ={10,}/ { seen++; next } seen == 1 { print }' "$0" | sed 's/^# \{0,1\}//'
+  exit 2
+}
+
+cmd=${1:-}; shift || true
+[ -n "$cmd" ] || usage
+
+port=8899
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --port) port=$2; shift 2 ;;
+    --port=*) port=${1#*=}; shift ;;
+    --) shift; while [ $# -gt 0 ]; do args+=("$1"); shift; done ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+
+rundir="$RUNROOT/$port"
+pidfile="$rundir/pid"
+logfile="$rundir/log"
+docroot="$rundir/docroot"
+
+# Copy the frozen tree, then stamp every path.  -p is deliberately NOT used:
+# preserving the source mtimes is the bug this function exists to avoid.
+seed_docroot() {
+  rm -rf "$docroot"
+  mkdir -p "$docroot"
+  if [ -d "$FROZEN" ]; then
+    cp -R "$FROZEN/." "$docroot/"
+  else
+    echo "oracle-serve: no frozen fixture tree at $FROZEN" >&2
+    exit 1
+  fi
+  # Directories last would be pointless -- touching a file updates its parent's
+  # mtime -- so stamp depth-first: files, then the directories above them.
+  find "$docroot" -depth -exec touch -h -d "$FIXED_MTIME" {} +
+  chmod -R u+w "$docroot"
+}
+
+do_stop() {
+  if [ -f "$pidfile" ]; then
+    pid=$(cat "$pidfile")
+    if kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      for _ in $(seq 1 50); do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.1
+      done
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$pidfile"
+  fi
+}
+
+case "$cmd" in
+  start|run)
+    do_stop
+    mkdir -p "$rundir"
+    seed_docroot
+    test -x "$BIN" || { echo "oracle-serve: no oracle binary at $BIN" >&2; exit 1; }
+
+    "$BIN" -addr "127.0.0.1:$port" \
+           -document_root "$docroot" \
+           "${args[@]}" >"$logfile" 2>&1 &
+    echo $! > "$pidfile"
+
+    ok=
+    for _ in $(seq 1 100); do
+      # -o /dev/null -w '%{http_code}': OPTIONS returns 204 with no body, and
+      # `curl -f` treats 204 as success, but checking the code explicitly means a
+      # server that answers 404 (wrong binary, wrong routes) also fails here
+      # rather than passing readiness and producing wrong golden data.
+      code=$(curl -sS -o /dev/null -w '%{http_code}' -X OPTIONS \
+                  --max-time 2 "http://127.0.0.1:$port/upload" 2>/dev/null || true)
+      if [ "$code" = "204" ]; then ok=1; break; fi
+      # a crashed process will never answer; fail fast rather than waiting out
+      # the whole timeout
+      kill -0 "$(cat "$pidfile")" 2>/dev/null || break
+      sleep 0.1
+    done
+    if [ -z "$ok" ]; then
+      echo "oracle-serve: server on port $port never became ready" >&2
+      echo "--- probed: OPTIONS http://127.0.0.1:$port/upload (want 204, got ${code:-nothing})" >&2
+      echo "--- flags: ${args[*]-}" >&2
+      echo "--- log ---" >&2
+      tail -30 "$logfile" >&2 || true
+      do_stop
+      exit 1
+    fi
+    # NB: a bare `[ ... ] && cat` here would make the script exit 1 under
+    # `set -e` whenever cmd is "start", i.e. succeed and report failure.
+    if [ "$cmd" = "run" ]; then
+      cat "$pidfile"
+    fi
+    ;;
+  stop)
+    do_stop
+    ;;
+  docroot)
+    echo "$docroot"
+    ;;
+  log)
+    cat "$logfile"
+    ;;
+  *)
+    usage
+    ;;
+esac

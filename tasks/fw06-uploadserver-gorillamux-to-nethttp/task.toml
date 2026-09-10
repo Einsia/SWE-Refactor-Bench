@@ -1,0 +1,302 @@
+# =============================================================================
+# SWERefactorBench -- framework rewrite (router retirement)
+#
+#   State A : go-simple-upload-server v2.2.0, whose HTTP layer is
+#             github.com/gorilla/mux 1.8.1 -- five route registrations in one
+#             file, wrapped by CORS, authentication and logging middleware.
+#   State B : the same server routed by net/http.ServeMux from the standard
+#             library, with no third-party router in the module graph at all.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# This is the deliberately smaller task in the framework-rewrite set, and it is
+# small because the interesting part is not volume.  State A's whole dispatch
+# block is thirteen lines: five registrations covering six method/path pairs, plus
+# a not-found and a method-not-allowed handler.  Porting the table is mechanical;
+# what does not port is what the table MEANT.
+#
+# Three of those five use `r.PathPrefix("/files")`, which matches a STRING
+# prefix, not a path prefix.  So `/filesabc` reaches the file handler and answers
+# `{"ok":false,"error":"file not found"}`, while `/file` is not a prefix at all
+# and gets the different catch-all body `{"ok":false,"error":"not found"}`.
+# ServeMux has no pattern that expresses this: `/files/{path...}` requires the
+# separator and `/files` matches only itself.  Reproducing it means the catch-all
+# has to test the string prefix and dispatch -- which is the actual design work
+# in this task, and it is invisible in a diff that only swaps import lines.
+#
+# The rest compounds it.  `GET /files` is answered, not redirected: a submission
+# registering the subtree pattern gets stdlib's 301 to `/files/` with a body,
+# where State A returns 404.  Authentication runs AFTER matching, which is why
+# `/filesabc` under `-enable_auth` is 401 rather than 404 -- the one case that
+# proves the string-prefix route matched before the middleware refused.  Wrong
+# method on a matched route is a 405 whose Allow list is the ROUTE's, so a port
+# that lets ServeMux synthesise its own gets Allow right and the body wrong.
+#
+# Grading is the benchmark's three-stage ladder, declared in
+# tests/evaluation.toml and applied by score.py:
+#
+#   1. an audit review: a model reads State A against the submission with no
+#      toolchain and no network.  Six gates, all required.  Failing one is a zero
+#      and nothing after it runs.
+#   2. nine behavioural modules, 40 points, replayed against a recording of State
+#      A and paid only for a submission that passed every scored check in every
+#      one of them.  Short of that the ladder stops here with nothing from this
+#      stage.
+#   3. six adversaries with an hour each to write one test the original passes
+#      and the submission fails.  60 points, 10 for every adversary that finds
+#      nothing.
+#
+# The three stages sit on three different axes, and each is measured where it can
+# be measured well.  Whether the rewrite happened: stage 1, reading both trees.
+# Whether behaviour survived: stage 2, replaying a recording.  Whether anything
+# else broke: stage 3, constructing inputs the recording does not contain.
+#
+# Stage 2 therefore builds against a COMPLETE mirror and State A scores 1.000 on
+# it, which is the calibration a behaviour-preservation suite has to pass: the
+# expectations were recorded from State A, so a suite State A fails is a suite
+# disagreeing with its own transcript.  A submission that renamed some identifiers
+# and changed nothing also passes stage 2, and that is the correct outcome there --
+# it is stage 1 that rejects it, on sight, with a gate whose failure is a zero.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 has no
+# Go toolchain, because a review that can build grades a build log instead of an
+# implementation.  Stage 3 builds both trees, because "the original passes this
+# test" is a claim that has to be executed.
+#
+# The dependency gate lives in the AGENT's environment, enforced by omission: the
+# offline module proxy the agent works against holds no .zip for
+# github.com/gorilla/mux, so `go build` cannot resolve it and there is no network
+# to reach past it.  A tree that still imports the retired router is one the agent
+# could not have compiled.  That is a harder constraint than a grader check, and
+# it is why stage 2 does not need to repeat it.  The .mod IS kept, deliberately:
+# that is what lets a correct submission run `go mod tidy` to drop the require it
+# is removing.  Deleting the .mod as well would break tidy for the honest path
+# only.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# What Harbor collects from the agent container after the trial.
+#
+# Go's module cache and build cache are excluded because the verifier resolves
+# and builds from its own mirror; an agent's cache never influences the score.
+# The cache exclusion also closes a hole: a module already unpacked in GOMODCACHE
+# is never fetched from a proxy again, so a submitted cache holding gorilla/mux
+# would link a banned router without the mirror ever being asked for it.
+#
+# vendor/ is excluded for the same reason -- `go build -mod=vendor` does not
+# consult GOPROXY at all -- and data/ because it is the served upload root: a run
+# leaves uploaded files there, and every verifier stage seeds its own document
+# root from its own frozen fixtures.
+#
+# Solutions must therefore live in tracked source files, never inside these
+# paths -- a rule instruction.md states explicitly.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    "vendor",
+    "data",
+    "bin",
+    "dist",
+    ".gocache",
+    ".gomodcache",
+    "simple-upload-server",
+    "*.test",
+    "*.exe",
+    "*.tar.gz",
+    "*.tgz",
+    "*.tar",
+    "*.zip",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".git",
+    ".venv",
+]
+
+[task]
+name = "swerefactor/fw06-uploadserver-gorillamux-to-nethttp"
+description = """
+Migrate go-simple-upload-server v2.2.0 off gorilla/mux onto net/http.ServeMux
+from the standard library, across the whole repository, preserving byte-exact
+HTTP behaviour and leaving no third-party router in the dependency graph.
+"""
+authors = []
+keywords = [
+    "swe-refactor",
+    "framework-rewrite",
+    "go",
+    "gorilla-mux",
+    "net-http",
+    "servemux",
+    "http-router",
+    "http-contract",
+    "stdlib-migration",
+    "offline",
+]
+
+[metadata]
+category = "framework-rewrite"
+difficulty = "hard"
+license = "MIT"
+source_repository = "https://github.com/mayth/go-simple-upload-server"
+source_version = "v2.2.0"
+state_a = "github.com/gorilla/mux v1.8.1"
+# The distinction from fw04 is the point of naming the target this precisely.
+# fw04 moves chartmuseum from Gin to chi -- one third-party router for another,
+# with net/http underneath both.  Here the target IS net/http: after the port the
+# module graph contains no third-party router at all, which is why the gate can
+# be a total ban rather than a comparison.
+state_b = "net/http.ServeMux (Go 1.22+ method patterns and {name}/{name...} wildcards); no third-party router in the module graph"
+language = "go"
+go_version = "1.25"
+tags = [
+    "whole-repository",
+    "framework-rewrite",
+    "router-retirement",
+    "smaller-scope",
+    "offline-module-proxy",
+    "http-contract",
+    "dependency-closure",
+    "audit-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 6h wall clock.  The dispatch block is thirteen lines and the observable surface
+# it produces is fifty-odd distinct responses, several of which stdlib's ServeMux
+# does not reproduce by default and two of which it ADDS: a 301 with a body on an
+# unclean path, and a synthesised 405 where gorilla returned its own.  Finding
+# those costs an afternoon of differential testing against the original, which is
+# what the time is for.  Writing the replacement router costs an hour.
+#
+# no-network: every module the target stack needs is already in the mirror at
+# /opt/goproxy, and that mirror holds no archive of the retired router.  Offline
+# is what turns "the old router left the dependency closure" from a code-review
+# opinion into a mechanical fact -- `go build` reports it, and there is no proxy
+# to fall back to.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 21600.0
+network_mode = "no-network"
+
+[environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+TZ = "UTC"
+LANG = "C.UTF-8"
+LC_ALL = "C.UTF-8"
+SOURCE_DATE_EPOCH = "1705276800"
+# The toolchain must be the one State A's go.mod declares.  GOTOOLCHAIN=local
+# with a `go 1.25.0` directive means an older toolchain refuses the module
+# outright rather than quietly downloading one -- which offline it could not do
+# anyway, so the refusal is the honest failure.
+GOTOOLCHAIN = "local"
+GOFLAGS = "-mod=mod"
+GOPATH = "/opt/go"
+GOMODCACHE = "/opt/go/pkg/mod"
+GOCACHE = "/opt/gocache"
+GOSUMDB = "off"
+GOPROXY = "file:///opt/goproxy"
+# Deliberately empty, and named rather than omitted.  A non-empty GOPRIVATE makes
+# the file proxy be skipped for matching module paths, and the failure then looks
+# like a missing dependency rather than like a misconfiguration.
+GOPRIVATE = ""
+GONOSUMDB = ""
+SRB_GOPROXY_ROOT = "/opt/goproxy"
+SRB_RETIRED_MODULES = "/opt/srb/retired-modules.txt"
+SRB_BANNED_ROUTERS = "/opt/srb/banned-routers.txt"
+SRB_FIXTURE_ROOT = "/opt/fixtures/docroot"
+SRB_FIXTURE_AGGREGATE = "bfa364db081206cba49def81caf967e5b80785bcdcfca4c4565017c5d6b51c2f"
+SRB_FIXTURE_MTIME = "2026-01-01 00:00:00 UTC"
+# The State A reference binary, and the only feedback loop this task hands the
+# agent.  Named as the binary rather than its directory: /opt/oracle is read-only
+# and holds nothing else, so a variable that needs a filename appended is one an
+# agent gets wrong exactly once.  `oracle-serve` wraps it, because this server's
+# observable surface moves with its flags and a single running instance could not
+# answer for all of them.
+SRB_ORACLE = "/opt/oracle/simple-upload-server"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ is the
+# build context of the verifier image and Harbor never uploads it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The 5400s above that is for building three
+# images -- two of which warm a module mirror from source -- and for the ladder's
+# own overhead.  It is a ceiling rather than an expectation: most submissions
+# never reach stage 3, because stage 1 zeroed them or stage 2 came in under the
+# floor.  A run that does reach it spends most of its day there: six
+# adversaries, sequentially, because a candidate must not be broken by whatever
+# the previous one uploaded to the document root.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota.
+#
+# No verifier stage ships a State A source tree, and none can: a State A checkout
+# inside the grader would be a working gorilla/mux tree one COPY away from the
+# module it is meant to ban.  Stage 1 reads State A as a snapshot with no build
+# toolchain present; stage 2 replays a recording; stage 3 builds State A from its
+# own mirror, from the same go.mod and go.sum every other stage digests.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+
+[verifier.environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+TZ = "UTC"
+LANG = "C.UTF-8"
+LC_ALL = "C.UTF-8"
+SOURCE_DATE_EPOCH = "1705276800"
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+GOTOOLCHAIN = "local"
+GOFLAGS = "-mod=mod"
+GOSUMDB = "off"
+# GOPROXY is deliberately absent here and set per stage instead.  Stage 1 has no
+# toolchain at all; stage 2 grades against the complete mirror, because it has to
+# be able to compile State A; stage 3 chooses between a pruned mirror and a
+# complete baseline according to which tree it is building.  A value inherited
+# from here would override those choices.
+#
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a
+# smoke test that the suite can be passed at all.  The suite's own gate answers
+# that: stage 3 is asked only of a submission that scored stage 2 in full, so a
+# tree that reaches it has already passed every recorded check.  What six models
+# add is the other half -- an hour each spent hunting for a behaviour nobody
+# thought to record.

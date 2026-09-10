@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Serve the State A oracle bundle, so you can look at the behaviour you have to
+# preserve. Read-only: what you observe here is what the grader observed when it
+# recorded the reference.
+#
+#   swerefactor-oracle [--port N]
+#
+# Then open http://127.0.0.1:<port>/#/ with a browser or a script. The mock
+# Conduit API is served from the same origin under /api, with fixed fixture data.
+# Ctrl-C to stop.
+set -euo pipefail
+
+PORT=8080
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --port) PORT="${2:?--port needs a value}"; shift 2 ;;
+    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "swerefactor-oracle: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
+
+exec node /opt/harness/serve.mjs /opt/oracle/dist "$PORT" "State A oracle"

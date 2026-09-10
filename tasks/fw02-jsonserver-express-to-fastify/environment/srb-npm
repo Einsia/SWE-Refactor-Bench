@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+#
+# Run npm against the offline registry mirror.
+#
+#   srb-npm install
+#   srb-npm ci
+#   srb-npm add fastify @fastify/static
+#   srb-npm ls --all
+#
+# There is no network in this container. The mirror at $SRB_REGISTRY_ROOT holds a
+# frozen closure of packages, served on loopback for the duration of the command.
+# The set is fixed, so a resolution here is reproducible, and what installs here
+# installs in the grading containers too.
+#
+# The converse does not hold, and reading it backwards is a trap: a 404 here means
+# "not carried in this environment", which is not the same fact as "rejected when
+# your result is measured".  Each container is built with the mirror its own job
+# needs.  So do not treat this registry as the thing that decides whether a
+# dependency is acceptable -- what a submission has to satisfy is stated in the
+# task instruction, and it is stated there in full.
+#
+# Run it from the directory holding the package.json you want to install.
+
+set -euo pipefail
+
+REGISTRY_ROOT="${SRB_REGISTRY_ROOT:-/opt/npm-registry}"
+REGISTRY_PORT="${SRB_REGISTRY_PORT:-4873}"
+REGISTRY_URL="http://127.0.0.1:${REGISTRY_PORT}"
+
+if [ ! -d "$REGISTRY_ROOT" ]; then
+    echo "srb-npm: no registry mirror at $REGISTRY_ROOT" >&2
+    exit 1
+fi
+
+log="$(mktemp -t srb-registry-XXXXXX.log)"
+node /opt/srb/serve-registry.mjs "$REGISTRY_ROOT" > "$log" 2>&1 &
+registry_pid=$!
+
+cleanup() {
+    kill "$registry_pid" 2>/dev/null || true
+    wait "$registry_pid" 2>/dev/null || true
+    rm -f "$log"
+}
+trap cleanup EXIT
+
+# Wait for the mirror to accept connections rather than sleeping a fixed time.
+for _ in $(seq 1 100); do
+    if node -e '
+        const net = require("net")
+        const s = net.connect(Number(process.argv[1]), "127.0.0.1")
+        s.on("connect", () => { s.destroy(); process.exit(0) })
+        s.on("error", () => process.exit(1))
+    ' "$REGISTRY_PORT" 2>/dev/null; then
+        break
+    fi
+    sleep 0.1
+done
+
+if ! kill -0 "$registry_pid" 2>/dev/null; then
+    echo "srb-npm: registry mirror failed to start" >&2
+    cat "$log" >&2
+    exit 1
+fi
+
+# --ignore-scripts: the repository declares a "prepare" script that expects a
+# git checkout, and lifecycle scripts of third-party packages have no business
+# running in a grading environment. The verifier installs the same way.
+#
+# Not exec'd: the trap has to run so the mirror does not outlive the command.
+set +e
+npm \
+    --registry "$REGISTRY_URL" \
+    --no-audit \
+    --no-fund \
+    --ignore-scripts \
+    --loglevel "${SRB_NPM_LOGLEVEL:-warn}" \
+    "$@"
+rc=$?
+set -e
+exit "$rc"

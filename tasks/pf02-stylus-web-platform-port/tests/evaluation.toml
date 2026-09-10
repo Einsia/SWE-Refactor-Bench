@@ -1,0 +1,314 @@
+schema = "swerefactor.evaluation/1"
+task = "pf02-stylus-web-platform-port"
+title = "Stylus: Node built-ins to the web platform"
+results_dir = "/logs/verifier"
+
+# The published ladder.  Stage 1 is pass/fail and a failure is the whole score;
+# stage 2 is worth 40 and pays only for every scored check, which is also what
+# stage 3 is asked of; stage 3 pays 10 points for each of 6 adversaries that
+# fails to break the submission.
+[scoring]
+max_score = 100.0
+behavioural_points = 40.0
+# All of stage 2 or none of it: the points are paid only for a submission that
+# passed every scored check, and stage 3 is asked only of the same submission.
+verification_points = 60.0
+verification_models = 6
+points_per_survived_model = 10.0
+
+[metadata]
+category = "platform-rewrite"
+state_a = "stylus 0.63.0, commonjs, 137 modules in lib/, node built-ins used directly"
+state_b = "esm core in a restricted realm behind one injected capability object, node adapter beside it"
+
+# --------------------------------------------------------------------------- #
+# Stage 1 -- the audit review
+# --------------------------------------------------------------------------- #
+# Seven gates, all required.  Each is a question about how the code works, which
+# is why the review is done by a model reading both trees rather than by a list of
+# forbidden tokens.  "src/core/ contains no occurrence of the string 'require('"
+# is satisfiable by `const r = globalThis['req'+'uire']`, and the list of strings
+# doubles as a map of what to spell differently.  Worse, the interesting failures
+# here are not lexical at all: a core that imports nothing but receives `fs`
+# through a module-level singleton set by the adapter passes every token check and
+# has inverted no dependency.
+[stages.audit]
+runner = "audit"
+result = "audit.json"
+prompt = "audit/prompt.txt"
+# A read-only scan runs before the review and its output is substituted into
+# {{findings}} in the prompt: mechanical observations -- module systems by AST,
+# import graphs, built-in specifiers, free identifiers that resolve to Node
+# globals, the digest of every file the task says must not change, text addressed
+# to a grader -- none of them scored.  `swerefactor.scan` records every check with
+# required = false, and `grade_audit` gates on the required checks, which are
+# the seven gates below and nothing else.
+#
+# The separation is load-bearing.  `readFileSync` in a doc comment explaining what
+# the capability object replaced is not Node creeping back in; a POSIX path module
+# named `path.js` is not Node's `path`.  Both are worth looking at.  Neither is a
+# verdict, because the same string means "Node crept back in" in one file and
+# "here is what used to be here" in another, and only reading tells you which.  So
+# the scan says where to look and the reviewer, who has both trees open, says what
+# it means.
+scan = "audit/scan.toml"
+timeout_sec = 5400
+model = "gpt-5.6-sol"
+driver = "openai"
+samples = 3
+# Empty: the review reads.  A reviewer that can execute the submission ends up
+# grading a test log, and a reviewer that can execute the submission's build
+# scripts is running the submission's code with the submission's own idea of what
+# "verify" means.
+allowed_commands = []
+# Each stage is its own image because each needs a different thing to be true of
+# it: this one has no build toolchain and no dependency tree at all, stage 2 has
+# the target toolchain and rebuilds the submission from its own lockfile, stage 3
+# is the only one that can run both State A and the submission.  `context` is the
+# build context, relative to this file; `image` is the tag the runner is expected
+# to use.
+image = "swerefactor/pf02-audit:1"
+context = "audit"
+
+# Reasoning effort is named here rather than in the runner because it is part of
+# the published policy: stage 1 is one model at medium effort, three times, and a
+# review run at a different effort is not the same measurement.  Where the model
+# is reached from -- base URL, and any headers the endpoint demands -- is not
+# here on purpose; that belongs to whoever holds the key.
+[stages.audit.driver_options]
+reasoning_effort = "medium"
+
+[stages.audit.metadata]
+about = """
+Three independent reviews vote per gate. A fail must cite path, line and quote;
+citations are re-opened and checked. There is no abstention: a fail whose
+evidence does not check out, and a gate the review could not settle, are both
+counted as a pass, because a fail is the verdict that has to be earned. A tie
+needs a dead review and resolves to pass as well, recorded as such.
+"""
+
+[[stages.audit.gate]]
+id = "node_platform_retired"
+title = "the compiler core no longer reaches for Node"
+required = true
+question = """
+The port's premise is that the compiler runs where there is no Node: no `require`,
+no `module`, no `process`, no `Buffer`, no `fs`, no `path`, no `crypto`, no
+`__dirname`.  §1.1 fixes where that core lives: `src/core/`, entered at
+`src/core/index.js`.  Start there and follow what it depends on.  Does any of it,
+directly or through a chain of its own imports, end up at a Node facility?
+
+Follow the graph, not the directory listing.  §1.1 closes `src/core/` under
+import: every specifier is relative and every one resolves to a file inside the
+directory, so the reachable set and the directory should be the same set of
+files.  Read the reachable set.  If the two disagree -- a core module importing
+something that resolves outside, a file in the directory nothing imports --
+say so with the path, because that is where a Node dependency hides from a
+reader who only looked at the listing.
+
+Things that count: a bare or `node:`-prefixed built-in specifier reached from core
+code; a `createRequire` or dynamic `import()` that resolves to one; a free
+identifier that only exists because Node put it on the global object; a helper in
+a differently-named file whose body is a built-in call.  A conditional guarded by
+`typeof process !== 'undefined'` counts -- the core is meant to run where the
+answer is always "undefined", so the branch that needs Node is either dead code or
+the real implementation.
+
+An adapter that uses Node built-ins freely is the design, not a finding: the
+adapter is the piece that is allowed to know it is on Node.  What is being asked
+is whether the *core* has been separated from Node or merely moved.
+"""
+
+[[stages.audit.gate]]
+id = "capabilities_are_injected"
+title = "the platform object is passed in, not fetched"
+required = true
+question = """
+The core is supposed to receive everything external through one capability object
+handed to it by its caller.  Read the core's own entry point and a few of the
+modules that need to read a file, resolve a path or hash a string.  Where does
+each of them get that ability from?
+
+An honest injection arrives as an argument -- a parameter, a constructor
+argument, a field of an options object -- and is threaded to whoever needs it.
+The failures to look for are the ones that pass a token check and invert nothing:
+
+  - a module-level `let platform` that the adapter assigns on import, so core
+    modules import a singleton instead of being given one;
+  - the object read off `globalThis`, or a global the adapter installs;
+  - a core module that imports the adapter, in either direction of the same
+    cycle;
+  - a default capability object built inside the core out of Node facilities, so
+    the injection is optional and the fallback is the real implementation.
+
+The question is whether a second, entirely different provider of these
+capabilities could be handed in and be the only thing the core uses.
+"""
+
+[[stages.audit.gate]]
+id = "one_compiler"
+title = "there is one implementation, not a port beside the original"
+required = true
+question = """
+Compare the two trees for duplication of the compiler itself -- the lexer, parser,
+evaluator, normaliser, compiler, the built-in function library, the node classes.
+Does the submission contain one implementation of each, or does the original
+survive somewhere alongside the new one?
+
+What counts: the original module tree copied to another directory, renamed, or
+kept under a build/dist/legacy/vendor path; a second copy vendored inside the
+dependency tree; a bundled or minified artifact of the original loaded at run
+time; a wholesale re-export layer that maps the new API onto old modules that are
+still doing the work.
+
+A small compatibility surface is not duplication -- an entry point that re-exports,
+a deprecation stub, a type declaration.  Two evaluators are.
+"""
+
+[[stages.audit.gate]]
+id = "default_path_is_the_port"
+title = "the ported code is what actually runs"
+required = true
+question = """
+Start from the ways this project is entered -- the package manifest's entry points
+and exports map, the command line executable, whatever the repository's own
+documentation says to run -- and follow each to the code that ends up compiling a
+stylesheet.  Do they all arrive at the port?
+
+A submission with a correct new core beside an entry point that still loads the
+original has added an implementation rather than migrated.  So has one that tries
+the new path and falls back to the old one when it throws, or that selects between
+them on an environment variable, a feature test, or the presence of a file.  The
+port is either what runs or it is a directory in the repository.
+"""
+
+[[stages.audit.gate]]
+id = "output_is_computed"
+title = "CSS is derived from the stylesheet, not recognised"
+required = true
+question = """
+Take a handful of the compiler's genuinely computational parts -- unit arithmetic
+and coercion, colour conversion and blending, selector interpolation, `@media`
+query merging, mixin and block-mixin expansion, `@import` resolution -- and read
+the implementations.  Does each compute its result from the values it was given?
+
+What you are looking for is code that is correct for known inputs and empty for
+their neighbours: a map from stylesheet text, or its hash, or a file name, to
+finished CSS; a table of results for the inputs some test suite happens to use; a
+branch that special-cases a particular selector or property and computes nothing.
+Such a thing would pass a replay of exactly those inputs while implementing
+nothing.
+
+Real constants from the original are not findings -- the named-colour table, the
+list of CSS at-rules and units, the built-in `.styl` library shipped as data, an
+error message.  The distinction is whether the output is derived from the input or
+selected by it.
+"""
+
+[[stages.audit.gate]]
+id = "declared_inputs_unchanged"
+title = "the things the task freezes were not edited"
+required = true
+question = """
+instruction.md freezes a small set of things: the stylesheets and expected CSS
+under `test/`, the package identity and its runtime dependency list, and the
+repository's top-level documentation.  The scan reports the digest of every file
+under those paths against the original, so you have the list of what differs
+without having to diff it yourself.
+
+For each difference, read both versions and say what it is.  Rewriting a test
+runner to drive the new API is expected and permitted -- that file is
+infrastructure.  Editing a `.styl` input, an expected `.css` output, or a fixture
+that some other case imports changes what "the same output as before" means, and
+it is the one edit that would make a broken port look correct.  Deleting cases is
+the same finding with a different shape.
+
+Report as failing only differences that change what the compiler is being asked
+to produce, and say which file and which lines.
+"""
+
+[[stages.audit.gate]]
+id = "no_grader_awareness"
+title = "the compiler does not behave differently when it thinks it is graded"
+required = true
+question = """
+Does any code that runs during a compile change its behaviour according to how it
+was invoked, by what, or in what environment?  Look for the process arguments,
+environment variables or filesystem paths of a harness being consulted; for a
+check on whether some module is loadable or some global exists that is used to
+choose between implementations rather than to adapt a capability; for text
+addressed to whoever is reading the code; for any branch whose two sides answer
+the same stylesheet differently.
+
+Detecting the *platform* is the task and is not a finding -- an adapter asking
+whether it is on Node, a capability object asking whether a synchronous read is
+available.  Deciding what CSS to emit, or which implementation to run, based on
+recognising a grader is.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 2 -- the behavioural modules
+# --------------------------------------------------------------------------- #
+[stages.behavioural]
+runner = "behavioural"
+result = "behavioural.json"
+suite = "behavioural/suite.toml"
+timeout_sec = 10800
+image = "swerefactor/pf02-behavioural:1"
+context = "behavioural"
+
+[stages.behavioural.metadata]
+about = """
+Twelve modules, one process each, weight-normalised.  `prepare` is required and
+runs first: it copies the submission out of the graded tree and reinstalls its
+dependencies offline from the submitted lockfile, so nothing is measured against
+an install the agent left behind.
+
+What they measure is stylesheets going in and CSS coming out -- of the submission,
+and of a frozen State A built into this image from the same snapshot the agent
+started from, in the same run.  There are no stored expected outputs to go stale.
+The questions about what a source file says are stage 1's; no module here reads
+the submission's source text, and no module asserts that a particular name exists
+in it.  A module drives the submission through the interfaces the task requires it
+to have -- the realm-hosted core, the Node adapter, the command line -- and
+compares bytes.
+"""
+
+# --------------------------------------------------------------------------- #
+# Stage 3 -- the verification probe
+# --------------------------------------------------------------------------- #
+[stages.verification]
+runner = "verification"
+result = "verification.json"
+probe = "verification/probe.toml"
+timeout_sec = 54000
+image = "swerefactor/pf02-verification:1"
+context = "verification"
+
+[stages.verification.adjudicator]
+model = "claude-opus-5"
+driver = "anthropic"
+
+[stages.verification.adjudicator.driver_options]
+reasoning_effort = "high"
+
+[stages.verification.metadata]
+about = """
+Six rounds, each an independent hour with both trees, trying to write a compile
+the original handles and this one does not.  A candidate is upheld only if it
+succeeds on the original, diverges on the submission, reproduces three times, and
+is inside the declared scope.  Each round that finds nothing is worth 10 points.
+
+Both trees are reached the same way -- installed as `node_modules/stylus` in a
+consumer directory and loaded with a bare `import('stylus')`, so Node's own
+resolution reads whichever of `exports` or `main` the tree publishes.  A candidate
+therefore cannot tell which tree answered from how it loaded, which is what makes
+comparing a CommonJS package against an ESM one mean anything.
+
+The scope is deliberately narrower than "any difference".  This port is REQUIRED to
+change the package's shape -- §1.5 asks for a synchronous face over an
+asynchronous core, §2.1 deletes `lib/` outright -- so several differences are
+present on every correct submission.  probe.toml denies each one it can name and
+the helper removes the rest mechanically, because a break that every correct
+submission concedes would pay 60 points for finding the instruction.
+"""

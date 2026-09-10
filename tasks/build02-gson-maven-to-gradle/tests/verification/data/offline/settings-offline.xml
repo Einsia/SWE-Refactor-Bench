@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SWERefactorBench build02 — Maven side of the offline plumbing.
+
+  The containers have no network. The local repository is pre-populated with the
+  pinned closure in deps.txt, so every resolution must be satisfied from it and
+  nothing may be attempted against a remote. Mirroring Central to an unusable
+  URL makes an accidental remote resolution fail loudly instead of hanging until
+  the timeout.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <localRepository>/root/.m2/repository</localRepository>
+  <interactiveMode>false</interactiveMode>
+  <offline>true</offline>
+</settings>

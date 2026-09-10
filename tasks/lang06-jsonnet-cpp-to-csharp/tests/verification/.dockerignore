@@ -1,0 +1,43 @@
+# What must not enter this stage's build context.
+#
+# The same list ships in every one of this task's stage directories -- a stage
+# that excluded something the others kept would produce an image nobody could
+# reproduce from the tree.
+#
+# Every cache pattern is `**/`-prefixed on purpose.  A .dockerignore pattern is
+# matched against the whole context-relative path and is *not* applied at every
+# depth the way a .gitignore pattern is, so a bare `__pycache__/` excludes only a
+# `__pycache__` sitting at the context root -- it does not exclude
+# `lib/__pycache__` or `modules/closure/__pycache__`, which are the only places
+# this suite ever produces one.  Without the prefix the host's bytecode is copied
+# into the image: interpreter-tagged .pyc files compiled by whatever Python and
+# pytest the author happened to run, shipped alongside a pinned 3.11 and pytest
+# 8.3.4 that will never load them.  They are dead weight in the best case and a
+# stale module in the worst, and PYTHONDONTWRITEBYTECODE in the Dockerfile does
+# not help -- it stops the *image* writing bytecode, not the COPY bringing it in.
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*~
+**/*.orig
+**/*.rej
+**/.DS_Store
+
+# The metadata inspector is built inside the image, from source, by the pinned
+# SDK.  A host-built bin/ or obj/ would be another compiler's output smuggled in
+# -- and `dotnet build` would then decide it had nothing to do.  Only
+# tests/behavioural/ actually holds the .csproj: in the other stage directories
+# these two lines match nothing, and are kept so all three copies stay identical.
+#
+# Named by path rather than as `**/obj`, which is what this file said first and
+# which cost a build: `**/obj` matches ANY path element called obj, and one of the
+# twenty module directories is `modules/obj` -- the family of cases about jsonnet
+# objects.  Excluding it dropped a module the suite declares, and the build failed
+# on `suite.toml names missing module dir(s): ['obj']`.  The `**/` prefix above is
+# right for __pycache__, which appears wherever a module happens to be imported
+# from; it is wrong here, because build output appears only beside a .csproj and
+# there is exactly one of those.
+lib/asminspect/bin
+lib/asminspect/obj

@@ -1,0 +1,226 @@
+# =============================================================================
+# SWERefactorBench -- platform port (flagship)
+#
+#   State A : Stylus 0.63.0 as published -- CommonJS throughout, 137 modules in
+#             lib/, 120 of them inside a single import cycle, and Node built-ins
+#             (fs, path, crypto, url, process) reached for directly from
+#             compiler code.
+#   State B : the same compiler with its core in src/core/, pure ESM, able to run
+#             inside a restricted V8 realm that has no Node built-ins at all.
+#             Everything the compiler needs from the outside world arrives
+#             through one injected capability object.  A thin src/node/ adapter
+#             supplies that object on Node and keeps bin/stylus working.
+#
+# The agent edits /workspace/repo in place.  Harbor collects that directory as an
+# artifact, destroys the agent container, and re-materialises the repository
+# inside independent verifier containers that the agent never touches and whose
+# tests/ tree the agent never sees.
+#
+# node_modules/ is deliberately NOT carried over.  Stage 2 discards whatever the
+# agent left and reinstalls offline from the *submitted* package-lock.json, so a
+# port that quietly added a dependency, vendored a bundler, or hand-patched a
+# module inside node_modules does not get to be graded on it.
+#
+# Grading is the benchmark's three-stage ladder, declared in
+# tests/evaluation.toml and applied by score.py:
+#
+#   1. an audit review, done by a model reading State A against the
+#      submission.  Seven gates, all required.  Failing one is a zero and nothing
+#      after it runs.
+#   2. twelve behavioural modules, 40 points, paid only for a submission that
+#      passed every scored check in every one of them.  Short of that the
+#      ladder stops here with nothing from this stage.
+#   3. six adversaries with an hour each to find a compile whose output
+#      differs between State A and the submission.  60 points, 10 for every
+#      adversary that finds nothing.
+#
+# What each stage may know is as deliberate as what it measures.  Stage 1 reads
+# code and cannot execute it, because a review that can run the thing grades a
+# test log instead of an implementation.  Stage 2 never looks at source text: it
+# compiles stylesheets through the submission and through a frozen State A and
+# compares the CSS.  Stage 3 is the only image that can run both, because "the
+# original compiles this and yours does not" is a claim that has to be executed.
+# =============================================================================
+
+schema_version = "1.4"
+
+# ---------------------------------------------------------------------------
+# Collected from the agent container, re-materialised at the same absolute path
+# inside the separate verifier container.
+#
+# The exclusions drop install and build debris.  They exist so the verifier cannot
+# be handed a pre-built tree and be fooled into loading something the submitted
+# *source* no longer contains.  Solutions must therefore live in tracked source
+# files, never inside these paths -- a rule instruction.md states explicitly.
+#
+# `node_modules` is deliberately NOT one of them, and this is the one exclusion in
+# the benchmark that had to be given up rather than narrowed.  A bare name matches
+# at any depth -- as a path segment under `swerefactor validate`, as a path suffix
+# under GNU tar -- so it also took `test/cases/import.lookup/node_modules/`: three
+# upstream files that are corpus data, the subject of the graded
+# `import.lookup.styl` case, which checks that `@import` resolves through a package
+# directory.  No pattern separates the two.  `node_modules/*` matches the fixture as
+# well under both readings; `./node_modules` anchors only when the collector stores
+# members with a `./` prefix, and Harbor's argv is not in this repository; and
+# `--anchored` is a tar flag, which an exclude list has nowhere to put.  Enumerating
+# the install instead would mean naming State A's 89 top-level packages in a
+# contract a *port* is allowed to renegotiate -- a dependency the submission adds
+# then ships unexcluded, and the list is wrong in a way nothing reports.
+#
+# Dropping the pattern collects 8.3 MB nothing grades, because each stage already
+# excludes the install where it can say "top level" and the manifest cannot:
+# stage 1's srbscan skips `node_modules` on every walk; stage 2's prepare module
+# discards it from its copy at the top level only and reinstalls offline from the
+# *submitted* package-lock.json, so a port that hand-patched a module in there is
+# still not graded on it; stage 3's run-candidate.sh scrubs it at `-maxdepth 3`,
+# above the fixture's depth of 4, before its own `npm ci --offline`.  That property
+# was never the manifest's to enforce, and the three files were the whole price.
+# ---------------------------------------------------------------------------
+[[artifacts]]
+source = "/workspace/repo"
+exclude = [
+    ".npm",
+    ".cache",
+    "coverage",
+    ".nyc_output",
+    "dist",
+    "build",
+    "*.tgz",
+    "*.log",
+    "npm-debug.log*",
+    ".DS_Store",
+    "__pycache__",
+    "*.pyc",
+]
+
+[task]
+name = "swerefactor/pf02-stylus-web-platform-port"
+description = "Port the Stylus 0.63.0 compiler off Node built-ins onto web standards: a pure-ESM core that runs in a restricted V8 realm behind one injected capability object, a thin Node adapter, and CLI and JS API parity, preserving byte-exact CSS output."
+authors = []
+keywords = [
+    "swe-refactor",
+    "platform-port",
+    "javascript",
+    "commonjs-to-esm",
+    "node-to-web",
+    "capability-injection",
+    "stylus",
+    "css",
+    "offline",
+]
+
+[metadata]
+category = "platform-rewrite"
+difficulty = "frontier"
+license = "MIT"
+source_repository = "https://github.com/stylus/stylus"
+source_version = "0.63.0"
+source_release_date = "2024-03-05"
+state_a = "commonjs + node built-ins (fs/path/crypto/url/process), 137 modules in lib/"
+state_b = "esm core in a restricted V8 realm + one injected platform capability object + src/node/ adapter"
+tags = [
+    "whole-repository",
+    "platform-port",
+    "commonjs-to-esm",
+    "dependency-inversion",
+    "import-cycle",
+    "byte-exact-output",
+    "cli-parity",
+    "anti-cheat-gated",
+]
+
+# ---------------------------------------------------------------------------
+# Agent phase
+#
+# 10h wall clock: 137 CommonJS modules have to become ESM, a 120-module cycle has
+# to survive conversion to static imports, every fs/path/crypto/url call in the
+# compiler has to be routed through the injected object, POSIX path algebra has
+# to be reimplemented to match node:path.posix exactly, and the CLI and the JS
+# API have to keep working.  A frozen, runnable State A lives at /opt/state-a, so
+# the time is spent on engineering rather than on guessing what the old output
+# was.
+#
+# no-network: the whole dependency closure of package-lock.json is already in
+# /opt/npm-cache, so `npm ci --offline` works and nothing wider does.  Offline is
+# what makes "no bundler was smuggled in" a mechanical fact rather than a
+# code-review opinion.
+# ---------------------------------------------------------------------------
+[agent]
+harness = "codex-cli 0.146.0"
+timeout_sec = 36000.0
+network_mode = "no-network"
+
+[environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+workdir = "/workspace/repo"
+
+[environment.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+NODE_OPTIONS = "--no-warnings"
+NPM_CONFIG_CACHE = "/opt/npm-cache"
+NPM_CONFIG_FUND = "false"
+NPM_CONFIG_AUDIT = "false"
+NPM_CONFIG_UPDATE_NOTIFIER = "false"
+STYLUS_STATE_A_ROOT = "/opt/state-a"
+
+# ---------------------------------------------------------------------------
+# Verifier phase
+#
+# environment_mode = "separate" + [verifier.environment] means tests/ becomes the
+# build context of the verifier images and Harbor does not upload it to the agent
+# container.  That is what keeps the suite invisible.
+#
+# The timeout covers the whole ladder, whose own budgets in tests/evaluation.toml
+# are 5400 + 10800 + 54000 = 70200s.  The margin above that is for building three
+# images and for the ladder's own overhead, and it is a ceiling rather than an
+# expectation: most submissions never reach stage 3, because stage 1 zeroed them
+# or stage 2 came in short of full marks.  A run that does reach it spends most of a
+# day there -- six adversaries with an hour each, sequentially, so one
+# candidate cannot be broken by what the previous one left behind.
+#
+# Stage 3's budget is deliberately not 6 * 3600: an adversary that concludes
+# early returns early, and the hour is a limit on one round rather than a quota
+# to be spent.
+# ---------------------------------------------------------------------------
+[verifier]
+timeout_sec = 75600.0
+environment_mode = "separate"
+
+[verifier.environment]
+build_timeout_sec = 5400.0
+network_mode = "no-network"
+cpus = 4
+memory_mb = 8192
+storage_mb = 20480
+gpus = 0
+mcp_servers = []
+
+[verifier.env]
+TZ = "UTC"
+LC_ALL = "C.UTF-8"
+NODE_OPTIONS = "--no-warnings"
+NPM_CONFIG_CACHE = "/opt/npm-cache"
+NPM_CONFIG_FUND = "false"
+NPM_CONFIG_AUDIT = "false"
+NPM_CONFIG_UPDATE_NOTIFIER = "false"
+# Where the shared grader lives inside every stage image, and where the three
+# stages agree to leave their result files.  score.py reads the second from
+# evaluation.toml, so this only has to hold for a stage invoked by hand.
+SRB_INFRA = "/opt/swerefactor"
+SRB_RESULTS = "/logs/verifier"
+
+# There is deliberately no solution/ tree and no [solution.env].  A reference
+# implementation in the task directory is a thing that has to be kept correct
+# against every future change to the suite, and its only consumer would be a
+# smoke test that the suite can be passed at all.  The suite's own gate answers
+# that: stage 3 is asked only of a submission that scored stage 2 in full, so a
+# tree that reaches it has already passed every recorded check.  What six models
+# add is the other half -- an hour each spent hunting for a behaviour nobody
+# thought to record.
