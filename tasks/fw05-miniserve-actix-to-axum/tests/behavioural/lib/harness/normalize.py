@@ -257,6 +257,57 @@ def drop_humanised_times(text: str) -> tuple[str, int]:
     return text, n
 
 
+_LISTING_ROW = re.compile(r"<tr>.*?</tr>", re.S)
+_ROW_NAME = re.compile(
+    r'<a [^>]*class="(?:file|directory|symlink)"[^>]*>(.*?)</a>', re.S)
+_ROW_SIZE = re.compile(r'<td class="size-cell">([^<]*)</td>')
+_ROW_DATE = re.compile(r'<td class="date-cell"><span>([^<]*)</span>')
+
+
+def _row_key(row: str, method: str) -> tuple[str, str, bool]:
+    name = _ROW_NAME.search(row)
+    cell = (_ROW_SIZE if method == "size" else _ROW_DATE).search(row)
+    return (re.sub(r"<[^>]+>", "", name.group(1)).strip() if name else "",
+            cell.group(1) if cell else "",
+            'class="directory"' in row)
+
+
+def order_ties_by_name(text: str, method: str, dirs_first: bool = False) -> str:
+    """Order rows a size or date sort cannot separate by name.
+
+    The sample tree gives every file the same 14 bytes and every entry the same
+    pinned mtime, so those two sorts leave most of a listing tied, and what
+    orders a tied run is the order the entries came back from the filesystem --
+    a property of the filesystem the tree was materialised on, not of the server
+    reading it. The sequence of keys is still compared exactly, and so is the
+    directories-first grouping where the flag asks for one.
+    """
+    if method not in ("size", "date"):
+        return text
+    rows = list(_LISTING_ROW.finditer(text))
+    if not rows:
+        return text
+    order: list[int] = []
+    run: list[tuple[tuple[bool, str], str, int]] = []
+    for index, match in enumerate(rows):
+        name, cell, isdir = _row_key(match.group(0), method)
+        group = (isdir and dirs_first, cell)
+        if run and group != run[0][0]:
+            order += [i for _, _, i in sorted(run)]
+            run = []
+        run.append((group, name, index))
+    order += [i for _, _, i in sorted(run)]
+    if order == list(range(len(rows))):
+        return text
+    out, last = [], 0
+    for slot, source in zip(rows, order):
+        out.append(text[last:slot.start()])
+        out.append(rows[source].group(0))
+        last = slot.end()
+    out.append(text[last:])
+    return "".join(out)
+
+
 def html_records(text: str) -> dict:
     """Structural facts about an HTML page, extracted for their own assertions.
 

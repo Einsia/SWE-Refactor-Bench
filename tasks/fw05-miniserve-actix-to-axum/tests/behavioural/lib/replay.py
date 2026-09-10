@@ -32,7 +32,7 @@ import json
 import os
 from pathlib import Path
 
-from harness import corpus
+from harness import corpus, normalize
 
 #: The frozen State A capture.  Shipped gzipped: it is 8.1 MB of JSON that no
 #: reviewer reads by eye and that git would store twice on every edit.
@@ -113,18 +113,44 @@ def lookup(recording: dict, *, golden: bool):
     than rewriting either.
     """
     sessions = recording.get("sessions") or {}
+    seen: dict[tuple[str, str], object] = {}
 
     def get(session_id: str, case_id: str):
         session = sessions.get(session_id)
         if not session:
             return None
-        if golden:
-            return (session.get("cases") or {}).get(case_id)
-        if "__failed__" in session:
-            return None
-        return session.get(case_id)
+        if (session_id, case_id) not in seen:
+            if golden:
+                entry = (session.get("cases") or {}).get(case_id)
+            elif "__failed__" in session:
+                entry = None
+            else:
+                entry = session.get(case_id)
+            seen[(session_id, case_id)] = _ordered(session_id, case_id, entry)
+        return seen[(session_id, case_id)]
 
     return get
+
+
+#: ``(session, case) -> (sort method, dirs first)``, for the entries below.
+_ORDER = {corpus.case_key(s.id, c.id): corpus.listing_order(s, c)
+          for s, c in corpus.all_cases()}
+
+
+def _ordered(session_id: str, case_id: str, entry):
+    """The same entry with rows the sort key leaves tied put in name order.
+
+    Applied to both recordings as they are read, so the capture keeps the order
+    it was made in and the comparison stops depending on it.
+    """
+    if not entry or not entry.get("html"):
+        return entry
+    method, dirs_first = _ORDER.get(corpus.case_key(session_id, case_id),
+                                    ("name", False))
+    body = normalize.order_ties_by_name(entry["body"], method, dirs_first)
+    if body == entry["body"]:
+        return entry
+    return {**entry, "body": body, "html": normalize.html_records(body)}
 
 
 def boot_failures(recording: dict) -> dict[str, str]:

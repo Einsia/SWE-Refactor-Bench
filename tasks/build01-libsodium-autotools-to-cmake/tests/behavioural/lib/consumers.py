@@ -22,7 +22,7 @@ CONSUMER_C = r"""
 
 int main(void) {
     unsigned char h[crypto_generichash_BYTES];
-    const char *msg = "SWERefactorBench";
+    const char *msg = "RepoMorphBench";
     if (sodium_init() < 0) { puts("INIT-FAIL"); return 1; }
     if (crypto_generichash(h, sizeof h, (const unsigned char *) msg,
                            strlen(msg), NULL, 0) != 0) {

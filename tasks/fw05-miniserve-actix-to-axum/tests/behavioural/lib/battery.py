@@ -76,6 +76,24 @@ def _decoded_cases(module_id: str, golden: dict):
     return [(s, c) for s, c in routing.cases_for(module_id) if c.decompress]
 
 
+def _sized_cases(module_id: str, golden: dict):
+    """Every case whose body has a length worth comparing.
+
+    A compressed archive does not: its length is how well deflate happened to do
+    on the order the archiver walked the tree in, which is the order the
+    filesystem handed the entries over in.  What the stream contains is graded by
+    the archive facts, which read it back out.
+    """
+    get = replay.lookup(golden, golden=True)
+    out = []
+    for session, case in routing.cases_for(module_id):
+        archive = (get(session.id, case.id) or {}).get("archive") or {}
+        if archive.get("kind") == "tar.gz":
+            continue
+        out.append((session, case))
+    return out
+
+
 #: ``fixture name in the battery signature -> the cases it is run over``.
 AXES = {
     "case": _all_cases,
@@ -83,6 +101,7 @@ AXES = {
     "archive_case": _carries("archive"),
     "nonce_case": _nonce_cases,
     "decoded_case": _decoded_cases,
+    "sized_case": _sized_cases,
 }
 
 
@@ -170,7 +189,7 @@ def test_body(session_id, case, actual, expected):
     compare_body(got, want, session_id, case.id)
 
 
-def test_body_length(session_id, case, actual, expected):
+def test_body_length(session_id, sized_case, actual, expected):
     """The response length, separately from the content.
 
     Cheap, and it isolates a class of failure that a body diff reports badly: a
@@ -181,6 +200,7 @@ def test_body_length(session_id, case, actual, expected):
     binary one -- miniserve's 500 pages name the filesystem path they failed to
     write, so a raw length there would compare the harness's own workdir name.
     """
+    case = sized_case
     got, want = actual(session_id, case.id), expected(session_id, case.id)
     require(got, want, session_id, case.id)
     field = "text_len" if want.get("is_text") else "body_len"

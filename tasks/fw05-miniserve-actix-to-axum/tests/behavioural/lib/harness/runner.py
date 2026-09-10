@@ -78,7 +78,8 @@ class ServerFailed(RuntimeError):
         self.log = log
 
 
-def build_tree(root: Path, spec: Path = TREE_SPEC) -> Path:
+def build_tree(root: Path, spec: Path = TREE_SPEC, *,
+               without: tuple[str, ...] = ()) -> Path:
     """Materialise the sample tree with pinned mtimes.
 
     Imported rather than shelled out to, so a broken ``srb-sample-tree`` on
@@ -88,7 +89,11 @@ def build_tree(root: Path, spec: Path = TREE_SPEC) -> Path:
 
     from .tree import build
 
-    build(json.loads(spec.read_text(encoding="utf-8")), root, clean=True)
+    doc = json.loads(spec.read_text(encoding="utf-8"))
+    if without:
+        doc = {**doc, "entries": [entry for entry in doc["entries"]
+                                  if entry["path"] not in without]}
+    build(doc, root, clean=True)
     return root
 
 
@@ -102,6 +107,12 @@ def prepare_tree(kind: str, workdir: Path, spec: Path = TREE_SPEC) -> Path:
     ``symlink`` -- a symlink *to* the tree, which is what ``--no-symlinks``
                    refuses to start on.
     ``empty``   -- an empty directory: the listing's degenerate case.
+    ``archivable``
+                -- the tree without the dangling symlink, for the sessions that
+                   download it as an archive: ``tar::Builder::append_dir_all``
+                   follows symlinks and stops at the first one it cannot stat,
+                   which makes the archive a function of the order the
+                   filesystem returned the entries in rather than of the tree.
 
     ``given``   -- serve a directory the caller built and passed to ``Target``
                    as ``serve_path``. No corpus session uses this: it exists for
@@ -129,6 +140,8 @@ def prepare_tree(kind: str, workdir: Path, spec: Path = TREE_SPEC) -> Path:
         # has nothing to do with what is being served.
         os.utime(link, (FIXED_MTIME, FIXED_MTIME), follow_symlinks=False)
         return link
+    if kind == "archivable":
+        return build_tree(base / "tree-root", spec, without=("links/dangling",))
     if kind == "empty":
         if base.exists():
             shutil.rmtree(base)
