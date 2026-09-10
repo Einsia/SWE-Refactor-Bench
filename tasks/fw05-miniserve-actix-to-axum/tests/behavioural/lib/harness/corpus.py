@@ -1647,6 +1647,23 @@ def all_cases() -> list[tuple[Session, Case]]:
     return [(s, c) for s in SESSIONS for c in s.cases]
 
 
+def listing_order(session: Session, case: Case) -> tuple[str, bool]:
+    """The sort method and dirs-first setting a request is answered under.
+
+    ``sort`` and ``order`` are per-request, the ``--default-sorting-*`` flags
+    are per-process, and the query wins where it names a method the baseline
+    parses.
+    """
+    method = "name"
+    if "--default-sorting-method" in session.argv:
+        method = session.argv[session.argv.index("--default-sorting-method") + 1]
+    for part in case.path.partition("?")[2].split("&"):
+        key, _, value = part.partition("=")
+        if key == "sort" and value in ("name", "size", "date"):
+            method = value
+    return method, "--dirs-first" in session.argv
+
+
 def fingerprint() -> str:
     """Digest of the corpus definition.
 
