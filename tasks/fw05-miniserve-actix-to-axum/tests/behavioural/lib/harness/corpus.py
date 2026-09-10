@@ -404,11 +404,10 @@ def archive_cases(prefix: str, base: str = "", *,
                   ) -> list[Case]:
     """Archive downloads, over subtrees chosen for what they contain.
 
-    ``links/`` has a symlink to a file, a symlink to a directory and a dangling
-    symlink -- three cases the tar and zip writers each answer their own way, and
-    the dangling one is where a port that resolves eagerly falls over. ``/`` is
-    the whole 133-entry tree including a 1 MiB file, which is also the only case
-    where the archive stream is large enough to be chunked.
+    ``links/`` has a symlink to a file and a symlink to a directory, which the
+    tar and zip writers each answer their own way. ``/`` is the whole tree
+    including a 1 MiB file, which is also the only case where the archive stream
+    is large enough to be chunked.
     """
     targets = [("root", f"{base}/"), ("dira", f"{base}/dira/"),
                ("links", f"{base}/links/"), ("empty", f"{base}/emptydir/"),
@@ -733,6 +732,7 @@ SESSION_SPECS: list[Session] = [
     Session(
         id="archives",
         argv=("--enable-tar", "--enable-tar-gz", "--enable-zip"),
+        tree="archivable",
         cases=tuple(archive_cases("ar") + [
             Case(id="ar-root-listing", path="/", body_mode="html",
                  note="all three download links appear in the footer"),
@@ -755,6 +755,7 @@ SESSION_SPECS: list[Session] = [
     Session(
         id="archives-hidden",
         argv=("--enable-tar", "--enable-zip", "--hidden"),
+        tree="archivable",
         cases=(
             Case(id="ah-tar", path="/dira/?download=tar", body_mode="archive",
                  note="dotfiles are inside the archive when --hidden is on"),
