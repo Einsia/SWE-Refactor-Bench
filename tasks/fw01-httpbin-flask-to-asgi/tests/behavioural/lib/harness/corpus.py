@@ -323,7 +323,7 @@ A(_case("status-bad-weight", "status", "GET", "/status/200:x",
 
 A(_case("ip", "inspect", "GET", "/ip", note="origin is the peer address"))
 A(_case("user-agent", "inspect", "GET", "/user-agent",
-        headers=[("User-Agent", "swerefactor/1.0")],
+        headers=[("User-Agent", "repomorph/1.0")],
         note="echoes the User-Agent header"))
 A(_case("user-agent-absent", "inspect", "GET", "/user-agent",
         note="no User-Agent -> null"))
@@ -966,7 +966,7 @@ A(_case("edge-high-byte-header", "edge", "GET", "/headers",
 # 15. Multipart uploads
 # ===========================================================================
 
-_MP_BOUNDARY = "----SWERefactorBoundary7MA4YWxkTrZu0gW"
+_MP_BOUNDARY = "----RepoMorphBoundary7MA4YWxkTrZu0gW"
 
 
 def _multipart(parts):
