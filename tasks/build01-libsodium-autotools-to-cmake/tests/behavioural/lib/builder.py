@@ -1055,6 +1055,9 @@ class Build:
         self.steps["_srcpkg"] = out
         return out
 
+    #: Cache types a capability probe leaves behind, not a control anyone sets.
+    PROBE_CACHE_TYPES = ("INTERNAL", "STATIC")
+
     def feature_switch(self, *patterns):
         """The delivered build system's own name for an optional feature.
 
@@ -1064,11 +1067,25 @@ class Build:
         `--enable-`/`--disable-` pair in `configure --help` for an Autotools one.
         Returns (name, value_to_turn_it_off) or None when the delivered build
         system has no such control, which is a fact about it and not a defect.
+
+        Patterns are tried in order and the first that matches anything wins,
+        which is the same rule the Autotools branch below already followed.  It
+        is load-bearing: a caller passes a precise pattern and then a broad one,
+        and a single pass over a sorted cache answers with whichever *name*
+        sorted first instead of with whichever *pattern* was meant.  That is how
+        `feature_switch(r"SSP", r"STACK")` came back with
+        SODIUM_ACCEPTS_NOEXECSTACK, a compiler-capability probe that sorts before
+        SODIUM_USE_SSP, and turned a check about the stack protector into a check
+        about something else that then failed.
         """
         if self.is_cmake:
-            for name in sorted(self.cmake_cache()):
-                if any(re.search(p, name) for p in patterns):
-                    return (name, "OFF")
+            cache = self.cmake_cache()
+            for p in patterns:
+                for name in sorted(cache):
+                    if cache[name][0] in self.PROBE_CACHE_TYPES:
+                        continue
+                    if re.search(p, name):
+                        return (name, "OFF")
             return None
         help_text = self.configure_help()
         for p in patterns:
