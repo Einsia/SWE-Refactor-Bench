@@ -568,23 +568,22 @@ def test_debug_build_is_debuggable(b_debug):
         % (len(missing), missing[:4]))
 
 
-@pytest.mark.srb_skip_ok
 def test_ssp_can_be_turned_off(registry):
     """`./configure --disable-ssp` had to keep working; so must its CMake twin.
 
-    §1.10 requires the capability -- a build that does not want the stack
-    protector can say so -- without saying what the port must call its
-    replacement, so the switch is looked up rather than assumed:
+    §1.10 requires the capability -- `-fstack-protector` is listed there as
+    "overridable, the way `--disable-ssp` was" -- without saying what the port
+    must call its replacement, so the switch is looked up rather than assumed:
     `Build.feature_switch()` reads the cache for a CMake tree and
     `configure --help` for an Autotools one, and answers with the name and the
-    value that turns it off. A build system with no such control simply has
-    nothing to turn off, which this records as a skip.
+    value that turns it off.  A build system exposing no such control has not
+    reproduced the capability.
     """
     base = registry.get("ninja-default")
-    found = base.feature_switch(r"SSP", r"STACK")
+    found = base.feature_switch(r"SSP", r"STACK_?PROTECT")
     if found is None:
-        pytest.skip("the delivered build system exposes no stack-protector "
-                    "switch (permitted)")
+        pytest.skip("the delivered build system exposes no way to turn the "
+                    "stack protector off; State A has --disable-ssp (§1.10)")
     name, off = found
     b = registry.dynamic("harden-nossp", generator="Ninja",
                          options={name: off})
