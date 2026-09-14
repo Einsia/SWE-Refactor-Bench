@@ -70,7 +70,10 @@ def split_osgi_clauses(value):
 
 
 def parse_osgi_header(value):
-    """`pkg;a=b,pkg2;c="d"` -> {pkg: {a: b}, pkg2: {c: d}}."""
+    """`pkg;a=b,pkg2;c:="d"` -> {pkg: {"a": b}, pkg2: {"c:": d}}.
+
+    A directive keeps its colon: OSGi gives `a=b` and `a:=b` different meanings.
+    """
     out = {}
     for clause in split_osgi_clauses(value):
         parts = clause.split(";")
@@ -79,9 +82,25 @@ def parse_osgi_header(value):
             if "=" not in p:
                 continue
             k, v = p.split("=", 1)
-            attrs[k.strip().rstrip(":")] = v.strip().strip('"')
+            attrs[k.strip()] = v.strip().strip('"')
         out[parts[0].strip()] = attrs
     return out
+
+
+#: Directives whose value is a set written as a comma-separated list.
+OSGI_SET_VALUED = frozenset({"uses:"})
+
+
+def osgi_header_meaning(value):
+    """An OSGi header as what it means: clause and attribute order dropped."""
+    return {
+        pkg: {
+            key: (frozenset(p.strip() for p in val.split(",") if p.strip())
+                  if key in OSGI_SET_VALUED else val)
+            for key, val in attrs.items()
+        }
+        for pkg, attrs in parse_osgi_header(value).items()
+    }
 
 
 def exported_packages(manifest):

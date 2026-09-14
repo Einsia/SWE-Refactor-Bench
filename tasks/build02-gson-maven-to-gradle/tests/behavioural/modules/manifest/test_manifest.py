@@ -11,7 +11,9 @@ wiring, which is why it is measured here as well as there.
 
 Headers fall into three groups, decided by measurement, not by taste:
 
-  required    13 headers that describe the bundle itself.  Byte-exact.
+  required    13 headers that describe the bundle itself.  Byte-exact, except
+               ``Export-Package`` and ``Import-Package``, which the instruction
+               compares clause by clause.
   provenance   4 headers bnd-maven-plugin synthesises from the POM's
                ``<developers>``, ``<url>``, ``<licenses>`` and ``<scm>``.  A Gradle
                build has no POM to read them from, so they are graded separately.
@@ -55,6 +57,10 @@ def _prov_norm(value):
                          ("/gson/gson", "/gson")):
         out = out.replace(suffix, repl)
     return out.rstrip("/")
+
+
+#: The headers the instruction compares clause by clause.
+CLAUSE_HEADERS = ("Export-Package", "Import-Package")
 
 
 def _clauses(value):
@@ -102,18 +108,25 @@ def test_manifest_was_generated_not_handwritten(gson_jar, data):
     imp = mf.get("Import-Package")
     assert imp, "no Import-Package header: bnd never analysed the bundle"
     want = data["manifest"]["required"]["Import-Package"]
-    assert imp == want, (
-        "Import-Package is\n  %r\nState A computes\n  %r" % (imp, want))
+    assert jarinspect.osgi_header_meaning(imp) == \
+        jarinspect.osgi_header_meaning(want), (
+            "Import-Package is\n  %r\nState A computes\n  %r" % (imp, want))
 
 
-# --------------------------------------------------------------- exact headers
+# ------------------------------------------------------------ required headers
 @pytest.mark.behavioural
 @pytest.mark.parametrize("header,want", REQUIRED, ids=[h for h, _ in REQUIRED])
-def test_required_header_exact(gson_jar, header, want):
-    """This header matches State A byte for byte."""
+def test_required_header(gson_jar, header, want):
+    """This header carries State A's value, byte for byte or clause by clause."""
     mf = _manifest(gson_jar)
     got = mf.get(header)
     assert got is not None, "manifest has no %s header" % header
+    if header in CLAUSE_HEADERS:
+        assert jarinspect.osgi_header_meaning(got) == \
+            jarinspect.osgi_header_meaning(want), (
+                "%s differs by more than clause order.\n  State A : %s\n"
+                "  produced: %s" % (header, want, got))
+        return
     assert got == want, (
         "%s differs.\n  State A : %s\n  produced: %s" % (header, want, got))
 
@@ -236,7 +249,7 @@ def test_sun_misc_import_is_optional(gson_jar):
     mf = _manifest(gson_jar)
     got = _clauses(mf.get("Import-Package", ""))
     assert "sun.misc" in got, "sun.misc is not imported at all"
-    assert got["sun.misc"].get("resolution") == "optional", (
+    assert got["sun.misc"].get("resolution:") == "optional", (
         "sun.misc must be imported with resolution:=optional, got %r"
         % got["sun.misc"])
 
