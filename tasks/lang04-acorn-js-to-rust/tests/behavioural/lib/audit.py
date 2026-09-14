@@ -369,13 +369,26 @@ class IntegrityAuditor:
         """`cargo metadata` output, parsed once."""
         if self._metadata is None:
             self._metadata = {}
-            if self.outcome is not None and self.outcome.metadata is not None \
-                    and self.outcome.metadata.ok:
-                try:
-                    self._metadata = json.loads(self.outcome.metadata.stdout)
-                except ValueError:
-                    self._metadata = {}
+            if self.outcome is not None:
+                if isinstance(self.outcome.metadata_json, dict):
+                    self._metadata = self.outcome.metadata_json
+                elif self.outcome.metadata is not None and self.outcome.metadata.ok:
+                    try:
+                        self._metadata = json.loads(self.outcome.metadata.stdout)
+                    except ValueError:
+                        self._metadata = {}
         return self._metadata
+
+    def metadata_problem(self) -> str:
+        """Why `metadata()` is empty: the command, or the document."""
+        result = self.outcome.metadata if self.outcome is not None else None
+        if result is None:
+            return "cargo metadata did not run"
+        if not result.ok:
+            err = result.stderr.decode("utf-8", "replace").strip()[:600]
+            return f"cargo metadata failed (rc={result.returncode}): {err}"
+        return ("cargo metadata succeeded but its output did not parse as JSON "
+                "-- a defect in this verifier, not in the submission")
 
     def needles(self, *, width: int, stride: int) -> list[str]:
         """Cached runs of State A's code, for the two copy-detection gates."""
@@ -609,11 +622,7 @@ class IntegrityAuditor:
         """
         meta = self.metadata()
         if not meta:
-            detail = "cargo metadata did not run or did not parse"
-            if self.outcome is not None and self.outcome.metadata is not None:
-                err = self.outcome.metadata.stderr.decode("utf-8", "replace")[:600]
-                detail += f": {err.strip()}"
-            return False, detail, []
+            return False, self.metadata_problem(), []
         packages = {p["name"]: p for p in meta.get("packages", [])}
         want = {c["name"]: c["version"] for c in self.contract["state_b"]["crates"]}
         problems: list[str] = []
@@ -653,7 +662,7 @@ class IntegrityAuditor:
         """
         meta = self.metadata()
         if not meta:
-            return False, "cargo metadata did not run; cannot enumerate dependencies", []
+            return False, f"{self.metadata_problem()}; cannot enumerate dependencies", []
         own = {p["name"] for p in meta.get("packages", [])}
         offenders: list[str] = []
         for pkg in meta.get("packages", []):
@@ -722,7 +731,7 @@ class IntegrityAuditor:
         offenders = [rel(self.repo, p) for p in self.files if p.name == "build.rs"]
         meta = self.metadata()
         if not meta:
-            return False, "cargo metadata did not run; cannot enumerate build targets", []
+            return False, f"{self.metadata_problem()}; cannot enumerate build targets", []
         for pkg in meta.get("packages", []):
             for target in pkg.get("targets", []):
                 kinds = target.get("kind") or []

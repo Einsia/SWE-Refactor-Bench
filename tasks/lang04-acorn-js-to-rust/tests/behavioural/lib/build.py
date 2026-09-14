@@ -22,6 +22,7 @@ network access and certainly without the tripwire.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -73,6 +74,9 @@ class BuildOutcome:
     build: Result | None = None
     install: Result | None = None
     metadata: Result | None = None
+    #: `cargo metadata`'s document, carried as JSON because `brief()` clips the
+    #: result beside it to log length.
+    metadata_json: dict | None = None
     extra: dict[str, Result] = field(default_factory=dict)
     # What each probe observed while it ran, for the probes whose evidence does
     # not survive them.  `make clean` is the reason this exists: whether it
@@ -120,6 +124,14 @@ class BuildOutcome:
                              ("metadata", self.metadata)):
             if result is not None:
                 payload[name] = result.brief()
+        meta_json = self.metadata_json
+        if meta_json is None and self.metadata is not None and self.metadata.ok:
+            try:
+                meta_json = json.loads(self.metadata.stdout)
+            except ValueError:
+                meta_json = None
+        if isinstance(meta_json, dict):
+            payload["metadata_json"] = meta_json
         if self.extra:
             payload["probes"] = {k: v.brief() for k, v in sorted(self.extra.items())}
         if self.discarded:
@@ -161,6 +173,8 @@ class BuildOutcome:
         for name in ("build", "install", "metadata"):
             if isinstance(payload.get(name), dict):
                 setattr(outcome, name, Result.from_brief(payload[name]))
+        if isinstance(payload.get("metadata_json"), dict):
+            outcome.metadata_json = payload["metadata_json"]
         for name, brief in sorted((payload.get("probes") or {}).items()):
             if isinstance(brief, dict):
                 outcome.extra[name] = Result.from_brief(brief)
