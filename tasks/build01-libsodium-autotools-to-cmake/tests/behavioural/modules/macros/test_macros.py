@@ -19,8 +19,8 @@ SUITE = os.environ.get("SRB_SUITE_DIR") or os.path.dirname(
 with open(os.path.join(SUITE, "data", "macros.json")) as _fh:
     MACROS = json.load(_fh)
 
-REQUIRED = MACROS["required"]          # 64, value-checked
-OPTIONAL = MACROS["optional"]          # 25, presence not required
+REQUIRED = MACROS["required"]          # 64, presence and value checked here
+OPTIONAL = MACROS["optional"]          # 25, value checked in one check
 MINIMAL_EXTRA = MACROS["minimal_extra"]  # ["MINIMAL"]
 
 
@@ -104,12 +104,13 @@ def test_macro_set_is_uniform_across_translation_units(b_default):
            offenders[next(iter(offenders))][:6]))
 
 
-@pytest.mark.srb_skip_ok
 @pytest.mark.parametrize("macro", sorted(OPTIONAL))
 def test_optional_macro_value_when_present(macros, macro):
-    """PACKAGE_*/VERSION/portability macros: if defined, keep State A's value."""
+    """PACKAGE_*/VERSION/portability macros carry State A's value (§1.4)."""
     if macro not in macros:
-        pytest.skip("%s not defined (permitted)" % macro)
+        pytest.skip(
+            "%s is not defined for library translation units. State A's "
+            "configure defines it; §1.4 requires the same macro set." % macro)
     want = macro_value(OPTIONAL[macro])
     got = macro_value(macros[macro])
     assert got == want, (
